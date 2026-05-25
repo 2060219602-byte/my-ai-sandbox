@@ -204,11 +204,12 @@ updated_memories = []
 for i, event in enumerate(st.session_state.memory_events):
     col_memo_txt, col_memo_del = st.sidebar.columns([0.8, 0.2])
     with col_memo_txt:
-        edited_event = st.text_input(f"事件 {i+1}", value=event, key=f"memo_edit_{i}")
+        # 🛠️ 关键修复：将角色名字组合进独立组件 Key 中，切角色时强行解绑残留文本
+        edited_event = st.text_input(f"事件 {i+1}", value=event, key=f"{st.session_state.current_role_name}_memo_edit_{i}")
         updated_memories.append(edited_event)
     with col_memo_del:
         st.write("") 
-        if st.button("❌", key=f"memo_del_{i}", help="删除此条核心记忆"):
+        if st.button("❌", key=f"{st.session_state.current_role_name}_memo_del_{i}", help="删除此条核心记忆"):
             st.session_state.memory_events.pop(i)
             save_local_data()
             st.rerun()
@@ -217,7 +218,8 @@ if updated_memories != st.session_state.memory_events:
     st.session_state.memory_events = updated_memories
     save_local_data()
 
-new_event_input = st.sidebar.text_input("➕ 添加新核心记忆事件（回车生效）：", value="", key="new_memo_widget")
+# 🛠️ 关键修复：新增事件组件同样绑定动态角色名 Key，避免缓存错乱
+new_event_input = st.sidebar.text_input("➕ 添加新核心记忆事件（回车生效）：", value="", key=f"{st.session_state.current_role_name}_new_memo_widget")
 if new_event_input:
     clean_event = new_event_input.strip()
     if clean_event and clean_event not in st.session_state.memory_events:
@@ -428,7 +430,6 @@ if execute_dice and req_input.strip() != "":
 # ==========================================
 # 6. API 核心调用与 ✨防偷懒三维拦截块
 # ==========================================
-# 🌟 终极优化：完全写明无省略的三段式驱动协议
 multi_reply_protocol = (
     "【⚠️ 核心戏剧冲突与逻辑续写协议 —— 必须绝对强制执行】\n"
     "你现在正在撰写高质量的沉浸式角色扮演小说。你接下来的‘每一次’回复，都必须严格、无条件地包含且仅包含以下三个结构化部分。格式必须完全按照下面的数字标号开头，禁止合并，禁止输出任何前言、导语或总结，直奔剧本！\n\n"
@@ -533,7 +534,7 @@ if user_input or st.session_state.regenerate_trigger or dice_triggered:
             st.error(f"调用 API 出错: {str(e)}")
 
 # ==========================================
-# 7. PyCharm 直接运行支持
+# 7. PyCharm Directly Run Support
 # ==========================================
 if __name__ == "__main__":
     import sys
