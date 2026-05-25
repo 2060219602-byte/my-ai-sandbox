@@ -4,6 +4,26 @@ import json
 import os
 import random
 
+# 🔒 线上全盘拦截密码锁
+if "app_password" in st.secrets:
+    correct_password = st.secrets["app_password"]["password"]
+    
+    # 如果没有登录成功，强制锁死页面
+    if "logged_in" not in st.session_state:
+        st.session_state.logged_in = False
+        
+    if not st.session_state.logged_in:
+        st.title("🛡️ 个人专属私有沙盒")
+        input_pwd = st.text_input("请输入访问密码：", type="password")
+        if st.button("验证登录"):
+            if input_pwd == correct_password:
+                st.session_state.logged_in = True
+                st.success("密码正确，正在进入...")
+                st.rerun()
+            else:
+                st.error("密码错误，拒绝访问！")
+        st.stop() # 💡 核心：密码不对时，直接斩断后面所有游戏代码的执行！
+
 # 定义本地保存数据的 JSON 文件路径
 DATA_FILE = "chat_sandbox_data.json"
 
