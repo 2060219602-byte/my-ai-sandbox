@@ -3,6 +3,7 @@ from openai import OpenAI
 import json
 import os
 import random
+import time  # ✨ 引入时间戳用于群聊历史的物理时间线排序
 import streamlit.components.v1 as components  # ✨ 引入用于和手机浏览器口袋通信的组件（保留备用）
 
 # ☁️ 定义服务器本地（云端）保存数据的隐藏 JSON 文件路径
@@ -86,10 +87,7 @@ def save_local_data():
                 "favorability": st.session_state.favorability,
                 "memory_events": st.session_state.memory_events
             }
-    elif curr_sk.startswith("💬 群聊："):
-        g_name = curr_sk.replace("💬 群聊：", "")
-        if g_name in st.session_state.all_sessions_db["group_rooms"]:
-            st.session_state.all_sessions_db["group_rooms"][g_name]["history"] = st.session_state.chat_history
+    # 🛠️ 核心改动：群聊房间不再拥有独立的"history"字段保存，全盘交由单人历史驱动
 
     st.session_state.all_sessions_db["current_session_key"] = curr_sk
     
@@ -100,7 +98,18 @@ def save_local_data():
         pass
 
 def clear_current_chat_only():
-    st.session_state.chat_history = []
+    curr_sk = st.session_state.current_session_key
+    if curr_sk.startswith("👤 单聊："):
+        st.session_state.chat_history = []
+    elif curr_sk.startswith("💬 群聊："):
+        g_name = curr_sk.replace("💬 群聊：", "")
+        # 清空当前群内所有成员关于这个群的聊天痕迹
+        for agent in st.session_state.group_members_list:
+            agent_history = st.session_state.all_sessions_db["roles"][agent]["chat_history"]
+            st.session_state.all_sessions_db["roles"][agent]["chat_history"] = [
+                msg for msg in agent_history if msg.get("from_group") != g_name
+            ]
+        st.session_state.chat_history = []
     save_local_data()
 
 def clear_all_file_data():
@@ -110,6 +119,24 @@ def clear_all_file_data():
     for key in ["all_sessions_db", "current_session_key", "chat_history", "system_role", "background_story",
                 "character_status", "favorability", "memory_events", "group_active_agent", "group_members_list", "group_active_queue"]:
         if key in st.session_state: del st.session_state[key]
+
+# 🛠️ 新增核心辅助工具：动态合成当前群聊大厅的物理历史线，完全取决于群内各联系人自己单人后台的群聊记录
+def synthesize_group_chat_history(g_name, members_list):
+    combined_history = []
+    # 捞取所有群成员后台标记了 from_group == g_name 的消息
+    for agent in members_list:
+        agent_history = st.session_state.all_sessions_db["roles"][agent].get("chat_history", [])
+        for msg in agent_history:
+            if msg.get("from_group") == g_name:
+                # 复制并去重（多联系人后台会重复记录同一条玩家消息或彼此的发言，利用唯一 msg_id 或 timestamp 排重）
+                if msg not in combined_history:
+                    # 避免由于浅拷贝引起错乱，通过特定标识去重
+                    if not any(item.get("msg_id") == msg.get("msg_id") for item in combined_history if msg.get("msg_id")):
+                        combined_history.append(msg)
+                        
+    # 严格按照消息发生的物理时间戳先后进行高精准重组排序
+    combined_history.sort(key=lambda x: x.get("timestamp", 0))
+    return combined_history
 
 # ==========================================
 # 1. 页面基本配置与顶层数据加载
@@ -171,8 +198,9 @@ if not is_group_chat:
 else:
     g_name = curr_sk.replace("💬 群聊：", "")
     room_data = st.session_state.all_sessions_db["group_rooms"][g_name]
-    st.session_state.chat_history = room_data["history"]
     st.session_state.group_members_list = room_data["members"]
+    # 🛠️ 核心改动：群聊大厅不再读取公共死历史，而是通过此时群内成员的单人后台数据，动态高精准合线合成历史
+    st.session_state.chat_history = synthesize_group_chat_history(g_name, st.session_state.group_members_list)
 
 if "regenerate_trigger" not in st.session_state: st.session_state.regenerate_trigger = False
 if "dice_instruction_patch" not in st.session_state: st.session_state.dice_instruction_patch = ""
@@ -208,7 +236,7 @@ if st.sidebar.button("🚀 创立并无缝切入该群聊", use_container_width=
         st.sidebar.error("❌ 请至少勾选一位AI成员！")
     else:
         save_local_data()
-        st.session_state.all_sessions_db["group_rooms"][clean_room_name] = {"members": pulled_members, "history": []}
+        st.session_state.all_sessions_db["group_rooms"][clean_room_name] = {"members": pulled_members}
         st.session_state.current_session_key = f"💬 群聊：{clean_room_name}"
         st.session_state.chat_history = []
         st.session_state.group_active_agent = ""
@@ -333,12 +361,18 @@ st.sidebar.header("🚨 危险清理区")
 if is_group_chat:
     if st.sidebar.button("🗑️ 彻底解散并永久删除当前群聊房间", type="primary", use_container_width=True):
         g_target = curr_sk.replace("💬 群聊：", "")
+        # 解散房间
         st.session_state.all_sessions_db["group_rooms"].pop(g_target, None)
+        # 顺便清洗所有联系人单人聊天里包含该群信息的字段，彻底断根
+        for agent in available_roles_list:
+            st.session_state.all_sessions_db["roles"][agent]["chat_history"] = [
+                msg for msg in st.session_state.all_sessions_db["roles"][agent]["chat_history"] if msg.get("from_group") != g_target
+            ]
         st.session_state.current_session_key = "👤 单聊：" + available_roles_list[0]
         st.session_state.group_active_agent = ""
         st.session_state.group_active_queue = []
         save_local_data()
-        st.toast(f"🔥 群聊【{g_target}】已被解散！")
+        st.toast(f"🔥 群聊【{g_target}】已被解散且相关记忆已抹除！")
         st.rerun()
 else:
     if st.sidebar.button("🧹 只清空当前角色聊天历史", type="secondary", use_container_width=True):
@@ -373,50 +407,46 @@ else:
     st.subheader(f"👤 当前对话框：与【{curr_sk.replace('👤 单聊：', '')}】的私密悄悄话")
 st.write("---")
 
-# 🛠️ 深度升级：同时兼容单聊与多人群聊的消息独立删除、重发交互中枢
 def render_message_controls(idx):
     c1, c2, _ = st.columns([0.1, 0.1, 0.8])
     with c1:
         if st.button("❌ 删除", key=f"del_{idx}"):
-            # 获取将要被删除的这条消息
             target_msg = st.session_state.chat_history[idx]
-            # 移除当前群聊/单聊主线中的缓存
-            st.session_state.chat_history.pop(idx)
+            target_id = target_msg.get("msg_id")
             
-            # 如果是在群聊场景，不仅要删掉群历史，还要把每一位后台同步了这句话的群成员单聊历史也一起删掉
             if is_group_chat:
+                g_target = curr_sk.replace("💬 群聊：", "")
+                # 精准清除每一个群成员单人历史里这条具有唯一ID的消息
                 for agent in st.session_state.group_members_list:
                     agent_history = st.session_state.all_sessions_db["roles"][agent]["chat_history"]
-                    # 反向寻找符合内容的一条并精准切除
-                    for sub_idx, sub_msg in enumerate(reversed(agent_history)):
-                        if target_msg["content"] in sub_msg["content"]:
-                            actual_sub_idx = len(agent_history) - 1 - sub_idx
-                            agent_history.pop(actual_sub_idx)
-                            break
+                    st.session_state.all_sessions_db["roles"][agent]["chat_history"] = [
+                        msg for msg in agent_history if msg.get("msg_id") != target_id
+                    ]
+            else:
+                st.session_state.chat_history.pop(idx)
+                
             save_local_data()
             st.rerun()
             
     with c2:
-        # 仅在最后一条由 Assistant 发出的剧本台词上开放“🔄 重发”
         if st.session_state.chat_history[idx]["role"] == "assistant" and idx == len(st.session_state.chat_history) - 1:
             if st.button("🔄 重发", key=f"regen_{idx}"):
                 target_msg = st.session_state.chat_history[idx]
-                st.session_state.chat_history.pop(idx)
+                target_id = target_msg.get("msg_id")
                 
                 if is_group_chat:
-                    # 群聊场景：抹除后台各联系人的同步数据，并把当前对应的发言人重新拉入点名处理队列中
+                    g_target = curr_sk.replace("💬 群聊：", "")
                     target_agent = target_msg.get("agent_name", "")
                     for agent in st.session_state.group_members_list:
                         agent_history = st.session_state.all_sessions_db["roles"][agent]["chat_history"]
-                        for sub_idx, sub_msg in enumerate(reversed(agent_history)):
-                            if target_msg["content"] in sub_msg["content"]:
-                                actual_sub_idx = len(agent_history) - 1 - sub_idx
-                                agent_history.pop(actual_sub_idx)
-                                break
+                        st.session_state.all_sessions_db["roles"][agent]["chat_history"] = [
+                            msg for msg in agent_history if msg.get("msg_id") != target_id
+                        ]
                     if target_agent:
                         st.session_state.group_active_queue = [target_agent]
                         st.session_state.group_active_agent = target_agent
                 else:
+                    st.session_state.chat_history.pop(idx)
                     st.session_state.regenerate_trigger = True
                     
                 save_local_data()
@@ -523,13 +553,30 @@ lazy_insurance_prompt = {
 user_input = st.chat_input("在此处输入聊天内容...")
 
 if is_group_chat:
+    g_name = curr_sk.replace("💬 群聊：", "")
     if user_input:
-        st.session_state.chat_history.append({"role": "user", "content": user_input, "agent_name": "玩家"})
+        # 生成具备时空排重特征的唯一打包标记
+        msg_id = f"msg_{int(time.time() * 1000)}_{random.randint(1000, 9999)}"
+        timestamp = time.time()
         
+        user_payload = {
+            "role": "user", 
+            "content": user_input, 
+            "agent_name": "玩家", 
+            "from_group": g_name, 
+            "msg_id": msg_id, 
+            "timestamp": timestamp
+        }
+        
+        # 🛠️ 核心机制：群聊不再自存，完全分流写入参与的所有成员的单人后台历史中
         for agent in st.session_state.group_members_list:
-            st.session_state.all_sessions_db["roles"][agent]["chat_history"].append(
-                {"role": "user", "content": f"（玩家在群聊【{curr_sk.replace('💬 群聊：', '')}】里发了一条消息）：\n{user_input}"}
-            )
+            st.session_state.all_sessions_db["roles"][agent]["chat_history"].append({
+                "role": "user", 
+                "content": f"（玩家在群聊【{g_name}】里发了一条消息）：\n{user_input}",
+                "from_group": g_name,
+                "msg_id": msg_id,
+                "timestamp": timestamp
+            })
         
         if called_agents_list:
             st.session_state.group_active_queue = list(called_agents_list)
@@ -558,15 +605,15 @@ if is_group_chat:
             f"【当前群聊房间的背景环境描述】：\n{agent_db['background_story']}\n\n"
             f"【你当前感知到的状态】：\n{agent_db['character_status']}\n\n"
             f"【🔥 微信多人群聊点名特赦令】：\n"
-            f"你现在正处于名为【{curr_sk.replace('💬 群聊：', '')}】的多人微信群现场！\n"
+            f"你现在正处于名为【{g_name}】的多人微信群现场！\n"
             f"由于你在侧边栏被主人正式‘翻牌点名’，现在该你站出来发言了！\n"
-            f"请看清前文的所有群内动态，保持你的独特人格，对主人或其他群成员进行精彩的三段式隔空还击！\n\n"
+            f"请看清前文的所有群内动态，保持你傲娇/冷酷的独特人格，对主人或其他群成员进行精彩的三段式隔空还击！\n\n"
             f"{multi_reply_protocol}\n\n"
             f"{jailbreak_prompt}"
         )
         
-        g_history_len = len(st.session_state.chat_history)
-        context_messages = st.session_state.chat_history if g_history_len <= 30 else st.session_state.chat_history[-30:]
+        # 🛠️ 核心机制：新加入的角色因为他的个人历史中没有任何来自当前房间的标记消息，动态合成时上下文天然为空，彻底实现历史防越权偷看！
+        context_messages = st.session_state.chat_history if len(st.session_state.chat_history) <= 30 else st.session_state.chat_history[-30:]
         
         cleaned_context = []
         for msg in context_messages:
@@ -576,7 +623,6 @@ if is_group_chat:
                 prefix_name = msg.get("agent_name", "神秘人")
                 cleaned_context.append({"role": "assistant", "content": f"（【{prefix_name}】在群里说道）：\n{msg['content']}"})
 
-        # 🛠️ 致命防跨行补丁：在历史上下文结尾塞入强效身份清醒指令，绝对斩断角色视角的交叉污染
         identity_lock_patch = {
             "role": "user",
             "content": f"🚨【角色视角绝对隔离防线】🚨\n请注意：你现在的身份是【{curr_agent}】！请立刻切回【{curr_agent}】的心理视角、语气口吻和身体状态。坚决禁止延续或模仿上文其他角色的视角和说话习惯！请立刻以【{curr_agent}】的身份输出接下来的三段式精彩表演。"
@@ -599,12 +645,20 @@ if is_group_chat:
                         response_placeholder.markdown(full_response + "▌")
                 response_placeholder.markdown(full_response)
                 
-                st.session_state.chat_history.append({"role": "assistant", "content": full_response, "agent_name": curr_agent})
-                
+                # 产生属于这条回复的全局唯一标记
+                reply_id = f"reply_{int(time.time() * 1000)}_{random.randint(1000, 9999)}"
+                reply_timestamp = time.time()
+
+                # 分发写回参与群聊的所有群成员个人的历史堆栈中
                 for inner_agent in st.session_state.group_members_list:
-                    st.session_state.all_sessions_db["roles"][inner_agent]["chat_history"].append(
-                        {"role": "assistant", "content": f"（【{curr_agent}】在群聊【{curr_sk.replace('💬 群聊：', '')}】现场当众说道）：\n{full_response}"}
-                    )
+                    st.session_state.all_sessions_db["roles"][inner_agent]["chat_history"].append({
+                        "role": "assistant", 
+                        "content": f"（【{curr_agent}】在群聊【{g_name}】现场当众说道）：\n{full_response}",
+                        "agent_name": curr_agent,
+                        "from_group": g_name,
+                        "msg_id": reply_id,
+                        "timestamp": reply_timestamp
+                    })
                 
                 st.session_state.group_active_queue.pop(0)
                 if st.session_state.group_active_queue:
@@ -628,7 +682,7 @@ else:
         if user_input:
             with st.chat_message("user", avatar="😎"):
                 st.markdown(user_input)
-            st.session_state.chat_history.append({"role": "user", "content": user_input})
+            st.session_state.chat_history.append({"role": "user", "content": user_input, "timestamp": time.time()})
             st.session_state.dice_instruction_patch = ""
             save_local_data()
 
@@ -669,7 +723,7 @@ else:
                         response_placeholder.markdown(full_response + "▌")
                 response_placeholder.markdown(full_response)
                 
-                st.session_state.chat_history.append({"role": "assistant", "content": full_response})
+                st.session_state.chat_history.append({"role": "assistant", "content": full_response, "timestamp": time.time()})
                 st.session_state.dice_instruction_patch = ""
                 save_local_data()
                 st.rerun()
