@@ -281,16 +281,22 @@ if new_role_name_input:
         st.sidebar.error("❌ 名字无效或联系人已存在！")
     else:
         save_local_data()
+        # 🛠️ 修复：这里的新建初始值全部清空，避免因为双向绑定或遗留缓存导致信息跟上一个角色串联
         st.session_state.all_sessions_db["roles"][clean_name] = {
             "chat_history": [], 
-            "system_role": f"你是一位名叫【{clean_name}】的神秘角色。",
-            "background_story": f"设定一个属于【{clean_name}】的全新故事场景...", 
-            "character_status": "设定该角色当前的身体与心理状态...",
+            "system_role": f"你是一位名叫【{clean_name}】的角色。",
+            "background_story": "", 
+            "character_status": "",
             "favorability": 0, 
             "memory_events": []
         }
         st.session_state.current_session_key = f"👤 单聊：{clean_name}"
         st.session_state.chat_history = []  # 物理洗净新角色前台缓存
+        st.session_state.system_role = f"你是一位名叫【{clean_name}】的角色。"
+        st.session_state.background_story = ""
+        st.session_state.character_status = ""
+        st.session_state.favorability = 0
+        st.session_state.memory_events = []
         save_local_data()
         st.rerun()
 
