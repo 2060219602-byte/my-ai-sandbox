@@ -28,13 +28,13 @@ if "app_password" in st.secrets:
         st.stop()
 
 # ==========================================
-# 0. 核心辅助函数：真正的【微信式多会话独立硬盘】读取与保存
+# 0. 核心辅助函数：独立微信式会话读取与保存
 # ==========================================
 def get_default_data():
-    """统一定义系统出厂干净初始会话数据库模板"""
+    """定义系统出厂初始会话数据库字典骨架"""
     return {
         "current_session_key": "👤 单聊：赛博贩子-丽莎",
-        "group_rooms": {},  # 格式：{"群名": {"members": ["丽莎", "露娜"], "history": []}}
+        "group_rooms": {},  # 存储格式 {"群名": {"members": ["丽莎", "露娜"], "history": []}}
         "roles": {
             "赛博贩子-丽莎": {
                 "chat_history": [],
@@ -64,11 +64,6 @@ def load_cloud_data():
                     if "group_rooms" not in saved_data: saved_data["group_rooms"] = {}
                     if "current_session_key" not in saved_data: saved_data["current_session_key"] = "👤 单聊：" + list(saved_data["roles"].keys())[0]
                     return saved_data
-                elif "timelines" in saved_data:
-                    old_正片 = saved_data["timelines"].get("🌌 默认正片主线故事", get_default_data())
-                    if "group_rooms" not in old_正片: old_正片["group_rooms"] = {}
-                    old_正片["current_session_key"] = "👤 单聊：" + list(old_正片["roles"].keys())[0]
-                    return old_正片
         except Exception:
             pass
     return get_default_data()
@@ -120,9 +115,6 @@ def clear_all_file_data():
 # ==========================================
 # 1. 页面配置与【微信独立会话分发引擎】（彻底解绑历史残留）
 # ==========================================
-st.set_page_config(page_title="AI 角色扮演动作检定沙盒", layout="wide")
-st.title("🎭 AI 角色扮演私有沙盒 (⚙️防偷懒终极调教版)")
-
 if "all_sessions_db" not in st.session_state:
     st.session_state.all_sessions_db = load_cloud_data()
 
@@ -132,7 +124,7 @@ if "current_session_key" not in st.session_state:
 if "group_active_agent" not in st.session_state: st.session_state.group_active_agent = ""
 if "group_active_queue" not in st.session_state: st.session_state.group_active_queue = []
 
-# 🛠️ 关键修复一：会话下拉菜单直刷。直接接管主脚本流，切换时强制清空内存，不给历史错乱留一丝机会！
+# 菜单选择直刷重载
 available_roles_list = list(st.session_state.all_sessions_db["roles"].keys())
 available_groups_list = list(st.session_state.all_sessions_db["group_rooms"].keys())
 session_menu_options = [f"👤 单聊：{name}" for name in available_roles_list] + [f"💬 群聊：{gname}" for gname in available_groups_list]
@@ -148,9 +140,9 @@ selected_session = st.sidebar.selectbox(
 )
 
 if selected_session != st.session_state.current_session_key:
-    save_local_data()  # 先存旧数据
+    save_local_data()  # 备份老联系人数据
     st.session_state.current_session_key = selected_session
-    # 🌟 强行物理洗白前台内存！斩断“新角色带老历史”的幽灵Bug！
+    # 🌟 物理切断：换人的一瞬间，内存里的剧本主线强行归零重洗，等刷新后由指针重新在JSON里抓取
     st.session_state.chat_history = []
     st.session_state.group_active_agent = ""
     st.session_state.group_active_queue = []
@@ -182,7 +174,7 @@ if "dice_instruction_patch" not in st.session_state: st.session_state.dice_instr
 # ==========================================
 # 2. 侧边栏控制台：常驻建群区 × 动态点名圆点 × 📌备忘录完美修复
 # ==========================================
-# 🌟 群内实时翻牌点名小圆点
+# 群内实时翻牌点名小圆点
 called_agents_list = []
 if is_group_chat:
     st.sidebar.write("---")
@@ -200,7 +192,6 @@ input_g_name = st.sidebar.text_input("1. 输入微信群名字（如：大乱斗
 st.sidebar.caption("2. 请在这里勾选你想邀请进群的角色：")
 pulled_members = []
 for r_name in available_roles_list:
-    # 默认不勾选，必须人手动去点，防止“默认拉入全员”恶性Bug
     if st.sidebar.checkbox(f"拉【{r_name}】进群", value=False, key=f"pull_action_check_{r_name}"):
         pulled_members.append(r_name)
 
@@ -227,22 +218,30 @@ if is_group_chat:
     for m in st.session_state.group_members_list:
         st.sidebar.write(f"• 👑 **{m}**")
 
-# ✨ 独占单聊控制面板（修复添加记忆不显示、不同角色记忆大串台）
+# ✨ 独占单聊控制面板（组件加锁防篡改）
 if not is_group_chat:
     target_girl = curr_sk.replace("👤 单聊：", "")
     st.sidebar.write("---")
     st.sidebar.subheader("❤️ 动态羁绊值")
-    st.sidebar.slider(f"{target_girl} 对我的好感度", -100, 100, value=st.session_state.favorability, key="favorability", on_change=save_local_data)
+    
+    # 🛠️ 关键修复一：羁绊滑块加锁，避免切人时好感度相互污染
+    st.sidebar.slider(f"{target_girl} 对我的好感度", -100, 100, value=st.session_state.favorability, key=f"SLIDER_LOCK_{target_girl}", on_change=save_local_data)
 
     st.sidebar.write("---")
     st.sidebar.subheader("🎬 实时环境与剧本设定")
-    bg_input = st.sidebar.text_area("当前背景剧情", value=st.session_state.background_story, key="background_story", on_change=save_local_data, height=100)
-    status_input = st.sidebar.text_area("角色的当前状态", value=st.session_state.character_status, key="character_status", on_change=save_local_data, height=100)
+    
+    # 🛠️ 关键修复二：【最狠大招】给背景、状态设定组件也加上专属的角色前缀 Key！
+    # 这样一换联系人，旧的丽莎残留信息会被彻底解绑，新角色绝对完美展现纯白初设，再也不会篡改 JSON！
+    bg_input = st.sidebar.text_area("当前背景剧情", value=st.session_state.background_story, key=f"BG_TEXT_AREA_LOCK_{target_girl}", on_change=save_local_data, height=100)
+    status_input = st.sidebar.text_area("角色的当前状态", value=st.session_state.character_status, key=f"STATUS_TEXT_AREA_LOCK_{target_girl}", on_change=save_local_data, height=100)
+
+    # 同步把前台变量更新
+    st.session_state.background_story = bg_input
+    st.session_state.character_status = status_input
 
     st.sidebar.write("---")
     st.sidebar.subheader("📌 核心事件备忘录（永久记忆）")
     
-    # 🛠️ 关键修复三：给循环修改框换上【当前单聊角色名字】的最高级别动态 Key 防线！彻底斩断不同角色大串台！
     updated_memories = []
     for i, event in enumerate(st.session_state.memory_events):
         col_memo_txt, col_memo_del = st.sidebar.columns([0.8, 0.2])
@@ -260,12 +259,11 @@ if not is_group_chat:
         st.session_state.memory_events = updated_memories
         save_local_data()
 
-    # 🛠️ 关键修复二：添加新事件备忘录。Key挂载当前单聊联系人，添加完直接追加进本单聊的阵列里，回车立现！
     new_event_input = st.sidebar.text_input("➕ 添加新核心记忆（回车生效）：", value="", key=f"FINAL_MEMO_KEY_{target_girl}_add_new_widget")
     if new_event_input:
         clean_event = new_event_input.strip()
         if clean_event and clean_event not in st.session_state.memory_events:
-            st.session_state.memory_events.append(clean_event)  # 正确追加
+            st.session_state.memory_events.append(clean_event)
             save_local_data()
             st.toast("📌 核心记忆链成功锁死！")
             st.rerun()
@@ -280,12 +278,15 @@ if new_role_name_input:
     else:
         save_local_data()
         st.session_state.all_sessions_db["roles"][clean_name] = {
-            "chat_history": [], "system_role": f"你是一位名叫【{clean_name}】的神秘角色。",
-            "background_story": "设定一个全新的故事场景...", "character_status": "设定当前状态...",
-            "favorability": 0, "memory_events": []
+            "chat_history": [], 
+            "system_role": f"你是一位名叫【{clean_name}】的神秘角色。",
+            "background_story": f"设定一个属于【{clean_name}】的全新故事场景...", 
+            "character_status": "设定该角色当前的身体与心理状态...",
+            "favorability": 0, 
+            "memory_events": []
         }
         st.session_state.current_session_key = f"👤 单聊：{clean_name}"
-        st.session_state.chat_history = []  # 物理洗净新角色前台缓存
+        st.session_state.chat_history = []
         save_local_data()
         st.rerun()
 
@@ -297,7 +298,8 @@ client = OpenAI(api_key=api_key, base_url="https://api.deepseek.com")
 
 if not is_group_chat:
     st.sidebar.header("⚙️ 全局配置管理")
-    system_role_input = st.sidebar.text_area("前端 AI 角色基本设定 (System Role)", value=st.session_state.system_role, key="system_role", on_change=save_local_data, height=120)
+    system_role_input = st.sidebar.text_area("前端 AI 角色基本设定 (System Role)", value=st.session_state.system_role, key=f"SYSTEM_ROLE_LOCK_{target_girl}", on_change=save_local_data, height=120)
+    st.session_state.system_role = system_role_input
 
 # ⚡ 完全保留！百分之百无阉割的破甲核心设定
 jailbreak_prompt = """
@@ -338,7 +340,7 @@ if st.sidebar.button("💣 毁灭一键复位（彻底销毁整个数据库）",
     st.rerun()
 
 # ==========================================
-# 3. 主界面渲染与历史切片折叠机制（安全位置定义变量）
+# 3. 主界面渲染与历史切片折叠机制
 # ==========================================
 if is_group_chat:
     st.subheader(f"💬 当前对话框：【{curr_sk.replace('💬 群聊：', '')}】 (微信多人群聊大舞台)")
@@ -362,7 +364,6 @@ def render_message_controls(idx):
                 save_local_data()
                 st.rerun()
 
-# 🌟 修复变量位置，彻底捍卫渲染顺序
 history_len = len(st.session_state.chat_history)
 DISPLAY_LIMIT = 6
 
@@ -459,26 +460,21 @@ lazy_insurance_prompt = {
 }
 
 # ==========================================
-# 6. 会话调用执行中枢：动态点名传火机制
+# 6. 会话调用执行中枢
 # ==========================================
-user_input = st.chat_input("在此处输入聊天内容...")
-
 if is_group_chat:
     if user_input:
         st.session_state.chat_history.append({"role": "user", "content": user_input, "agent_name": "玩家"})
-        
         for agent in st.session_state.group_members_list:
             st.session_state.all_sessions_db["roles"][agent]["chat_history"].append(
                 {"role": "user", "content": f"（玩家在群聊【{curr_sk.replace('💬 群聊：', '')}】里发了一条消息）：\n{user_input}"}
             )
-        
         if called_agents_list:
             st.session_state.group_active_queue = list(called_agents_list)
             st.session_state.group_active_agent = st.session_state.group_active_queue[0]
         else:
             st.session_state.group_active_queue = []
             st.session_state.group_active_agent = ""
-            
         save_local_data()
         st.rerun()
 
