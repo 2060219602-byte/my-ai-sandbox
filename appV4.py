@@ -228,8 +228,12 @@ if new_room_name:
             "history": []
         }
         st.session_state.current_session_key = f"💬 群聊：{clean_room_name}"
+        
+        # 🌟 核心修复：在此处强制将前台主舞台的聊天历史缓存洗成纯净的白纸，彻底切断单聊残留！
+        st.session_state.chat_history = []
         st.session_state.group_chat_history = []
         st.session_state.group_active_agent = ""
+        
         save_local_data()
         st.toast(f"🎉 成功拉群：【{clean_room_name}】，当前已无缝切入群聊框！")
         st.rerun()
