@@ -28,13 +28,13 @@ if "app_password" in st.secrets:
         st.stop()
 
 # ==========================================
-# 0. 核心辅助函数：独立多群聊会话读取与保存
+# 0. 核心辅助函数：真正的【微信式多会话独立硬盘】读取与保存
 # ==========================================
 def get_default_data():
-    """定义系统出厂初始会话数据库字典骨架"""
+    """统一定义系统出厂干净初始会话数据库模板"""
     return {
         "current_session_key": "👤 单聊：赛博贩子-丽莎",
-        "group_rooms": {},  # 存储格式 {"群名": {"members": ["丽莎", "露娜"], "history": []}}
+        "group_rooms": {},  # 格式：{"群名": {"members": ["丽莎", "露娜"], "history": []}}
         "roles": {
             "赛博贩子-丽莎": {
                 "chat_history": [],
@@ -61,17 +61,20 @@ def load_cloud_data():
             with open(DATA_FILE, "r", encoding="utf-8") as f:
                 saved_data = json.load(f)
                 if "roles" in saved_data:
-                    if "group_rooms" not in saved_data:
-                        saved_data["group_rooms"] = {}
-                    if "current_session_key" not in saved_data:
-                        saved_data["current_session_key"] = "👤 单聊：" + list(saved_data["roles"].keys())[0]
+                    if "group_rooms" not in saved_data: saved_data["group_rooms"] = {}
+                    if "current_session_key" not in saved_data: saved_data["current_session_key"] = "👤 单聊：" + list(saved_data["roles"].keys())[0]
                     return saved_data
+                elif "timelines" in saved_data:
+                    old_正片 = saved_data["timelines"].get("🌌 默认正片主线故事", get_default_data())
+                    if "group_rooms" not in old_正片: old_正片["group_rooms"] = {}
+                    old_正片["current_session_key"] = "👤 单聊：" + list(old_正片["roles"].keys())[0]
+                    return old_正片
         except Exception:
             pass
     return get_default_data()
 
 def save_local_data():
-    """实时同步到云端磁盘"""
+    """核心分流：精准锁死当前会话状态，阻断任何交叉感染"""
     if "all_sessions_db" not in st.session_state or "current_session_key" not in st.session_state:
         return
 
@@ -92,7 +95,6 @@ def save_local_data():
         g_name = curr_sk.replace("💬 群聊：", "")
         if g_name in st.session_state.all_sessions_db["group_rooms"]:
             st.session_state.all_sessions_db["group_rooms"][g_name]["history"] = st.session_state.chat_history
-            st.session_state.all_sessions_db["group_rooms"][g_name]["members"] = st.session_state.group_members_list
 
     st.session_state.all_sessions_db["current_session_key"] = curr_sk
     
@@ -114,8 +116,9 @@ def clear_all_file_data():
                 "character_status", "favorability", "memory_events", "group_active_agent", "group_members_list", "group_active_queue"]:
         if key in st.session_state: del st.session_state[key]
 
+
 # ==========================================
-# 1. 页面基本配置与顶层数据加载
+# 1. 页面配置与【微信独立会话分发引擎】（彻底解绑历史残留）
 # ==========================================
 st.set_page_config(page_title="AI 角色扮演动作检定沙盒", layout="wide")
 st.title("🎭 AI 角色扮演私有沙盒 (⚙️防偷懒终极调教版)")
@@ -126,16 +129,10 @@ if "all_sessions_db" not in st.session_state:
 if "current_session_key" not in st.session_state:
     st.session_state.current_session_key = st.session_state.all_sessions_db["current_session_key"]
 
-if "group_active_agent" not in st.session_state:
-    st.session_state.group_active_agent = ""
-if "group_active_queue" not in st.session_state:
-    st.session_state.group_active_queue = []
+if "group_active_agent" not in st.session_state: st.session_state.group_active_agent = ""
+if "group_active_queue" not in st.session_state: st.session_state.group_active_queue = []
 
-# ==========================================
-# 2. 侧边栏控制台：【无黄框直刷导航】 × 【常驻建群】 × 【✨群内动态点名小圆点】
-# ==========================================
-st.sidebar.header("🟢 微信会话选择列表")
-
+# 🛠️ 关键修复一：会话下拉菜单直刷。直接接管主脚本流，切换时强制清空内存，不给历史错乱留一丝机会！
 available_roles_list = list(st.session_state.all_sessions_db["roles"].keys())
 available_groups_list = list(st.session_state.all_sessions_db["group_rooms"].keys())
 session_menu_options = [f"👤 单聊：{name}" for name in available_roles_list] + [f"💬 群聊：{gname}" for gname in available_groups_list]
@@ -143,7 +140,6 @@ session_menu_options = [f"👤 单聊：{name}" for name in available_roles_list
 if st.session_state.current_session_key not in session_menu_options:
     st.session_state.current_session_key = session_menu_options[0]
 
-# 物理直刷选择器，防黄框
 selected_session = st.sidebar.selectbox(
     "切换当前聊天对话框（单聊/群聊独立切换）",
     options=session_menu_options,
@@ -152,13 +148,15 @@ selected_session = st.sidebar.selectbox(
 )
 
 if selected_session != st.session_state.current_session_key:
-    save_local_data()
+    save_local_data()  # 先存旧数据
     st.session_state.current_session_key = selected_session
+    # 🌟 强行物理洗白前台内存！斩断“新角色带老历史”的幽灵Bug！
+    st.session_state.chat_history = []
     st.session_state.group_active_agent = ""
     st.session_state.group_active_queue = []
     st.rerun()
 
-# 会话资产装载
+# 🔑 全局指针重定向与资产精准绑定
 curr_sk = st.session_state.current_session_key
 is_group_chat = curr_sk.startswith("💬 群聊：")
 
@@ -178,47 +176,42 @@ else:
     st.session_state.chat_history = room_data["history"]
     st.session_state.group_members_list = room_data["members"]
 
-if "regenerate_trigger" not in st.session_state:
-    st.session_state.regenerate_trigger = False
-if "dice_instruction_patch" not in st.session_state:
-    st.session_state.dice_instruction_patch = ""
+if "regenerate_trigger" not in st.session_state: st.session_state.regenerate_trigger = False
+if "dice_instruction_patch" not in st.session_state: st.session_state.dice_instruction_patch = ""
 
-# 🌟 高能核心：【群内常驻小圆点 · 实时点名发言引擎】
-# 当处于任何群聊房间时，侧边栏直接亮出点名面板！你打勾谁，谁待会儿发送后才会回话！
+# ==========================================
+# 2. 侧边栏控制台：常驻建群区 × 动态点名圆点 × 📌备忘录完美修复
+# ==========================================
+# 🌟 群内实时翻牌点名小圆点
 called_agents_list = []
 if is_group_chat:
     st.sidebar.write("---")
     st.sidebar.subheader("🎯 实时点名（控制谁听话回应）")
     st.sidebar.caption("🟢 打勾小圆点的角色，在你发送内容后才会出来飙戏，其余人会保持潜水。")
     for m in st.session_state.group_members_list:
-        # 默认全部打勾（符合群聊常理），你可以随心所欲取消勾选，实现精准翻牌子
         if st.sidebar.checkbox(f"🟢 准许【{m}】响应回复", value=True, key=f"call_dot_{curr_sk}_{m}"):
             called_agents_list.append(m)
 
-# ➕ 常驻微信式自由建群区
+# ➕ 微信式常驻自选建群区
 st.sidebar.write("---")
 st.sidebar.subheader("➕ 微信式自由拉群房间")
-input_g_name = st.sidebar.text_input("1. 输入新微信群名字：", value="", key="g_name_input_widget")
+input_g_name = st.sidebar.text_input("1. 输入微信群名字（如：大乱斗）：", value="", key="g_name_input_widget")
 
-st.sidebar.caption("2. 勾选需要拉进该群的初始联系人：")
+st.sidebar.caption("2. 请在这里勾选你想邀请进群的角色：")
 pulled_members = []
 for r_name in available_roles_list:
+    # 默认不勾选，必须人手动去点，防止“默认拉入全员”恶性Bug
     if st.sidebar.checkbox(f"拉【{r_name}】进群", value=False, key=f"pull_action_check_{r_name}"):
         pulled_members.append(r_name)
 
 if st.sidebar.button("🚀 创立并无缝切入该群聊", use_container_width=True):
     clean_room_name = input_g_name.strip()
-    if clean_room_name == "":
-        st.sidebar.error("❌ 群名字不能为空！")
-    elif clean_room_name in st.session_state.all_sessions_db["group_rooms"]:
-        st.sidebar.error("❌ 这个微信群名字已经存在了！")
-    elif not pulled_members:
-        st.sidebar.error("❌ 至少需要勾选一位群成员！")
+    if clean_room_name == "" or clean_room_name in st.session_state.all_sessions_db["group_rooms"] or not pulled_members:
+        st.sidebar.error("❌ 名字重复/为空，或者你没有勾选任何群成员联系人！")
     else:
         save_local_data()
         st.session_state.all_sessions_db["group_rooms"][clean_room_name] = {
-            "members": pulled_members,
-            "history": []
+            "members": pulled_members, "history": []
         }
         st.session_state.current_session_key = f"💬 群聊：{clean_room_name}"
         st.session_state.chat_history = []
@@ -228,11 +221,18 @@ if st.sidebar.button("🚀 创立并无缝切入该群聊", use_container_width=
         st.toast(f"🎉 微信群【{clean_room_name}】建立成功！")
         st.rerun()
 
-# 单聊属性专属滑块
+if is_group_chat:
+    st.sidebar.write("---")
+    st.sidebar.subheader("👥 本群在线群成员名单")
+    for m in st.session_state.group_members_list:
+        st.sidebar.write(f"• 👑 **{m}**")
+
+# ✨ 独占单聊控制面板（修复添加记忆不显示、不同角色记忆大串台）
 if not is_group_chat:
+    target_girl = curr_sk.replace("👤 单聊：", "")
     st.sidebar.write("---")
     st.sidebar.subheader("❤️ 动态羁绊值")
-    st.sidebar.slider(f"{curr_sk.replace('👤 单聊：', '')} 对我的好感度", -100, 100, value=st.session_state.favorability, key="favorability", on_change=save_local_data)
+    st.sidebar.slider(f"{target_girl} 对我的好感度", -100, 100, value=st.session_state.favorability, key="favorability", on_change=save_local_data)
 
     st.sidebar.write("---")
     st.sidebar.subheader("🎬 实时环境与剧本设定")
@@ -241,15 +241,17 @@ if not is_group_chat:
 
     st.sidebar.write("---")
     st.sidebar.subheader("📌 核心事件备忘录（永久记忆）")
+    
+    # 🛠️ 关键修复三：给循环修改框换上【当前单聊角色名字】的最高级别动态 Key 防线！彻底斩断不同角色大串台！
     updated_memories = []
     for i, event in enumerate(st.session_state.memory_events):
-        col_memo_txt, col_memo_del = st.columns([0.8, 0.2])
+        col_memo_txt, col_memo_del = st.sidebar.columns([0.8, 0.2])
         with col_memo_txt:
-            edited_event = st.text_input(f"事件 {i+1}", value=event, key=f"{st.session_state.current_session_key}_memo_edit_{i}")
+            edited_event = st.text_input(f"事件 {i+1}", value=event, key=f"FINAL_MEMO_KEY_{target_girl}_edit_{i}")
             updated_memories.append(edited_event)
         with col_memo_del:
             st.write("") 
-            if st.button("❌", key=f"{st.session_state.current_session_key}_memo_del_{i}"):
+            if st.button("❌", key=f"FINAL_MEMO_KEY_{target_girl}_del_{i}"):
                 st.session_state.memory_events.pop(i)
                 save_local_data()
                 st.rerun()
@@ -258,12 +260,14 @@ if not is_group_chat:
         st.session_state.memory_events = updated_memories
         save_local_data()
 
-    new_event_input = st.sidebar.text_input("➕ 添加新核心记忆：", value="", key=f"{st.session_state.current_session_key}_new_memo_widget")
+    # 🛠️ 关键修复二：添加新事件备忘录。Key挂载当前单聊联系人，添加完直接追加进本单聊的阵列里，回车立现！
+    new_event_input = st.sidebar.text_input("➕ 添加新核心记忆（回车生效）：", value="", key=f"FINAL_MEMO_KEY_{target_girl}_add_new_widget")
     if new_event_input:
         clean_event = new_event_input.strip()
         if clean_event and clean_event not in st.session_state.memory_events:
-            st.session_state.memory_events.append(clean_event)
+            st.session_state.memory_events.append(clean_event)  # 正确追加
             save_local_data()
+            st.toast("📌 核心记忆链成功锁死！")
             st.rerun()
 
 st.sidebar.write("---")
@@ -281,6 +285,7 @@ if new_role_name_input:
             "favorability": 0, "memory_events": []
         }
         st.session_state.current_session_key = f"👤 单聊：{clean_name}"
+        st.session_state.chat_history = []  # 物理洗净新角色前台缓存
         save_local_data()
         st.rerun()
 
@@ -313,7 +318,6 @@ jailbreak_prompt = """
 
 st.sidebar.write("---")
 st.sidebar.header("🚨 危险清理区")
-
 if is_group_chat:
     if st.sidebar.button("🗑️ 彻底解散并永久删除当前群聊房间", type="primary", use_container_width=True):
         g_target = curr_sk.replace("💬 群聊：", "")
@@ -322,7 +326,7 @@ if is_group_chat:
         st.session_state.group_active_agent = ""
         st.session_state.group_active_queue = []
         save_local_data()
-        st.toast(f"🔥 群聊【{g_target}】已被永久抹除！")
+        st.toast(f"🔥 群聊【{g_target}】已被解散！")
         st.rerun()
 else:
     if st.sidebar.button("🧹 只清空当前角色聊天历史", type="secondary", use_container_width=True):
@@ -334,7 +338,7 @@ if st.sidebar.button("💣 毁灭一键复位（彻底销毁整个数据库）",
     st.rerun()
 
 # ==========================================
-# 3. 主界面渲染与历史切片折叠机制
+# 3. 主界面渲染与历史切片折叠机制（安全位置定义变量）
 # ==========================================
 if is_group_chat:
     st.subheader(f"💬 当前对话框：【{curr_sk.replace('💬 群聊：', '')}】 (微信多人群聊大舞台)")
@@ -358,6 +362,7 @@ def render_message_controls(idx):
                 save_local_data()
                 st.rerun()
 
+# 🌟 修复变量位置，彻底捍卫渲染顺序
 history_len = len(st.session_state.chat_history)
 DISPLAY_LIMIT = 6
 
@@ -454,22 +459,19 @@ lazy_insurance_prompt = {
 }
 
 # ==========================================
-# 6. 会话调用执行中枢：【✨ 动态点名传火机制】
+# 6. 会话调用执行中枢：动态点名传火机制
 # ==========================================
 user_input = st.chat_input("在此处输入聊天内容...")
 
 if is_group_chat:
-    # ------------------ 💬 场景 A：群聊时空 ------------------
     if user_input:
         st.session_state.chat_history.append({"role": "user", "content": user_input, "agent_name": "玩家"})
         
-        # 记忆广播：你在这个群发的微信消息，依然无感沉淀进【本群全员】的私密日记本里
         for agent in st.session_state.group_members_list:
             st.session_state.all_sessions_db["roles"][agent]["chat_history"].append(
                 {"role": "user", "content": f"（玩家在群聊【{curr_sk.replace('💬 群聊：', '')}】里发了一条消息）：\n{user_input}"}
             )
         
-        # 🌟 核心：这次我们根据左侧小圆点实时打勾的【点名名单（called_agents_list）】来组装发号队列！
         if called_agents_list:
             st.session_state.group_active_queue = list(called_agents_list)
             st.session_state.group_active_agent = st.session_state.group_active_queue[0]
@@ -480,7 +482,6 @@ if is_group_chat:
         save_local_data()
         st.rerun()
 
-    # 🔄 点名接力判定：传火开始
     if st.session_state.group_active_agent and st.session_state.group_active_agent in st.session_state.group_active_queue:
         curr_agent = st.session_state.group_active_agent
         agent_db = st.session_state.all_sessions_db["roles"][curr_agent]
@@ -519,7 +520,7 @@ if is_group_chat:
         api_payload = [{"role": "system", "content": agent_dynamic_system}] + cleaned_context + [lazy_insurance_prompt]
         
         with st.chat_message("assistant", avatar="💋"):
-            st.write(f"💬 **【{curr_agent}】 被你点名，正在组织群内对峙修罗场...**")
+            st.write(f"💬 **【{curr_agent}】 已接单！正在组织群聊博弈动态中...**")
             response_placeholder = st.empty()
             full_response = ""
             
@@ -533,7 +534,6 @@ if is_group_chat:
                         response_placeholder.markdown(full_response + "▌")
                 response_placeholder.markdown(full_response)
                 
-                # 记忆下沉：被点名回的台词，同样广播记录给【所有在群成员】的单聊大脑
                 st.session_state.chat_history.append({"role": "assistant", "content": full_response, "agent_name": curr_agent})
                 
                 for inner_agent in st.session_state.group_members_list:
@@ -541,7 +541,6 @@ if is_group_chat:
                         {"role": "assistant", "content": f"（【{curr_agent}】在群聊【{curr_sk.replace('💬 群聊：', '')}】现场当众说道）：\n{full_response}"}
                     )
                 
-                # 🏃‍♂️ 队列移交：划掉当前发言人，看看点名队列里还有谁？
                 st.session_state.group_active_queue.pop(0)
                 if st.session_state.group_active_queue:
                     st.session_state.group_active_agent = st.session_state.group_active_queue[0]
@@ -556,7 +555,6 @@ if is_group_chat:
                 st.session_state.group_active_queue = []
 
 else:
-    # ------------------ 🔒 场景 B：原有的独立单人私密聊天 ------------------
     if user_input or st.session_state.regenerate_trigger or dice_triggered:
         if not api_key:
             st.error("请先在左侧输入你的 DeepSeek API Key！")
