@@ -654,9 +654,17 @@ multi_reply_protocol = (
     "基于前两段的情感蓄势，在这一段的结尾，请由你来扮演戏剧的打破者，主动发起一项带有叙事转折、或者充满张力的具体行为。通过这个行为强行将剧情推向下一个高潮或冲突点，以此来引导和激发玩家接下来的回应。"
 )
 
+group_multi_clash_protocol = (
+    "【⚡ 微信群聊多人修罗场高频对答协议】\n"
+    "注意！目前这场群聊有多个AI角色正在同台交锋！\n"
+    "请无条件按照 1️⃣、2️⃣ 两个标号分两段输出，直接输出内容：\n\n"
+    "1️⃣ 【对话回应】：结合当前局势，直接输出你对玩家或其他AI角色的回应台词。台词要符合设定，字数控制在2-5句内。\n\n"
+    "2️⃣ 【具体行动】：承接你的发言，描述你说话时正在做的连续肢体动作，或者具体行为。"
+)
+
 lazy_insurance_prompt = {
     "role": "system",
-    "content": "💡 [剧本质量终审确认]：请无条件按照 1️⃣、2️⃣、3️⃣ 标号分三段输出细节饱满的精彩长文，禁止附带多余标签文字！"
+    "content": "💡 [剧本质量终审确认]：请老老实实按照系统规定的数字标号分段输出细节，禁止附带多余标签文字！"
 }
 
 # ==========================================
@@ -700,17 +708,26 @@ if is_group_chat:
             for idx, event in enumerate(agent_db["memory_events"]):
                 agent_memory_prompt += f"{idx+1}. {event}\n"
                 
+        # 🔑 智能判定中枢：根据这轮勾选的人数，决定塞给AI什么协议
+        # 只有在群聊，且同时点名了2人及以上时，才启用精炼双段式。
+        if is_group_chat and len(called_agents_list) >= 2:
+            chosen_protocol = group_multi_clash_protocol
+            clash_hint = f"由于现场有【{', '.join(called_agents_list)}】正在同步对话，请采用 1️⃣ 2️⃣ 双段式输出"
+        else:
+            chosen_protocol = multi_reply_protocol
+            clash_hint = "由于目前只有你一人在对局，请采用传统的 1️⃣ 2️⃣ 3️⃣ 三段式输出。"
+
         agent_dynamic_system = (
             f"【你的名字：{curr_agent}】\n"
             f"【你的人格设定】：\n{agent_db['system_role']}\n\n"
             f"{agent_memory_prompt}\n"
             f"【当前群聊房间的背景环境描述】：\n{agent_db['background_story']}\n\n"
             f"【你当前感知到的状态】：\n{agent_db['character_status']}\n\n"
-            f"【🔥 微信多人群聊点名特赦令】：\n"
+            f"【🔥 微信多人群聊指令控制】：\n"
             f"你现在正处于名为【{g_name}】的多人微信群现场！\n"
-            f"由于你在侧边栏被主人正式‘翻牌点名’，现在该你站出来发言了！\n"
-            f"请看清前文的所有群内动态（注意：你只能看到你亲自参与发言或被点名时的历史，这构成了你的独立认知差异），保持你独特的性格设定，对主人或其他群成员进行精彩的三段式隔空还击！\n\n"
-            f"{multi_reply_protocol}\n\n"
+            f"{clash_hint}\n"
+            f"请看清前文的所有群内动态，保持你独特的性格设定，对主人或其他群成员进行隔空还击！\n\n"
+            f"{chosen_protocol}\n\n"
             f"{jailbreak_prompt}"
         )
         
