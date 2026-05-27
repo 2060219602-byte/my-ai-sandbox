@@ -676,7 +676,22 @@ else:
         st.session_state.regenerate_trigger = False
 
         total_history_len = len(st.session_state.chat_history)
-        context_messages = st.session_state.chat_history if total_history_len <= 30 else st.session_state.chat_history[((total_history_len // 15) * 15 - 15):]
+        raw_context = st.session_state.chat_history if total_history_len <= 30 else st.session_state.chat_history[((total_history_len // 15) * 15 - 15):]
+
+        # ✨ 【防御隔离修补】过滤上下文：如果是群聊历史，洗掉带有的群聊特征字样，防止单聊时AI说出“在群里说”
+        context_messages = []
+        for msg in raw_context:
+            content = msg["content"]
+            # 如果是user在群里的发言，提取纯文本
+            if "（玩家在群聊" in content and "里发了一条消息）：" in content:
+                content = content.split("）：\n")[-1]
+            # 如果是其他AI在群里的发言，提取纯文本
+            elif "现场当众说道）：" in content:
+                content = content.split("）：\n")[-1]
+            elif "在群里说道）：" in content:
+                content = content.split("）：\n")[-1]
+            
+            context_messages.append({"role": msg["role"], "content": content})
 
         memory_ledger_prompt = ""
         if st.session_state.memory_events:
@@ -684,9 +699,11 @@ else:
             for idx, event in enumerate(st.session_state.memory_events):
                 memory_ledger_prompt += f"{idx+1}. {event}\n"
 
+        # ✨ 【核心提示词微调】在System Prompt里明确告知这是私密单聊，打断群聊惯性
         dynamic_system_prompt = (
             f"{st.session_state.system_role}\n\n"
             f"{memory_ledger_prompt}\n\n"
+            f"【🚨 会话协议提示】：你当前正处于和玩家的【1对1私密悄悄话单聊对话】中，这里没有其他人，不需要在群里发言，请直接、自然地对玩家进行三段式扮演和回复。\n\n"
             f"【当前演出的背景剧情设定】：\n{st.session_state.background_story}\n\n"
             f"【你当前需要感知到的角色状态】：\n{st.session_state.character_status}\n\n"
             f"{multi_reply_protocol}\n\n"
