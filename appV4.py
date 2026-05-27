@@ -648,7 +648,7 @@ lazy_insurance_prompt = {
 }
 
 # ==========================================
-# 6. 会话调用执行中枢：动态点名传火机制
+# 6. 会话调用执行中枢：动态点名传火机制（修复连续接话版）
 # ==========================================
 user_input = st.chat_input("在此处输入聊天内容...")
 
@@ -658,19 +658,20 @@ if is_group_chat:
         msg_id = f"msg_{int(time.time() * 1000)}_{random.randint(1000, 9999)}"
         timestamp = time.time()
         
-        # 🔑 【隔离分发】：只分发给当前勾选的AI。未点名的AI因为没有这段记录，产生绝对信息差盲区
-        for agent in called_agents_list:
-            st.session_state.all_sessions_db["roles"][agent]["chat_history"].append({
+        # 🔑 【第一步：玩家发言时，只把消息塞给队列里的第一个AI角色】
+        # 这样确保绝对的信息差与严格的先后顺序
+        if called_agents_list:
+            st.session_state.group_active_queue = list(called_agents_list)
+            first_agent = st.session_state.group_active_queue[0]
+            
+            st.session_state.all_sessions_db["roles"][first_agent]["chat_history"].append({
                 "role": "user", 
                 "content": {"content": f"（玩家在群聊【{g_name}】里发了一条消息）：\n{user_input}", "summary": f"你在群聊【{g_name}】发消息：{user_input}"},
                 "from_group": g_name,
                 "msg_id": msg_id,
                 "timestamp": timestamp
             })
-        
-        if called_agents_list:
-            st.session_state.group_active_queue = list(called_agents_list)
-            st.session_state.group_active_agent = st.session_state.group_active_queue[0]
+            st.session_state.group_active_agent = first_agent
         else:
             st.session_state.group_active_queue = []
             st.session_state.group_active_agent = ""
@@ -678,6 +679,7 @@ if is_group_chat:
         save_local_data()
         st.rerun()
 
+    # 传火中枢：当队列里还有人没发言时，一个接一个地串行调用
     if st.session_state.group_active_agent and st.session_state.group_active_agent in st.session_state.group_active_queue:
         curr_agent = st.session_state.group_active_agent
         agent_db = st.session_state.all_sessions_db["roles"][curr_agent]
@@ -696,29 +698,29 @@ if is_group_chat:
             f"【你当前感知到的状态】：\n{agent_db['character_status']}\n\n"
             f"【🔥 微信多人群聊点名特赦令】：\n"
             f"你现在正处于名为【{g_name}】的多人微信群现场！\n"
-            f"由于你在侧边栏被主人正式‘翻牌点名’，现在该你站出来发言了！\n"
-            f"请看清前文的所有群内动态（注意：你只能看到你亲自参与或被点名时的历史，这构成了你的认知隔离），保持你独特的性格设定，对主人或其他群成员进行精彩的三段式隔空还击！\n\n"
+            f"现在该你站出来发言了！\n"
+            f"请看清前文的所有群内动态。你可以看到玩家的最新发言，以及在这一轮中排在你前面发言的角色做出的即时举动。\n"
+            f"请保持你独特的性格设定，承接她们的动作，对主人或群内其他AI进行精彩的三段式还击！\n\n"
             f"{multi_reply_protocol}\n\n"
             f"{jailbreak_prompt}"
         )
         
-        # 🔑 【动态视窗调控核心】
+        # 🔑 【群混战降燥】：如果点名了多个AI，为了防暴走，使用全精简30轮（full_limit=0）
+        # 如果只点了1个AI，使用黄金视窗 8详细+22精简
         if len(called_agents_list) > 1:
-            # 多人围观大乱斗：前30轮全精简，死死压制上文模仿效应导致的字数暴走
             cleaned_context = build_isolated_memory_context(agent_db.get("chat_history", []), curr_agent, full_limit=0, total_limit=30)
         else:
-            # 群内单挑/只选了一个人：使用最近8轮详细，前22轮精简
             cleaned_context = build_isolated_memory_context(agent_db.get("chat_history", []), curr_agent, full_limit=8, total_limit=30)
 
         identity_lock_patch = {
             "role": "user",
-            "content": f"🚨【角色视角绝对隔离防线】🚨\n请注意：你现在的身份是【{curr_agent}】！请立刻切回【{curr_agent}】的心理视角、语气口吻 and 身体状态。坚决禁止延续或模仿上文其他角色的视角和说话习惯！请立刻以【{curr_agent}】的身份输出接下来的三段式精彩表演。"
+            "content": f"🚨【角色视角绝对隔离防线】🚨\n请注意：你现在的身份是【{curr_agent}】！请立刻切回【{curr_agent}】的心理视角、语气口吻和身体状态。坚决禁止延续或模仿上文其他角色的视角和说话习惯！"
         }
 
         api_payload = [{"role": "system", "content": agent_dynamic_system}] + cleaned_context + [identity_lock_patch, lazy_insurance_prompt]
         
         with st.chat_message("assistant", avatar="💋"):
-            st.write(f"💬 **【{curr_agent}】 被点名，正在组织群内对峙修罗场...**")
+            st.write(f"💬 **【{curr_agent}】 正在观察前文并切入对峙战场...**")
             response_placeholder = st.empty()
             full_response = ""
             
@@ -735,34 +737,56 @@ if is_group_chat:
                 reply_id = f"reply_{int(time.time() * 1000)}_{random.randint(1000, 9999)}"
                 reply_timestamp = time.time()
 
-                # 🌟【一轮结束】：调用 flash 模型，执行白描主视角精简
+                # 调用 flash 生成属于当前 AI 的主视角白描
                 last_user_msg = cleaned_context[-1]["content"] if cleaned_context else "群内动态"
-                combined_dialogue_segment = f"群内发生或玩家发言：{last_user_msg}\n【我（{curr_agent}）】在这轮回复中对大家说道：{full_response}"
-                
+                combined_dialogue_segment = f"上文发生了：{last_user_msg}\n【我（{curr_agent}）】接着对大家说道：{full_response}"
                 flash_summary = generate_flash_summary(client, curr_agent, combined_dialogue_segment)
 
-                # 🔑 【精准分发】：只同步记录进那些被勾选在场的人的私有历史中
-                for inner_agent in called_agents_list:
-                    st.session_state.all_sessions_db["roles"][inner_agent]["chat_history"].append({
+                # 将当前 AI 的发言，写入当前正在扮演的这个角色的专属历史里
+                st.session_state.all_sessions_db["roles"][curr_agent]["chat_history"].append({
+                    "role": "assistant", 
+                    "content": {"content": f"（【{curr_agent}】在群聊【{g_name}】现场当众说道）：\n{full_response}", "summary": flash_summary},
+                    "agent_name": curr_agent,
+                    "from_group": g_name,
+                    "msg_id": reply_id,
+                    "timestamp": reply_timestamp
+                })
+
+                # 从队列中移出已经说完了话的这一个 AI
+                st.session_state.group_active_queue.pop(0)
+                
+                # 🔑【传火联动核心】：如果队列里还有下一个AI角色（例如 B），立刻将【刚才玩家的话】以及【刚刚 A 产生的回复】打包同步到 B 的数据库中！
+                if st.session_state.group_active_queue:
+                    next_agent = st.session_state.group_active_queue[0]
+                    
+                    # 1. 补塞玩家的发言（让下一个AI也知道玩家说了啥）
+                    st.session_state.all_sessions_db["roles"][next_agent]["chat_history"].append({
+                        "role": "user", 
+                        "content": {"content": f"（玩家在群聊【{g_name}】里发了一条消息）：\n{user_input if 'user_input' in locals() else '前文要求'}", "summary": f"你在群聊【{g_name}】发消息"},
+                        "from_group": g_name,
+                        "msg_id": f"pass_u_{reply_id}",
+                        "timestamp": reply_timestamp - 0.01 # 微调时间戳确保物理先后顺序
+                    })
+                    
+                    # 2. 补塞刚刚上一个 AI 的最新回复和精简（让下一个AI精准抓到上一个AI的动作！）
+                    st.session_state.all_sessions_db["roles"][next_agent]["chat_history"].append({
                         "role": "assistant", 
                         "content": {
                             "content": f"（【{curr_agent}】在群聊【{g_name}】现场当众说道）：\n{full_response}",
-                            "summary": flash_summary if inner_agent == curr_agent else f"群聊中【{curr_agent}】说道：{full_response[:60]}..."
+                            "summary": f"群聊中【{curr_agent}】说道：{full_response[:60]}..."
                         },
                         "agent_name": curr_agent,
                         "from_group": g_name,
                         "msg_id": reply_id,
                         "timestamp": reply_timestamp
                     })
-                
-                st.session_state.group_active_queue.pop(0)
-                if st.session_state.group_active_queue:
-                    st.session_state.group_active_agent = st.session_state.group_active_queue[0]
+                    
+                    st.session_state.group_active_agent = next_agent
                 else:
                     st.session_state.group_active_agent = ""
                     
                 save_local_data()
-                st.rerun()
+                st.rerun()  # 触发重刷，让下一个AI带着最新的热乎记忆登场！
             except Exception as e:
                 st.error(f"调用群聊 API 出错: {str(e)}")
                 st.session_state.group_active_agent = ""
