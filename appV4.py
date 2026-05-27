@@ -105,7 +105,7 @@ def clear_current_chat_only():
         for agent in st.session_state.group_members_list:
             agent_history = st.session_state.all_sessions_db["roles"][agent]["chat_history"]
             st.session_state.all_sessions_db["roles"][agent]["chat_history"] = [
-                msg for msg in agent_history if msg.get("from_group") != g_name and g_name not in msg.get("content", "")
+                msg for msg in agent_history if msg.get("from_group") != g_name
             ]
         st.session_state.chat_history = []
     save_local_data()
@@ -125,30 +125,99 @@ def synthesize_group_chat_history(g_name, members_list):
     for agent in members_list:
         agent_history = st.session_state.all_sessions_db["roles"][agent].get("chat_history", [])
         for sub_idx, msg in enumerate(agent_history):
-            # 兼容判断：只要打上了群组标记，或者文本内容包含老版本带入的群聊特征环境字样，全部打捞入库
-            is_old_style_group = (msg.get("role") == "user" and f"群聊【{g_name}】" in msg.get("content", "")) or \
-                                 (msg.get("role") == "assistant" and f"群聊【{g_name}】" in msg.get("content", ""))
+            content_str = msg.get("content", "") if isinstance(msg.get("content"), str) else msg.get("content", {}).get("content", "")
+            is_old_style_group = (msg.get("role") == "user" and f"群聊【{g_name}】" in content_str) or \
+                                 (msg.get("role") == "assistant" and f"群聊【{g_name}】" in content_str)
             
             if msg.get("from_group") == g_name or is_old_style_group:
-                # 兼容修复：老数据如果没有全局排版特征，前台动态实时补全
                 if "from_group" not in msg: msg["from_group"] = g_name
-                if "timestamp" not in msg: msg["timestamp"] = float(sub_idx)  # 用原有数组顺序作为基础排序权重
-                if "msg_id" not in msg: msg["msg_id"] = f"old_{hash(msg['content'])}_{sub_idx}"
+                if "timestamp" not in msg: msg["timestamp"] = float(sub_idx)
+                if "msg_id" not in msg: msg["msg_id"] = f"old_{hash(content_str)}_{sub_idx}"
                 
-                # 防止多个群联系人后台对同一句话重复排版，通过 msg_id 去重
                 if not any(item.get("msg_id") == msg.get("msg_id") for item in combined_history):
-                    # 避免浅拷贝指针互相污染，使用复制
                     combined_history.append(msg)
                         
-    # 严格按照时间轴先后重组排版
     combined_history.sort(key=lambda x: x.get("timestamp", 0))
     return combined_history
+
+# ==========================================
+# 新增核心工具函数：利用 deepseek-v4-flash 实时提炼白描精简记忆
+# ==========================================
+def generate_flash_summary(client, role_name, raw_dialogue_text):
+    """
+    调用 deepseek-v4-flash 将一轮完整对话精简为白描手法、主视角内容。
+    """
+    summary_prompt = f"""
+你是一个精密的记忆精简模块。请对以下这轮刚发生的对话内容进行白描提炼。
+【强制规则】：
+1. 采用白描手法，不带任何抒情、主观色彩与修辞修饰，只客观叙述发生了什么、说了什么。
+2. 必须以第一人称主视角描写：其中 “我” 代表AI角色【{role_name}】，“你” 代表用户。
+3. 如果群聊中存在其他AI角色在同一轮提问中依次发言，你必须将他们的对话一并提取。视角采用：“某人（使用其在对话中出现的全名或外号）对我/对你做了什么、说了什么，我怎么回应了”。
+4. 语言极尽简练，直接输出精简后的概述内容，不要带任何多余的开场白。
+
+【待提炼对话内容】：
+{raw_dialogue_text}
+"""
+    try:
+        response = client.chat.completions.create(
+            model="deepseek-v4-flash",
+            messages=[{"role": "system", "content": summary_prompt}],
+            stream=False,
+            temperature=0.3,
+            max_tokens=400
+        )
+        return response.choices[0].message.content.strip()
+    except Exception as e:
+        return f"[记忆模块提取白描失败: {str(e)}]"
+
+def build_isolated_memory_context(chat_history, role_name):
+    """
+    构建角色专属视角的切片记忆链：
+    前3条为完整信息 (从 content.content 读取)
+    再往前的 47 条为精简信息 (从 content.summary 读取)
+    """
+    isolated_context = []
+    if not chat_history:
+        return isolated_context
+
+    # 过滤出当前角色可以感知或参与的历史记录
+    # 在群聊模式中，由于每个群成员都会append历史到自己的 chat_history，因此直接对角色自带的序列进行切片即可。
+    target_history = chat_history[-50:]  # 最多保留50条
+    total_len = len(target_history)
+    
+    for i, msg in enumerate(target_history):
+        role = msg["role"]
+        # 获取原始文本及白描文本
+        if isinstance(msg["content"], dict):
+            full_text = msg["content"].get("content", "")
+            summary_text = msg["content"].get("summary", "")
+        else:
+            full_text = msg["content"]
+            summary_text = msg["content"]
+
+        # 判断切片：最后3条为完整信息，往前47条为精简信息
+        if total_len - i <= 3:
+            final_content = full_text
+        else:
+            final_content = f"【历史记忆白描概要】：{summary_text}"
+
+        # 保持单聊/群聊原有的前缀封装逻辑
+        if role == "user":
+            isolated_context.append({"role": "user", "content": final_content})
+        else:
+            prefix_name = msg.get("agent_name", role_name)
+            if prefix_name == role_name:
+                isolated_context.append({"role": "assistant", "content": final_content})
+            else:
+                isolated_context.append({"role": "assistant", "content": f"（【{prefix_name}】在群里说道）：\n{final_content}"})
+                
+    return isolated_context
 
 # ==========================================
 # 1. 页面基本配置与顶层数据加载
 # ==========================================
 st.set_page_config(page_title="AI 角色扮演动作检定沙盒", layout="wide")
-st.title("🎭 AI 角色扮演私有沙盒 (⚙️防偷懒终极调教版)")
+st.title("🎭 AI 角色扮演私有沙盒 (⚙️长短期记忆白描重构版)")
 
 if "all_sessions_db" not in st.session_state:
     st.session_state.all_sessions_db = load_cloud_data()
@@ -205,7 +274,6 @@ else:
     g_name = curr_sk.replace("💬 群聊：", "")
     room_data = st.session_state.all_sessions_db["group_rooms"][g_name]
     st.session_state.group_members_list = room_data["members"]
-    # 动态调捞各个联系人后台中的老/新群聊历史记录
     st.session_state.chat_history = synthesize_group_chat_history(g_name, st.session_state.group_members_list)
 
 if "regenerate_trigger" not in st.session_state: st.session_state.regenerate_trigger = False
@@ -257,13 +325,12 @@ if is_group_chat:
     for m in st.session_state.group_members_list:
         st.sidebar.write(f"• 👑 **{m}**")
 
-# ✨ 独占单聊属性控制（彻底阻断交叉污染）
+# ✨ 独占单聊属性控制
 if not is_group_chat:
     target_girl = curr_sk.replace("👤 单聊：", "")
     st.sidebar.write("---")
     st.sidebar.subheader("❤️ 动态羁绊值")
     
-    # 🛠️ 绝对防御：取消 on_change 依赖，使用手动比较和动态 Key，新角色绝不会读取旧缓存！
     fav_val = st.sidebar.slider(f"{target_girl} 对我的好感度", -100, 100, value=st.session_state.favorability, key=f"fav_lock_{target_girl}")
     if fav_val != st.session_state.favorability:
         st.session_state.favorability = fav_val
@@ -324,7 +391,7 @@ if new_role_name_input:
             "memory_events": []
         }
         st.session_state.current_session_key = f"👤 单聊：{clean_name}"
-        st.session_state.chat_history = []  # 物理洗净新角色前台缓存
+        st.session_state.chat_history = [] 
         st.session_state.system_role = f"你是一位名叫【{clean_name}】的角色。"
         st.session_state.background_story = ""
         st.session_state.character_status = ""
@@ -370,7 +437,7 @@ if is_group_chat:
         st.session_state.all_sessions_db["group_rooms"].pop(g_target, None)
         for agent in available_roles_list:
             st.session_state.all_sessions_db["roles"][agent]["chat_history"] = [
-                msg for msg in st.session_state.all_sessions_db["roles"][agent]["chat_history"] if msg.get("from_group") != g_target and g_target not in msg.get("content", "")
+                msg for msg in st.session_state.all_sessions_db["roles"][agent]["chat_history"] if msg.get("from_group") != g_target
             ]
         st.session_state.current_session_key = "👤 单聊：" + available_roles_list[0]
         st.session_state.group_active_agent = ""
@@ -456,6 +523,13 @@ def render_message_controls(idx):
 history_len = len(st.session_state.chat_history)
 DISPLAY_LIMIT = 6
 
+def get_msg_display_content(message):
+    # 辅助读取解析新的复合型 json 记忆数据
+    raw_content = message["content"]
+    if isinstance(raw_content, dict):
+        return raw_content.get("content", "")
+    return raw_content
+
 if history_len > DISPLAY_LIMIT:
     split_idx = history_len - DISPLAY_LIMIT
     early_history = st.session_state.chat_history[:split_idx]
@@ -467,7 +541,7 @@ if history_len > DISPLAY_LIMIT:
             with st.chat_message(message["role"], avatar=avatar_icon):
                 p_name = message.get("agent_name", "")
                 prefix = f"💬 **【{p_name}】**：\n\n" if p_name else ""
-                st.markdown(prefix + message["content"])
+                st.markdown(prefix + get_msg_display_content(message))
             render_message_controls(i)
             
     for i, message in enumerate(recent_history):
@@ -476,7 +550,7 @@ if history_len > DISPLAY_LIMIT:
         with st.chat_message(message["role"], avatar=avatar_icon):
             p_name = message.get("agent_name", "")
             prefix = f"💬 **【{p_name}】**：\n\n" if p_name else ""
-            st.markdown(prefix + message["content"])
+            st.markdown(prefix + get_msg_display_content(message))
         render_message_controls(actual_idx)
 else:
     for i, message in enumerate(st.session_state.chat_history):
@@ -484,7 +558,7 @@ else:
         with st.chat_message(message["role"], avatar=avatar_icon):
             p_name = message.get("agent_name", "")
             prefix = f"💬 **【{p_name}】**：\n\n" if p_name else ""
-            st.markdown(prefix + message["content"])
+            st.markdown(prefix + get_msg_display_content(message))
         render_message_controls(i)
 
 # ==========================================
@@ -523,7 +597,12 @@ if not is_group_chat:
 
         st.info(f"🔮 **最终意志服从分：{final_score} / 20 分】 -> **{text_level}**")
         user_action_text = f"⚙️ *[强迫动作检定]* 用户提出了强硬要求：**“{req_input.strip()}”** （🎲检定服从度：{final_score}分/20分）"
-        st.session_state.chat_history.append({"role": "user", "content": user_action_text})
+        
+        # 命运骰子动作临时生成占位 summary，等待稍后 AI 回复时合并提炼
+        st.session_state.chat_history.append({
+            "role": "user", 
+            "content": {"content": user_action_text, "summary": f"用户通过命运检定强迫我接受要求：{req_input.strip()}"}
+        })
         st.session_state.dice_instruction_patch = f"【🚨 命运之骰·绝对服从度控制密令】\n用户要求：“{req_input.strip()}”。服从度：【{final_score} 分】。倾向：{text_level}。指导：{desc_level}\n"
         save_local_data()
         dice_triggered = True
@@ -545,7 +624,7 @@ multi_reply_protocol = (
 
 lazy_insurance_prompt = {
     "role": "system",
-    "content": "💡 [剧本质量终审确认]：请无条件按照 1️⃣、2️⃣、3️⃣ 标号分三段输出细节饱满的精彩长文，禁止附带多余标签文字！"
+    "content": "💡 [剧本质量终审确认]：请无条件按照 1️⃣、2️⃣、3️⃣ 标号分三段输出细节饱饱的精彩长文，禁止附带多余标签文字！"
 }
 
 # ==========================================
@@ -559,10 +638,11 @@ if is_group_chat:
         msg_id = f"msg_{int(time.time() * 1000)}_{random.randint(1000, 9999)}"
         timestamp = time.time()
         
+        # 将用户的输入分发到各AI历史中（默认初次写入未精简结构，在AI发言时统一由deepseek-v4-flash处理）
         for agent in st.session_state.group_members_list:
             st.session_state.all_sessions_db["roles"][agent]["chat_history"].append({
                 "role": "user", 
-                "content": f"（玩家在群聊【{g_name}】里发了一条消息）：\n{user_input}",
+                "content": {"content": f"（玩家在群聊【{g_name}】里发了一条消息）：\n{user_input}", "summary": f"你在群聊【{g_name}】发消息：{user_input}"},
                 "from_group": g_name,
                 "msg_id": msg_id,
                 "timestamp": timestamp
@@ -602,15 +682,8 @@ if is_group_chat:
             f"{jailbreak_prompt}"
         )
         
-        context_messages = st.session_state.chat_history if len(st.session_state.chat_history) <= 30 else st.session_state.chat_history[-30:]
-        
-        cleaned_context = []
-        for msg in context_messages:
-            if msg["role"] == "user":
-                cleaned_context.append({"role": "user", "content": msg["content"]})
-            else:
-                prefix_name = msg.get("agent_name", "神秘人")
-                cleaned_context.append({"role": "assistant", "content": f"（【{prefix_name}】在群里说道）：\n{msg['content']}"})
+        # 🔑 调用专属视角记忆隔离链条：前3条完整内容，后47条精简内容
+        cleaned_context = build_isolated_memory_context(agent_db.get("chat_history", []), curr_agent)
 
         identity_lock_patch = {
             "role": "user",
@@ -637,10 +710,21 @@ if is_group_chat:
                 reply_id = f"reply_{int(time.time() * 1000)}_{random.randint(1000, 9999)}"
                 reply_timestamp = time.time()
 
+                # 🌟【一轮聊天结束】：触发调取 deepseek-v4-flash 实时精简对话
+                last_user_msg = cleaned_context[-1]["content"] if cleaned_context else "无上下文"
+                combined_dialogue_segment = f"用户说或群内发生了：{last_user_msg}\n【{curr_agent}】回复道：{full_response}"
+                
+                # 为该发言生成的白描主视角文本
+                flash_summary = generate_flash_summary(client, curr_agent, combined_dialogue_segment)
+
+                # 将数据分发记录至各个群成员缓存。各AI只能通过自己的长短切片函数动态感知此内容。
                 for inner_agent in st.session_state.group_members_list:
                     st.session_state.all_sessions_db["roles"][inner_agent]["chat_history"].append({
                         "role": "assistant", 
-                        "content": f"（【{curr_agent}】在群聊【{g_name}】现场当众说道）：\n{full_response}",
+                        "content": {
+                            "content": f"（【{curr_agent}】在群聊【{g_name}】现场当众说道）：\n{full_response}",
+                            "summary": flash_summary
+                        },
                         "agent_name": curr_agent,
                         "from_group": g_name,
                         "msg_id": reply_id,
@@ -666,17 +750,24 @@ else:
             st.error("请先在左侧输入你的 DeepSeek API Key！")
             st.stop()
 
+        target_girl = curr_sk.replace("👤 单聊：", "")
+        
         if user_input:
             with st.chat_message("user", avatar="😎"):
                 st.markdown(user_input)
-            st.session_state.chat_history.append({"role": "user", "content": user_input, "timestamp": time.time()})
+            # 初步添加用户对话节点，白描描述默认等待生成
+            st.session_state.chat_history.append({
+                "role": "user", 
+                "content": {"content": user_input, "summary": f"你对我说了：{user_input}"}, 
+                "timestamp": time.time()
+            })
             st.session_state.dice_instruction_patch = ""
             save_local_data()
 
         st.session_state.regenerate_trigger = False
 
-        total_history_len = len(st.session_state.chat_history)
-        context_messages = st.session_state.chat_history if total_history_len <= 30 else st.session_state.chat_history[((total_history_len // 15) * 15 - 15):]
+        # 🔑 建立单聊隔离切片：前3条完整内容，后47条精简内容
+        context_messages = build_isolated_memory_context(st.session_state.chat_history, target_girl)
 
         memory_ledger_prompt = ""
         if st.session_state.memory_events:
@@ -710,7 +801,21 @@ else:
                         response_placeholder.markdown(full_response + "▌")
                 response_placeholder.markdown(full_response)
                 
-                st.session_state.chat_history.append({"role": "assistant", "content": full_response, "timestamp": time.time()})
+                # 🌟【一轮单聊聊天结束】：触发提炼
+                last_user_msg = context_messages[-1]["content"] if context_messages else "无上下文"
+                combined_dialogue_segment = f"你(用户)说：{last_user_msg}\n我(AI)回复：{full_response}"
+                
+                flash_summary = generate_flash_summary(client, target_girl, combined_dialogue_segment)
+
+                # 将带有完整内容和精简白描节点的json字典保存到记忆数据库
+                st.session_state.chat_history.append({
+                    "role": "assistant", 
+                    "content": {
+                        "content": full_response,
+                        "summary": flash_summary
+                    }, 
+                    "timestamp": time.time()
+                })
                 st.session_state.dice_instruction_patch = ""
                 save_local_data()
                 st.rerun()
