@@ -99,7 +99,7 @@ def save_local_data():
 def clear_current_chat_only():
     curr_sk = st.session_state.current_session_key
     if curr_sk.startswith("👤 单聊："):
-        # 单聊清空时，保留该角色参与过的群聊信息，只清空纯单聊部分（没有 from_group 的部分）
+        # 单聊清空时，保留该角色参与过的群聊记录，只清空纯单聊部分（没有 from_group 的部分）
         r_name = curr_sk.replace("👤 单聊：", "")
         agent_history = st.session_state.all_sessions_db["roles"][r_name]["chat_history"]
         st.session_state.all_sessions_db["roles"][r_name]["chat_history"] = [
@@ -124,7 +124,7 @@ def clear_all_file_data():
                 "character_status", "favorability", "memory_events", "group_active_agent", "group_members_list", "group_active_queue"]:
         if key in st.session_state: del st.session_state[key]
 
-# 🛠️ 终极融合排版逻辑：动态捞出指定群聊中，所有亲身参与过讨论的角色在这间群聊里留下的记忆残片，按时间重组
+# 🛠️ 终极融合排版逻辑：动态捞出指定群聊中所有在线成员在该群里留下的记忆残片，按时间重组
 def synthesize_group_chat_history(g_name, members_list):
     combined_history = []
     for agent in members_list:
@@ -140,16 +140,15 @@ def synthesize_group_chat_history(g_name, members_list):
     combined_history.sort(key=lambda x: x.get("timestamp", 0))
     return combined_history
 
-# 🛠️ 新增核心逻辑：单人对话模式下，前端不仅显示纯单聊记录，还要无缝把她在各个群里亲身经历过的痕迹捞出来展示
+# 🛠️ 单人对话模式：前端不仅显示纯单聊记录，还要无缝把她在各个群里亲自参战的痕迹按物理线打捞出来
 def synthesize_single_chat_display_history(r_name):
     agent_history = st.session_state.all_sessions_db["roles"][r_name].get("chat_history", [])
-    # 浅拷贝防止排序污染数据库原始结构
     display_history = list(agent_history)
     display_history.sort(key=lambda x: x.get("timestamp", 0))
     return display_history
 
 # ==========================================
-# 新增核心工具函数：利用 deepseek-v4-flash 实时提炼白描精简记忆
+# 工具函数：利用 deepseek-v4-flash 实时提炼白描精简记忆
 # ==========================================
 def generate_flash_summary(client, role_name, raw_dialogue_text):
     summary_prompt = f"""
@@ -175,20 +174,18 @@ def generate_flash_summary(client, role_name, raw_dialogue_text):
     except Exception as e:
         return f"[记忆模块提取白描失败: {str(e)}]"
 
-def build_isolated_memory_context(chat_history, role_name):
+def build_isolated_memory_context(chat_history, role_name, full_limit=8, total_limit=30):
     """
     构建角色专属视角的切片记忆链：
-    前3条为完整信息 (从 content.content 读取)
-    再往前的 47 条为精简信息 (从 content.summary 读取)
-    更加靠前的记录直接丢弃，严格防爆。
+    最后 full_limit 条为完整信息 (从 content.content 读取)
+    再往前的条数为精简信息 (从 content.summary 读取)，总长 total_limit 条
     """
     isolated_context = []
     if not chat_history:
         return isolated_context
 
-    # 严格按照时间轴排序后取最后50条记忆切片
     sorted_history = sorted(chat_history, key=lambda x: x.get("timestamp", 0))
-    target_history = sorted_history[-50:]
+    target_history = sorted_history[-total_limit:]
     total_len = len(target_history)
     
     for i, msg in enumerate(target_history):
@@ -202,13 +199,12 @@ def build_isolated_memory_context(chat_history, role_name):
             full_text = msg["content"]
             summary_text = msg["content"]
 
-        # 核心切片判定规则
-        if total_len - i <= 3:
+        # 核心动态切片判定规则
+        if total_len - i <= full_limit:
             final_content = full_text
         else:
             final_content = f"【历史记忆白描概要】：{summary_text}"
 
-        # 封装至大模型交互格式
         if role == "user":
             if from_group:
                 isolated_context.append({"role": "user", "content": f"（玩家在群聊【{from_group}】现场发信）：\n{final_content}"})
@@ -222,7 +218,6 @@ def build_isolated_memory_context(chat_history, role_name):
                 else:
                     isolated_context.append({"role": "assistant", "content": final_content})
             else:
-                # 旁观到了同一个点名群里其他人的发言
                 isolated_context.append({"role": "assistant", "content": f"（【{prefix_name}】在群聊【{from_group}】里说道）：\n{final_content}"})
                 
     return isolated_context
@@ -231,7 +226,7 @@ def build_isolated_memory_context(chat_history, role_name):
 # 1. 页面基本配置与顶层数据加载
 # ==========================================
 st.set_page_config(page_title="AI 角色扮演动作检定沙盒", layout="wide")
-st.title("🎭 AI 角色扮演私有沙盒 (⚙️绝对信息差与单群记忆无缝融合版)")
+st.title("🎭 AI 角色扮演私有沙盒 (⚙️信息差防御与动态记忆降噪版)")
 
 if "all_sessions_db" not in st.session_state:
     st.session_state.all_sessions_db = load_cloud_data()
@@ -243,7 +238,7 @@ if "group_active_agent" not in st.session_state: st.session_state.group_active_a
 if "group_active_queue" not in st.session_state: st.session_state.group_active_queue = []
 
 # ==========================================
-# 2. 侧边栏控制台：切换与建群
+# 2. 侧边栏控制台
 # ==========================================
 st.sidebar.header("🟢 微信会话选择列表")
 
@@ -254,7 +249,6 @@ session_menu_options = [f"👤 单聊：{name}" for name in available_roles_list
 if st.session_state.current_session_key not in session_menu_options:
     st.session_state.current_session_key = session_menu_options[0]
 
-# 物理直刷选择器
 selected_session = st.sidebar.selectbox(
     "切换当前聊天对话框（单聊/群聊独立切换）",
     options=session_menu_options,
@@ -265,19 +259,17 @@ selected_session = st.sidebar.selectbox(
 if selected_session != st.session_state.current_session_key:
     save_local_data()
     st.session_state.current_session_key = selected_session
-    st.session_state.chat_history = []  # 物理清空！防污染
+    st.session_state.chat_history = []  
     st.session_state.group_active_agent = ""
     st.session_state.group_active_queue = []
     st.rerun()
 
-# 会话资产装载
 curr_sk = st.session_state.current_session_key
 is_group_chat = curr_sk.startswith("💬 群聊：")
 
 if not is_group_chat:
     r_name = curr_sk.replace("👤 单聊：", "")
     role_data = st.session_state.all_sessions_db["roles"][r_name]
-    # 🌟 单聊核心修正：前端展现时，通过融合函数将她在群里亲身说过的话也一起按物理时间线打捞出来，让前端可见
     st.session_state.chat_history = synthesize_single_chat_display_history(r_name)
     st.session_state.system_role = role_data["system_role"]
     st.session_state.background_story = role_data["background_story"]
@@ -289,23 +281,21 @@ else:
     g_name = curr_sk.replace("💬 群聊：", "")
     room_data = st.session_state.all_sessions_db["group_rooms"][g_name]
     st.session_state.group_members_list = room_data["members"]
-    # 群聊展现：提取这个群所有在线成员曾经因为“点名”被动/主动记录下来的记忆残片按时间融合
     st.session_state.chat_history = synthesize_group_chat_history(g_name, st.session_state.group_members_list)
 
 if "regenerate_trigger" not in st.session_state: st.session_state.regenerate_trigger = False
 if "dice_instruction_patch" not in st.session_state: st.session_state.dice_instruction_patch = ""
 
-# 🌟 群内实时翻牌点名小圆点
+# 🌟 群内实时翻牌点名（绝对隔离关键防线）
 called_agents_list = []
 if is_group_chat:
     st.sidebar.write("---")
     st.sidebar.subheader("🎯 实时点名（控制谁听话回应）")
-    st.sidebar.caption("🟢 打勾小圆点的角色，在你发送内容后才会真正参与这场讨论。没勾选的角色完全丧失这轮对话的记忆。")
+    st.sidebar.caption("🟢 打勾的角色才会真正写入这轮对话。没勾选的角色在后台将彻底丧失这轮对话的记忆，以此保持绝对信息差。")
     for m in st.session_state.group_members_list:
         if st.sidebar.checkbox(f"🟢 准许【{m}】响应回复", value=True, key=f"call_dot_{curr_sk}_{m}"):
             called_agents_list.append(m)
 
-# ➕ 常驻微信式自由建群区
 st.sidebar.write("---")
 st.sidebar.subheader("➕ 微信式自由拉群房间")
 input_g_name = st.sidebar.text_input("1. 输入微信群名字（如：大乱斗）：", value="", key="g_name_input_widget")
@@ -341,7 +331,6 @@ if is_group_chat:
     for m in st.session_state.group_members_list:
         st.sidebar.write(f"• 👑 **{m}**")
 
-# ✨ 独占单聊属性控制
 if not is_group_chat:
     target_girl = curr_sk.replace("👤 单聊：", "")
     st.sidebar.write("---")
@@ -509,7 +498,6 @@ def render_message_controls(idx):
                         msg for msg in agent_history if msg.get("msg_id") != target_id
                     ]
             else:
-                # 单聊界面如果是群聊残片，则去该角色总库里将对应 msg_id 清除
                 r_name = curr_sk.replace("👤 单聊：", "")
                 st.session_state.all_sessions_db["roles"][r_name]["chat_history"] = [
                     msg for msg in st.session_state.all_sessions_db["roles"][r_name]["chat_history"] if msg.get("msg_id") != target_id
@@ -654,17 +642,9 @@ multi_reply_protocol = (
     "基于前两段的情感蓄势，在这一段的结尾，请由你来扮演戏剧的打破者，主动发起一项带有叙事转折、或者充满张力的具体行为。通过这个行为强行将剧情推向下一个高潮或冲突点，以此来引导和激发玩家接下来的回应。"
 )
 
-group_multi_clash_protocol = (
-    "【⚡ 微信群聊多人修罗场高频对答协议】\n"
-    "注意！目前这场群聊有多个AI角色正在同台交锋！\n"
-    "请无条件按照 1️⃣、2️⃣ 两个标号分两段输出，直接输出内容：\n\n"
-    "1️⃣ 【对话回应】：结合当前局势，直接输出你对玩家或其他AI角色的回应台词。台词要符合设定，字数控制在2-5句内。\n\n"
-    "2️⃣ 【具体行动】：承接你的发言，描述你说话时正在做的连续肢体动作，或者具体行为。"
-)
-
 lazy_insurance_prompt = {
     "role": "system",
-    "content": "💡 [剧本质量终审确认]：请老老实实按照系统规定的数字标号分段输出细节，禁止附带多余标签文字！"
+    "content": "💡 [剧本质量终审确认]：请无条件按照 1️⃣、2️⃣、3️⃣ 标号分三段输出细节饱满的精彩长文，禁止附带多余标签文字！"
 }
 
 # ==========================================
@@ -678,7 +658,7 @@ if is_group_chat:
         msg_id = f"msg_{int(time.time() * 1000)}_{random.randint(1000, 9999)}"
         timestamp = time.time()
         
-        # 🔑 【绝对隔离防御核心】：只将这一轮玩家发的消息分发给【当前确定被点名勾选】的AI。没被点名的AI由于这一轮数据库不写入，从而产生物理级的信息差（完全不知道）。
+        # 🔑 【隔离分发】：只分发给当前勾选的AI。未点名的AI因为没有这段记录，产生绝对信息差盲区
         for agent in called_agents_list:
             st.session_state.all_sessions_db["roles"][agent]["chat_history"].append({
                 "role": "user", 
@@ -708,35 +688,31 @@ if is_group_chat:
             for idx, event in enumerate(agent_db["memory_events"]):
                 agent_memory_prompt += f"{idx+1}. {event}\n"
                 
-        # 🔑 智能判定中枢：根据这轮勾选的人数，决定塞给AI什么协议
-        # 只有在群聊，且同时点名了2人及以上时，才启用精炼双段式。
-        if is_group_chat and len(called_agents_list) >= 2:
-            chosen_protocol = group_multi_clash_protocol
-            clash_hint = f"由于现场有【{', '.join(called_agents_list)}】正在同步对话，请采用 1️⃣ 2️⃣ 双段式输出"
-        else:
-            chosen_protocol = multi_reply_protocol
-            clash_hint = "由于目前只有你一人在对局，请采用传统的 1️⃣ 2️⃣ 3️⃣ 三段式输出。"
-
         agent_dynamic_system = (
             f"【你的名字：{curr_agent}】\n"
             f"【你的人格设定】：\n{agent_db['system_role']}\n\n"
             f"{agent_memory_prompt}\n"
             f"【当前群聊房间的背景环境描述】：\n{agent_db['background_story']}\n\n"
             f"【你当前感知到的状态】：\n{agent_db['character_status']}\n\n"
-            f"【🔥 微信多人群聊指令控制】：\n"
+            f"【🔥 微信多人群聊点名特赦令】：\n"
             f"你现在正处于名为【{g_name}】的多人微信群现场！\n"
-            f"{clash_hint}\n"
-            f"请看清前文的所有群内动态，保持你独特的性格设定，对主人或其他群成员进行隔空还击！\n\n"
-            f"{chosen_protocol}\n\n"
+            f"由于你在侧边栏被主人正式‘翻牌点名’，现在该你站出来发言了！\n"
+            f"请看清前文的所有群内动态（注意：你只能看到你亲自参与或被点名时的历史，这构成了你的认知隔离），保持你独特的性格设定，对主人或其他群成员进行精彩的三段式隔空还击！\n\n"
+            f"{multi_reply_protocol}\n\n"
             f"{jailbreak_prompt}"
         )
         
-        # 🔑 切片机制触发：抽取该角色私有库里的记录，严格执行3完整+47精简逻辑
-        cleaned_context = build_isolated_memory_context(agent_db.get("chat_history", []), curr_agent)
+        # 🔑 【动态视窗调控核心】
+        if len(called_agents_list) > 1:
+            # 多人围观大乱斗：前30轮全精简，死死压制上文模仿效应导致的字数暴走
+            cleaned_context = build_isolated_memory_context(agent_db.get("chat_history", []), curr_agent, full_limit=0, total_limit=30)
+        else:
+            # 群内单挑/只选了一个人：使用最近8轮详细，前22轮精简
+            cleaned_context = build_isolated_memory_context(agent_db.get("chat_history", []), curr_agent, full_limit=8, total_limit=30)
 
         identity_lock_patch = {
             "role": "user",
-            "content": f"🚨【角色视角绝对隔离防线】🚨\n请注意：你现在的身份是【{curr_agent}】！请立刻切回【{curr_agent}】的心理视角、语气口吻和身体状态。坚决禁止延续或模仿上文其他角色的视角和说话习惯！请立刻以【{curr_agent}】的身份输出接下来的三段式精彩表演。"
+            "content": f"🚨【角色视角绝对隔离防线】🚨\n请注意：你现在的身份是【{curr_agent}】！请立刻切回【{curr_agent}】的心理视角、语气口吻 and 身体状态。坚决禁止延续或模仿上文其他角色的视角和说话习惯！请立刻以【{curr_agent}】的身份输出接下来的三段式精彩表演。"
         }
 
         api_payload = [{"role": "system", "content": agent_dynamic_system}] + cleaned_context + [identity_lock_patch, lazy_insurance_prompt]
@@ -759,13 +735,13 @@ if is_group_chat:
                 reply_id = f"reply_{int(time.time() * 1000)}_{random.randint(1000, 9999)}"
                 reply_timestamp = time.time()
 
-                # 🌟【触发调取 deepseek-v4-flash】主视角实时提炼
-                last_user_msg = cleaned_context[-1]["content"] if cleaned_context else "群聊动态"
-                combined_dialogue_segment = f"群聊背景发生或玩家发言：{last_user_msg}\n【我（{curr_agent}）】在这轮点名中对大家说道：{full_response}"
+                # 🌟【一轮结束】：调用 flash 模型，执行白描主视角精简
+                last_user_msg = cleaned_context[-1]["content"] if cleaned_context else "群内动态"
+                combined_dialogue_segment = f"群内发生或玩家发言：{last_user_msg}\n【我（{curr_agent}）】在这轮回复中对大家说道：{full_response}"
                 
                 flash_summary = generate_flash_summary(client, curr_agent, combined_dialogue_segment)
 
-                # 🔑【精准分发】：群里别的AI只有在“这一轮同时被勾选点名”时，才能在旁边听到当前AI的发言，并将其塞入她们自己的私有记忆。彻底隔绝无名围观。
+                # 🔑 【精准分发】：只同步记录进那些被勾选在场的人的私有历史中
                 for inner_agent in called_agents_list:
                     st.session_state.all_sessions_db["roles"][inner_agent]["chat_history"].append({
                         "role": "assistant", 
@@ -793,9 +769,6 @@ if is_group_chat:
                 st.session_state.group_active_queue = []
 
 else:
-    # ==========================================
-    # 单人悄悄话模式执行逻辑
-    # ==========================================
     if user_input or st.session_state.regenerate_trigger or dice_triggered:
         if not api_key:
             st.error("请先在左侧输入你的 DeepSeek API Key！")
@@ -806,7 +779,6 @@ else:
         if user_input:
             with st.chat_message("user", avatar="😎"):
                 st.markdown(user_input)
-            # 写入单聊专属记忆
             st.session_state.all_sessions_db["roles"][target_girl]["chat_history"].append({
                 "role": "user", 
                 "content": {"content": user_input, "summary": f"你对我说了：{user_input}"}, 
@@ -818,9 +790,9 @@ else:
 
         st.session_state.regenerate_trigger = False
 
-        # 🔑 从角色的总记忆库（此时由于融合，库里已包含了她之前在群里亲身说过的话）中构建 3完整+47精简 的 Payload
+        # 🔑 单人单聊模式：固定执行 8 完整详细 + 22 精简白描的黄金视窗配比
         agent_db = st.session_state.all_sessions_db["roles"][target_girl]
-        context_messages = build_isolated_memory_context(agent_db.get("chat_history", []), target_girl)
+        context_messages = build_isolated_memory_context(agent_db.get("chat_history", []), target_girl, full_limit=8, total_limit=30)
 
         memory_ledger_prompt = ""
         if st.session_state.memory_events:
@@ -854,7 +826,7 @@ else:
                         response_placeholder.markdown(full_response + "▌")
                 response_placeholder.markdown(full_response)
                 
-                # 单人对话结束，调用 flash 模型提炼单聊白描
+                # 单人对话结束，调用 flash 提炼主视角
                 last_user_msg = context_messages[-1]["content"] if context_messages else "交互信息"
                 combined_dialogue_segment = f"你（用户）对我说：{last_user_msg}\n我（{target_girl}）回应：{full_response}"
                 
