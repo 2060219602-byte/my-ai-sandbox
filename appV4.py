@@ -113,6 +113,9 @@ def clear_current_chat_only():
                 msg for msg in agent_history if msg.get("from_group") != g_name and g_name not in msg.get("content", "")
             ]
         st.session_state.chat_history = []
+    
+    # 🛡️ 临时打一个小补丁：告诉下一轮重刷，刚刚大扫除过，禁止残余文本偷渡
+    st.session_state.just_cleared = True
     save_local_data()
 
 def clear_all_file_data():
@@ -557,6 +560,11 @@ lazy_insurance_prompt = {
 # 6. 会话调用执行中枢：动态点名传火机制与单聊上下文垫入
 # ==========================================
 user_input = st.chat_input("在此处输入聊天内容...")
+
+# 🛡️ 如果刚刚触发过清空按钮，这轮重刷直接把输入框的字作废
+if st.session_state.get("just_cleared", False):
+    user_input = None
+    st.session_state.just_cleared = False  # 用完立刻重置标记
 
 if is_group_chat:
     g_name = curr_sk.replace("💬 群聊：", "")
