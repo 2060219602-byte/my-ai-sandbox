@@ -752,6 +752,13 @@ else:
             except Exception as e:
                 st.error(f"调用 API 出错: {str(e)}")
 
+st.write("---")
+st.subheader("👁️ 备份确认：云端 JSON 真实数据快照")
+if os.path.exists(DATA_FILE):
+    with open(DATA_FILE, "r", encoding="utf-8") as f:
+        current_cloud_data = json.load(f)
+    st.json(current_cloud_data)
+
 if __name__ == "__main__":
     import sys
     from streamlit.web import cli as stcli
