@@ -114,8 +114,8 @@ def clear_current_chat_only():
             ]
         st.session_state.chat_history = []
     
-    # 🛡️ 临时打一个小补丁：告诉下一轮重刷，刚刚大扫除过，禁止残余文本偷渡
-    st.session_state.just_cleared = True
+    # 🌟 核心改动：版本号+1。只要它一变，底部的输入框就会被强制销毁并重新生成
+    st.session_state.clear_version += 1 
     save_local_data()
 
 def clear_all_file_data():
@@ -166,6 +166,9 @@ if "current_session_key" not in st.session_state:
 
 if "group_active_agent" not in st.session_state: st.session_state.group_active_agent = ""
 if "group_active_queue" not in st.session_state: st.session_state.group_active_queue = []
+
+if "clear_version" not in st.session_state: 
+    st.session_state.clear_version = 0
 
 # ==========================================
 # 2. 侧边栏控制台：无黄框直刷菜单与完全常驻建群大厅
@@ -559,7 +562,7 @@ lazy_insurance_prompt = {
 # ==========================================
 # 6. 会话调用执行中枢：动态点名传火机制与单聊上下文垫入
 # ==========================================
-user_input = st.chat_input("在此处输入聊天内容...")
+user_input = st.chat_input("在此处输入聊天内容...", key=f"chat_input_v_{st.session_state.clear_version}")
 
 # 🛡️ 如果刚刚触发过清空按钮，这轮重刷直接把输入框的字作废
 if st.session_state.get("just_cleared", False):
