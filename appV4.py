@@ -338,6 +338,7 @@ jailbreak_prompt = """
 multi_reply_protocol = (
     "【🎬 核心戏剧冲突与高级叙事协议】\n"
     "你现在正在撰写高质量、充满沉浸感的多角色扮演小说。为了让整个剧本的节奏跌宕起伏，请每次回复时，老老实实地分三段输出，并自然地在每一段开头带上 1️⃣、2️⃣、3️⃣ 纯净标号。请直接输出剧本内容，保持演出的纯粹性。\n\n"
+    "辨识指南：在接收到的群聊上下文中，如果是他人发言，内容会带有【姓名】前缀标签。请看清是谁在说话，针对性地进行反击。如果是你自己的前文，内容会是真正的助手角色。\n\n"
     "为了让每一段的叙事厚度更立体、情感质量更细腻，请参考以下戏剧层进指南：\n\n"
     "1️⃣ \n"
     "首先敏锐地承接用户的上一句发言，详细描绘角色在听到这句话时的即时生理反馈与面部微表情。随后，说出至少3句逻辑连贯、语气完全符合当前身份的台词，正面回应矛盾。\n\n"
@@ -392,47 +393,39 @@ else:
 # ==========================================
 # 3. 主界面渲染与历史切片折叠机制
 # ==========================================
-if is_group_chat:
-    st.subheader(f"💬 当前对话框：【{curr_sk.replace('💬 群聊：', '')}】 (微信多人群聊大舞台)")
-else:
-    st.subheader(f"👤 当前对话框：与【{target_girl}】的私密悄悄话")
-st.write("---")
-
-def render_message_controls(idx):
+# 🌟【幽灵删除修复核心机制】：重构控制函数，让删除和重发功能彻底斩断 Index 依赖，100%绑定物理唯一主键 Msg_ID 闭包
+def render_message_controls_by_id(msg_id, is_last_msg, agent_name_fallback=""):
     c1, c2, _ = st.columns([0.1, 0.1, 0.8])
     with c1:
-        if st.button("❌ 删除", key=f"del_{idx}"):
+        if st.button("❌ 删除", key=f"del_btn_{msg_id}"):
             if is_group_chat:
-                target_msg = chat_history_view[idx]
-                target_id = target_msg.get("msg_id")
+                # 群聊精准广播抹除：拿物理 ID 去所有相关角色的独立数据库里定点爆破，彻底阻断漂移
                 for agent in st.session_state.group_members_list:
                     agent_history = st.session_state.all_sessions_db["roles"][agent]["chat_history"]
                     st.session_state.all_sessions_db["roles"][agent]["chat_history"] = [
-                        msg for msg in agent_history if msg.get("msg_id") != target_id
+                        msg for msg in agent_history if msg.get("msg_id") != msg_id
                     ]
             else:
-                role_data["chat_history"].pop(idx)
+                # 单聊精准定点爆破
+                role_data["chat_history"] = [msg for msg in role_data["chat_history"] if msg.get("msg_id") != msg_id]
                 
             save_local_data()
             st.rerun()
             
     with c2:
-        if chat_history_view[idx]["role"] == "assistant" and idx == len(chat_history_view) - 1:
-            if st.button("🔄 重发", key=f"regen_{idx}"):
+        if is_last_msg:
+            if st.button("🔄 重发", key=f"regen_btn_{msg_id}"):
                 if is_group_chat:
-                    target_msg = chat_history_view[idx]
-                    target_id = target_msg.get("msg_id")
-                    target_agent = target_msg.get("agent_name", "")
                     for agent in st.session_state.group_members_list:
                         agent_history = st.session_state.all_sessions_db["roles"][agent]["chat_history"]
                         st.session_state.all_sessions_db["roles"][agent]["chat_history"] = [
-                            msg for msg in agent_history if msg.get("msg_id") != target_id
+                            msg for msg in agent_history if msg.get("msg_id") != msg_id
                         ]
-                    if target_agent:
-                        st.session_state.group_active_queue = [target_agent]
-                        st.session_state.group_active_agent = target_agent
+                    if agent_name_fallback:
+                        st.session_state.group_active_queue = [agent_name_fallback]
+                        st.session_state.group_active_agent = agent_name_fallback
                 else:
-                    role_data["chat_history"].pop(idx)
+                    role_data["chat_history"] = [msg for msg in role_data["chat_history"] if msg.get("msg_id") != msg_id]
                     st.session_state.regenerate_trigger = True
                     
                 save_local_data()
@@ -448,29 +441,41 @@ if history_len > DISPLAY_LIMIT:
     
     with st.expander(f"📜 展开更早的对话历史记录 (当前已折叠前 {split_idx} 条文本)...", expanded=False):
         for i, message in enumerate(early_history):
+            # 🌟 动态补充确实缺乏物理主键的远古残留消息 ID，确保组件键值永远唯一不报错
+            if "msg_id" not in message:
+                message["msg_id"] = f"backfill_{i}_{hash(message['content'])}"
+            
             avatar_icon = "💋" if message["role"] == "assistant" else "😎"
             with st.chat_message(message["role"], avatar=avatar_icon):
                 p_name = message.get("agent_name", "")
                 prefix = f"💬 **【{p_name}】**：\n\n" if p_name else ""
                 st.markdown(prefix + message["content"])
-            render_message_controls(i)
+            render_message_controls_by_id(message["msg_id"], is_last_msg=False)
             
     for i, message in enumerate(recent_history):
         actual_idx = split_idx + i
+        if "msg_id" not in message:
+            message["msg_id"] = f"backfill_{actual_idx}_{hash(message['content'])}"
+            
+        is_last = (actual_idx == history_len - 1) and (message["role"] == "assistant")
         avatar_icon = "💋" if message["role"] == "assistant" else "😎"
         with st.chat_message(message["role"], avatar=avatar_icon):
             p_name = message.get("agent_name", "")
             prefix = f"💬 **【{p_name}】**：\n\n" if p_name else ""
             st.markdown(prefix + message["content"])
-        render_message_controls(actual_idx)
+        render_message_controls_by_id(message["msg_id"], is_last_msg=is_last, agent_name_fallback=message.get("agent_name", ""))
 else:
     for i, message in enumerate(chat_history_view):
+        if "msg_id" not in message:
+            message["msg_id"] = f"backfill_{i}_{hash(message['content'])}"
+            
+        is_last = (i == history_len - 1) and (message["role"] == "assistant")
         avatar_icon = "💋" if message["role"] == "assistant" else "😎"
         with st.chat_message(message["role"], avatar=avatar_icon):
             p_name = message.get("agent_name", "")
             prefix = f"💬 **【{p_name}】**：\n\n" if p_name else ""
             st.markdown(prefix + message["content"])
-        render_message_controls(i)
+        render_message_controls_by_id(message["msg_id"], is_last_msg=is_last, agent_name_fallback=message.get("agent_name", ""))
 
 # ==========================================
 # 4. 命运骰子交互区
@@ -508,7 +513,9 @@ if not is_group_chat:
 
         st.info(f"🔮 **最终意志服从分：{final_score} / 20 分】 -> **{text_level}**")
         user_action_text = f"⚙️ *[强迫动作检定]* 用户提出了强硬要求：**“{req_input.strip()}”** （🎲检定服从度：{final_score}分/20分）"
-        role_data["chat_history"].append({"role": "user", "content": user_action_text})
+        
+        dice_msg_id = f"dice_{int(time.time() * 1000)}_{random.randint(1000, 9999)}"
+        role_data["chat_history"].append({"role": "user", "content": user_action_text, "msg_id": dice_msg_id})
         st.session_state.dice_instruction_patch = f"【🚨 命运之骰·绝对服从度控制密令】\n用户要求：“{req_input.strip()}”。服从度：【{final_score} 分】。倾向：{text_level}。指导：{desc_level}\n"
         save_local_data()
         dice_triggered = True
@@ -575,26 +582,32 @@ if is_group_chat:
             f"【🔥 微信多人群聊点名特赦令】：\n"
             f"你现在正处于名为【{g_name}】的多人微信群现场！\n"
             f"由于你在侧边栏被主人正式‘翻牌点名’，现在该你站出来发言了！\n"
-            f"请看清前文的所有群内动态，保持你的独特人格，对主人或其他群成员的语言和行动进行回应！\n\n"
+            f"请看清前文的所有群内动态（他人发言均有姓名标签提示），保持你的独特人格，对主人或其他群成员的语言和行动进行回应！\n\n"
             f"{multi_reply_protocol}\n\n"
             f"{jailbreak_prompt}"
         )
         
-        # 🌟 优化点：群聊上下文也限定在 16 条内，防止并发读取时超出大模型处理上限
         context_messages = chat_history_view[-16:] if len(chat_history_view) > 16 else chat_history_view
         
+        # 🌟【视听盲区修复点】：重配上下文环境逻辑，分算清角色灵魂发言与群内外部环境噪音的区别
         cleaned_context = []
         for msg in context_messages:
             if msg["role"] == "user":
                 cleaned_context.append({"role": "user", "content": msg["content"]})
             else:
                 prefix_name = msg.get("agent_name", "神秘人")
-                clean_content = msg['content'].replace(f"（【{prefix_name}】在群聊现场当众说道）：\n", "")
-                cleaned_context.append({"role": "assistant", "content": f"{prefix_name}: {clean_content}"})
+                clean_content = msg['content'].replace(f"（【{prefix_name}】在群聊【{g_name}】现场当众说道）：\n", "")
+                clean_content = clean_content.replace(f"（【{prefix_name}】在群聊现场当众说道）：\n", "")
+                
+                if prefix_name == curr_agent:
+                    cleaned_context.append({"role": "assistant", "content": clean_content})
+                else:
+                    g_view_text = f"⚔️ [群会话通知]: 成员【{prefix_name}】在群现场公开发言说道：\n“{clean_content}”"
+                    cleaned_context.append({"role": "user", "content": g_view_text})
 
         identity_lock_patch = {
             "role": "user",
-            "content": f"⚡[视角同步机制]: 请立刻代入【{curr_agent}】的灵魂。用你的本能、语调和当下状态，进行接下来的三段式小说演绎。"
+            "content": f"⚡[视角同步机制]: 请立刻代入【{curr_agent}】的灵魂。看清前文【玩家】与【其他群成员】挑起的戏剧冲突，用你的本能、语调和当下状态，进行接下来的三段式小说演绎。"
         }
 
         api_payload = [{"role": "system", "content": agent_dynamic_system}] + cleaned_context + [identity_lock_patch, lazy_insurance_prompt]
@@ -650,13 +663,13 @@ else:
             with st.chat_message("user", avatar="😎"):
                 st.markdown(user_input)
             
-            role_data["chat_history"].append({"role": "user", "content": user_input, "timestamp": time.time()})
+            single_msg_id = f"msg_{int(time.time() * 1000)}_{random.randint(1000, 9999)}"
+            role_data["chat_history"].append({"role": "user", "content": user_input, "timestamp": time.time(), "msg_id": single_msg_id})
             st.session_state.dice_instruction_patch = ""
             save_local_data()
 
         st.session_state.regenerate_trigger = False
 
-        # 🌟【⚡优化点】：单聊滑动切片由 30条 缩减为 14条（由于三段式输出字数极多，14条已经足够维系短期记忆并大幅提高打字响应速率）
         context_messages = role_data["chat_history"][-14:] if len(role_data["chat_history"]) > 14 else role_data["chat_history"]
 
         memory_ledger_prompt = ""
@@ -694,7 +707,8 @@ else:
                         response_placeholder.markdown(full_response + "▌")
                 response_placeholder.markdown(full_response)
                 
-                role_data["chat_history"].append({"role": "assistant", "content": full_response, "timestamp": time.time()})
+                single_reply_id = f"reply_{int(time.time() * 1000)}_{random.randint(1000, 9999)}"
+                role_data["chat_history"].append({"role": "assistant", "content": full_response, "timestamp": time.time(), "msg_id": single_reply_id})
                 st.session_state.dice_instruction_patch = ""
                 save_local_data()
                 st.rerun()
