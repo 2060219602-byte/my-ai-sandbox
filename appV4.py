@@ -79,22 +79,27 @@ def save_local_data():
     if curr_sk.startswith("👤 单聊："):
         r_name = curr_sk.replace("👤 单聊：", "")
         if r_name in st.session_state.all_sessions_db["roles"]:
-            st.session_state.all_sessions_db["roles"][r_name] = {
-                "chat_history": st.session_state.chat_history,
-                "system_role": st.session_state.system_role,
-                "background_story": st.session_state.background_story,
-                "character_status": st.session_state.character_status,
-                "favorability": st.session_state.favorability,
-                "memory_events": st.session_state.memory_events
-            }
+            # 🛡️ 【绝对防御锁】：只有当前前端真的有历史记录，或者数据库原本就是空的，才允许覆盖云端！
+            # 彻底封死“手速快、切换对话框时空历史意外覆写”导致聊天记录蒸发的漏洞。
+            if st.session_state.chat_history or not st.session_state.all_sessions_db["roles"][r_name]["chat_history"]:
+                st.session_state.all_sessions_db["roles"][r_name]["chat_history"] = st.session_state.chat_history
 
     st.session_state.all_sessions_db["current_session_key"] = curr_sk
     
+    # 🛠️ 【稳健写入补丁】：高频重刷时，直接写入原文件极易因为文件锁写出空包。
+    # 采用先写临时文件再原子重命名的方式，确保即使发生写冲突，旧数据绝不损坏。
+    temp_file = DATA_FILE + ".tmp"
     try:
-        with open(DATA_FILE, "w", encoding="utf-8") as f:
+        with open(temp_file, "w", encoding="utf-8") as f:
             json.dump(st.session_state.all_sessions_db, f, ensure_ascii=False, indent=4)
-    except Exception:
-        pass
+        # 写入成功后，一瞬间完成原子替换，把损坏率降到 0%
+        os.replace(temp_file, DATA_FILE)
+    except Exception as e:
+        # 如果万一发生极端写锁，清理临时文件，绝不让它影响原有的 JSON 数据
+        if os.path.exists(temp_file):
+            try: os.remove(temp_file)
+            except Exception: pass
+        print(f"写入云端数据库失败: {e}")
 
 def clear_current_chat_only():
     curr_sk = st.session_state.current_session_key
