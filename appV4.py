@@ -591,7 +591,7 @@ if is_group_chat:
             f"{jailbreak_prompt}"
         )
         
-        context_messages = chat_history_view[-16:] if len(chat_history_view) > 16 else chat_history_view
+        context_messages = chat_history_view[-20:] if len(chat_history_view) > 20 else chat_history_view
         
         # 🌟【视听盲区修复点】：重配上下文环境逻辑，分算清角色灵魂发言与群内外部环境噪音的区别
         cleaned_context = []
