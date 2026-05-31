@@ -43,7 +43,6 @@ def get_default_data():
         "roles": {
             "赛博贩子-丽莎": {
                 "chat_history": [],
-                "chat_summaries": [], # 保存每轮对话的一句话概述
                 "system_role": "你是一位冷酷的赛博朋克情报贩子，说话简短、讽刺，习惯使用黑话。",
                 "background_story": "时间：2077年深夜。\n地点：下层区霓虹街角的一家老旧面馆。\n氛围：下着暴雨，空气中弥漫着机油与廉价合成肉的味道。",
                 "character_status": "状态：轻度受伤，义体能量剩余35%，心情极度烦躁。",
@@ -52,7 +51,6 @@ def get_default_data():
             },
             "魔法学徒-露娜": {
                 "chat_history": [],
-                "chat_summaries": [], # 保存每轮对话的一句话概述
                 "system_role": "你是一个性格有些冒失、但天赋异禀的高级魔法学院见习女巫，说话喜欢带上古怪的咒语口头禅。",
                 "background_story": "时间：魔法历512年。\n地点：皇家学院深夜被禁闭的藏书馆密室。\n氛围：摇曳的烛光，空气中漂浮着古老羊皮纸的尘埃，中央摆放着一本散发暗芒的禁忌魔法书。",
                 "character_status": "状态：精神力消耗过度（过度透支），衣角有些焦黑，正处于被导师发现的惊恐中。",
@@ -72,13 +70,6 @@ def load_cloud_data():
                         saved_data["group_rooms"] = {}
                     if "current_session_key" not in saved_data:
                         saved_data["current_session_key"] = "👤 单聊：" + list(saved_data["roles"].keys())[0]
-                    # 确保旧数据平滑升级，拥有概述字段
-                    for r_name in saved_data["roles"]:
-                        if "chat_summaries" not in saved_data["roles"][r_name] or not isinstance(saved_data["roles"][r_name]["chat_summaries"], list):
-                            saved_data["roles"][r_name]["chat_summaries"] = []
-                    for g_name in saved_data.get("group_rooms", {}):
-                        if "chat_summaries" not in saved_data["group_rooms"][g_name] or not isinstance(saved_data["group_rooms"][g_name]["chat_summaries"], list):
-                            saved_data["group_rooms"][g_name]["chat_summaries"] = []
                     return saved_data
         except Exception:
             pass
@@ -91,7 +82,6 @@ def save_local_data():
     curr_sk = st.session_state.current_session_key
     st.session_state.all_sessions_db["current_session_key"] = curr_sk
     
-    # 🛠️ 【加锁原子写入】：引入互斥锁，多标签页同开绝不会把 JSON 冲刷成 0 字节
     with st.session_state.db_lock:
         temp_file = DATA_FILE + ".tmp"
         try:
@@ -110,11 +100,8 @@ def clear_current_chat_only():
         r_name = curr_sk.replace("👤 单聊：", "")
         if r_name in st.session_state.all_sessions_db["roles"]:
             st.session_state.all_sessions_db["roles"][r_name]["chat_history"] = []
-            st.session_state.all_sessions_db["roles"][r_name]["chat_summaries"] = [] # 清空概述
     elif curr_sk.startswith("💬 群聊："):
         g_name = curr_sk.replace("💬 群聊：", "")
-        if g_name in st.session_state.all_sessions_db.get("group_rooms", {}):
-            st.session_state.all_sessions_db["group_rooms"][g_name]["chat_summaries"] = [] # 清空群组概述
         for agent in st.session_state.group_members_list:
             agent_history = st.session_state.all_sessions_db["roles"][agent]["chat_history"]
             st.session_state.all_sessions_db["roles"][agent]["chat_history"] = [
@@ -167,9 +154,9 @@ def extract_ai_llm_summary(client, model_name, user_text, ai_text):
                 {"role": "system", "content": summary_jailbreak_prompt},
                 {"role": "user", "content": conversation_input}
             ],
-            stream=False, # 总结采用单次返回形式，方便直接捕获
+            stream=False, 
             temperature=0.3,
-            max_tokens=500
+            max_tokens=200
         )
         final_summary = completion.choices[0].message.content.strip()
         return final_summary
@@ -232,7 +219,6 @@ if not is_group_chat:
 else:
     g_name = curr_sk.replace("💬 群聊：", "")
     room_data = st.session_state.all_sessions_db["group_rooms"][g_name]
-    if "chat_summaries" not in room_data: room_data["chat_summaries"] = []
     st.session_state.group_members_list = room_data["members"]
     chat_history_view = synthesize_group_chat_history(g_name, st.session_state.group_members_list)
 
@@ -266,7 +252,7 @@ if st.sidebar.button("🚀 创立并无缝切入该群聊", use_container_width=
         st.sidebar.error("❌ 请至少勾选一位AI成员！")
     else:
         save_local_data()
-        st.session_state.all_sessions_db["group_rooms"][clean_room_name] = {"members": pulled_members, "chat_summaries": []}
+        st.session_state.all_sessions_db["group_rooms"][clean_room_name] = {"members": pulled_members}
         st.session_state.current_session_key = f"💬 群聊：{clean_room_name}"
         st.session_state.group_active_agent = ""
         st.session_state.group_active_queue = []
@@ -342,7 +328,6 @@ with st.sidebar.form(key="add_new_role_form"):
         else:
             st.session_state.all_sessions_db["roles"][clean_name] = {
                 "chat_history": [], 
-                "chat_summaries": [],
                 "system_role": init_sys.strip(),
                 "background_story": init_bg.strip(), 
                 "character_status": "状态：平静。",
@@ -446,11 +431,21 @@ def render_message_controls_by_id(msg_id, is_last_msg, agent_name_fallback=""):
             if is_group_chat:
                 for agent in st.session_state.group_members_list:
                     agent_history = st.session_state.all_sessions_db["roles"][agent]["chat_history"]
-                    st.session_state.all_sessions_db["roles"][agent]["chat_history"] = [
-                        msg for msg in agent_history if msg.get("msg_id") != msg_id
-                    ]
+                    # 联动删除：如果是user消息，同时干掉它和它下面的一条AI回复
+                    idx_to_del = [i for i, m in enumerate(agent_history) if m.get("msg_id") == msg_id]
+                    if idx_to_del:
+                        target_idx = idx_to_del[0]
+                        if agent_history[target_idx]["role"] == "user" and target_idx + 1 < len(agent_history):
+                            agent_history.pop(target_idx + 1)
+                        agent_history.pop(target_idx)
             else:
-                role_data["chat_history"] = [msg for msg in role_data["chat_history"] if msg.get("msg_id") != msg_id]
+                hist = role_data["chat_history"]
+                idx_to_del = [i for i, m in enumerate(hist) if m.get("msg_id") == msg_id]
+                if idx_to_del:
+                    target_idx = idx_to_del[0]
+                    if hist[target_idx]["role"] == "user" and target_idx + 1 < len(hist):
+                        hist.pop(target_idx + 1)
+                    hist.pop(target_idx)
                 
             save_local_data()
             st.rerun()
@@ -619,7 +614,7 @@ if is_group_chat:
         private_history = agent_db.get("chat_history", [])
         private_context_summary = ""
         if private_history:
-            recent_private = [m for m in private_history if not m.get("from_group")][-5:]
+            recent_private = [m for m in private_history if not m.get("from_group")][-6:]
             if recent_private:
                 private_context_summary = "【📌 你与用户在单人私聊中的最新互动快照（请彻底继承并维持此处的语气）】:\n"
                 for m in recent_private:
@@ -628,8 +623,11 @@ if is_group_chat:
                     private_context_summary += f"- {speaker}: {clean_txt}\n"
                 private_context_summary += "\n"
                 
-        # ✨ 需求 2: 动态历史切片，前情回顾读取最近 50 条故事概述账本内容
-        group_summaries_list = room_data.get("chat_summaries", [])[-80:]
+        # ✨ 需求重构：详细聊天只切片最后 6 条消息，更早消息提取其绑定的一句话概述（最深50条）
+        context_messages = chat_history_view[-6:] if len(chat_history_view) > 6 else chat_history_view
+        earlier_messages = chat_history_view[:-6] if len(chat_history_view) > 6 else []
+        
+        group_summaries_list = [m["summary"] for m in earlier_messages if m.get("role") == "assistant" and "summary" in m][-50:]
         group_summary_context_str = ""
         if group_summaries_list:
             group_summary_context_str = "【📌 本微信群聊前期已发生的历史剧情大纲备忘（前情回顾摘要）】:\n" + "\n".join([f"- {s}" for s in group_summaries_list]) + "\n\n"
@@ -648,9 +646,6 @@ if is_group_chat:
             f"{multi_reply_protocol}\n\n"
             f"{jailbreak_prompt}"
         )
-        
-        # ✨ 需求 2: 动态历史切片，详细历史记录列表截取最近 12 条对话
-        context_messages = chat_history_view[-12:] if len(chat_history_view) > 12 else chat_history_view
         
         cleaned_context = []
         for msg in context_messages:
@@ -689,6 +684,16 @@ if is_group_chat:
                         response_placeholder.markdown(full_response + "▌")
                 response_placeholder.markdown(full_response)
                 
+                # 获取引起这轮变动的最后一条用户记录
+                last_user_msg = "玩家请求推演剧情"
+                for m in reversed(chat_history_view):
+                    if m["role"] == "user":
+                        last_user_msg = m["content"]
+                        break
+                        
+                # ✨ 调用大模型异步提炼本轮剧情节点（破甲词执行）
+                extracted_summary = extract_ai_llm_summary(client, model_name, last_user_msg, full_response)
+
                 reply_id = f"reply_{int(time.time() * 1000)}_{random.randint(1000, 9999)}"
                 reply_timestamp = time.time()
 
@@ -699,22 +704,9 @@ if is_group_chat:
                         "agent_name": curr_agent,
                         "from_group": g_name,
                         "msg_id": reply_id,
-                        "timestamp": reply_timestamp
+                        "timestamp": reply_timestamp,
+                        "summary": extracted_summary # 将概述直接紧紧绑定到该条对话实体中，实现删除联动
                     })
-                
-                # 获取引起这轮变动的最后一条用户记录
-                last_user_msg = "玩家请求推演剧情"
-                for m in reversed(chat_history_view):
-                    if m["role"] == "user":
-                        last_user_msg = m["content"]
-                        break
-                        
-                # ✨ 需求重构：调用大模型提炼本轮剧情节点，彻底替换原有的前端纯文本NLP模拟算法
-                extracted_summary = extract_ai_llm_summary(client, model_name, last_user_msg, full_response)
-
-                if "chat_summaries" not in room_data or not isinstance(room_data["chat_summaries"], list):
-                    room_data["chat_summaries"] = []
-                room_data["chat_summaries"].append(extracted_summary)
 
                 st.session_state.group_active_queue.pop(0)
                 if st.session_state.group_active_queue:
@@ -750,8 +742,9 @@ else:
 
         st.session_state.regenerate_trigger = False
 
-        # ✨ 需求 2: 动态历史切片，详细历史记录切片滑动窗口严格截取最近 12 条对话
-        context_messages = role_data["chat_history"][-12:] if len(role_data["chat_history"]) > 12 else role_data["chat_history"]
+        # ✨ 需求重构：详细记录只截取最后6条（大概3轮），概述信息截取6条之前的50条
+        context_messages = role_data["chat_history"][-6:] if len(role_data["chat_history"]) > 6 else role_data["chat_history"]
+        earlier_messages = role_data["chat_history"][:-6] if len(role_data["chat_history"]) > 6 else []
 
         memory_ledger_prompt = ""
         if role_data.get("memory_events"):
@@ -759,8 +752,8 @@ else:
             for idx, event in enumerate(role_data["memory_events"]):
                 memory_ledger_prompt += f"{idx+1}. {event}\n"
 
-        # ✨ 需求 2: 动态滑动窗口，加载前 50 条合并故事概要
-        historical_summaries = role_data.get("chat_summaries", [])[-50:]
+        # 从过往消息中提取绑定的 summary 属性
+        historical_summaries = [m["summary"] for m in earlier_messages if m.get("role") == "assistant" and "summary" in m][-50:]
         summary_milestone_prompt = ""
         if historical_summaries:
             summary_milestone_prompt = "【📌 彼此交往的历史事件一句话概述备忘录（重要前情简纲）】\n"
@@ -798,50 +791,26 @@ else:
                         response_placeholder.markdown(full_response + "▌")
                 response_placeholder.markdown(full_response)
                 
-                single_reply_id = f"reply_{int(time.time() * 1000)}_{random.randint(1000, 9999)}"
-                role_data["chat_history"].append({"role": "assistant", "content": full_response, "timestamp": time.time(), "msg_id": single_reply_id})
-                
                 # 获取引起变动的上一条用户输入
-                last_user_action = role_data["chat_history"][-2]["content"] if len(role_data["chat_history"]) >= 2 else "初始引入"
+                last_user_action = role_data["chat_history"][-1]["content"] if len(role_data["chat_history"]) >= 1 else "初始引入"
                 
-                # ✨ 需求重构：调用大模型提炼本轮剧情节点，彻底替换原有的前端纯文本NLP模拟算法
+                # ✨ 调用大模型提炼本轮剧情节点（破甲词执行）
                 extracted_summary = extract_ai_llm_summary(client, model_name, last_user_action, full_response)
                 
-                if "chat_summaries" not in role_data or not isinstance(role_data["chat_summaries"], list):
-                    role_data["chat_summaries"] = []
-                role_data["chat_summaries"].append(extracted_summary)
+                single_reply_id = f"reply_{int(time.time() * 1000)}_{random.randint(1000, 9999)}"
+                role_data["chat_history"].append({
+                    "role": "assistant", 
+                    "content": full_response, 
+                    "timestamp": time.time(), 
+                    "msg_id": single_reply_id,
+                    "summary": extracted_summary # 将概述直接紧紧绑定到该条对话实体中，实现删除联动
+                })
                 
                 st.session_state.dice_instruction_patch = ""
                 save_local_data()  # 数据落盘
-                st.rerun()  # 确保页面重新加载时立刻能读取到刚才保存的 chat_summaries
+                st.rerun()  
             except Exception as e:
                 st.error(f"调用 API 出错: {str(e)}")
-
-# ==========================================
-# ✨ 需求 3: 在前端最后 main 触发和执行前加入前端可视化调试及显示代码段
-# ==========================================
-st.write("---")
-with st.expander("🔍 调试专用：前端实时显示底层已保存的「一句话故事概述」账本", expanded=True):
-    if is_group_chat:
-        g_name = st.session_state.current_session_key.replace("💬 群聊：", "")
-        room_data = st.session_state.all_sessions_db["group_rooms"][g_name]
-        st.write(f"当前群聊 **【{g_name}】** 的合并摘要列表（最新50条）：")
-        sums = room_data.get("chat_summaries", [])
-        if sums:
-            for idx, s in enumerate(sums[-50:]):
-                st.text(f"回合 {idx+1}: {s}")
-        else:
-            st.caption("暂无概述数据，请进行首次对话互动。")
-    else:
-        target_girl = st.session_state.current_session_key.replace("👤 单聊：", "")
-        role_data = st.session_state.all_sessions_db["roles"][target_girl]
-        st.write(f"当前单聊角色 **【{target_girl}】** 的合并摘要列表（最新50条）：")
-        sums = role_data.get("chat_summaries", [])
-        if sums:
-            for idx, s in enumerate(sums[-50:]):
-                st.text(f"回合 {idx+1}: {s}")
-        else:
-            st.caption("暂无概述数据，请进行首次对话互动。")
 
 # ==========================================
 # 7. 脚本自引导启动入口
