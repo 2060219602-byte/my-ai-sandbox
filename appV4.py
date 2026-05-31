@@ -4,70 +4,16 @@ import json
 import os
 import random
 import time  # ✨ 引入时间戳用于群聊历史的物理时间线排序
-import threading  # ✨ 引入线程锁与后台异步线程，彻底解决坚果云同步卡死问题
-import requests  # ✨ Streamlit 内置，无需在 requirements 额外安装
+import threading  # ✨ 引入线程锁，彻底防止多并发导致的数据文件归零
 
 # ☁️ 定义服务器本地（云端）保存数据的隐藏 JSON 文件路径
 DATA_FILE = "sandbox_private_db.json"
 
-# ==========================================
-# 坚果云 (WebDAV) 安全异步同步模块（彻底隔离主线程）
-# ==========================================
+# 🔒 初始化全局线程锁（防止多个浏览器标签或多用户并发写入导致损坏文件）
 if "db_lock" not in st.session_state:
     st.session_state.db_lock = threading.Lock()
 
-def get_nutstore_auth():
-    if "nutstore" in st.secrets:
-        return (st.secrets["nutstore"]["username"], st.secrets["nutstore"]["password"])
-    return None
-
-def _bg_upload_worker(data_str):
-    """守护线程：在后台悄悄上传，网络再卡也绝不影响前台游戏"""
-    auth = get_nutstore_auth()
-    if not auth:
-        return
-    try:
-        # 1. 探测/建立远程文件夹（忽略已存在的405错误）
-        folder_url = 'https://dav.jianguoyun.com/dav/PythonSandbox'
-        requests.request("MKCOL", folder_url, auth=auth, timeout=5)
-        
-        # 2. 推送最新数据流
-        remote_url = f"{folder_url}/{DATA_FILE}"
-        requests.put(remote_url, auth=auth, data=data_str.encode('utf-8'), timeout=10)
-    except Exception as e:
-        print(f"[坚果云后台同步悄悄失败（不影响主程序）]: {e}")
-
-def sync_to_nutstore_async():
-    """触发异步上传，瞬间返回，前台不卡顿"""
-    if os.path.exists(DATA_FILE):
-        try:
-            with open(DATA_FILE, "r", encoding="utf-8") as f:
-                data_str = f.read()
-            # 开辟一条后台独立通道进行网络传输
-            bg_thread = threading.Thread(target=_bg_upload_worker, args=(data_str,), daemon=True)
-            bg_thread.start()
-        except Exception:
-            pass
-
-def manual_sync_from_nutstore():
-    """安全的主动下载机制"""
-    auth = get_nutstore_auth()
-    if auth:
-        try:
-            folder_url = 'https://dav.jianguoyun.com/dav/PythonSandbox'
-            remote_url = f"{folder_url}/{DATA_FILE}"
-            res = requests.get(remote_url, auth=auth, timeout=10)
-            if res.status_code == 200:
-                with open(DATA_FILE, "wb") as f:
-                    f.write(res.content)
-                return True
-        except Exception as e:
-            st.sidebar.error(f"同步失败: {e}")
-    return False
-
-# ==========================================
-# 密码锁层
-# ==========================================
+# 🔒 线上全盘拦截密码锁
 if "app_password" in st.secrets:
     correct_password = st.secrets["app_password"]["password"]
     
@@ -80,7 +26,7 @@ if "app_password" in st.secrets:
         if st.button("验证登录"):
             if input_pwd == correct_password:
                 st.session_state.logged_in = True
-                st.success("密码正确，正在载入专属沙盒...")
+                st.success("密码正确，正在进入并载入云端专属进度...")
                 st.rerun()
             else:
                 st.error("密码错误，拒绝访问！")
@@ -96,7 +42,7 @@ def get_default_data():
         "roles": {
             "赛博贩子-丽莎": {
                 "chat_history": [],
-                "summary_history": [],  # ✨ 概述历史
+                "chat_summaries": [], # ✨ 新增：保存每轮对话的一句话概述
                 "system_role": "你是一位冷酷的赛博朋克情报贩子，说话简短、讽刺，习惯使用黑话。",
                 "background_story": "时间：2077年深夜。\n地点：下层区霓虹街角的一家老旧面馆。\n氛围：下着暴雨，空气中弥漫着机油与廉价合成肉的味道。",
                 "character_status": "状态：轻度受伤，义体能量剩余35%，心情极度烦躁。",
@@ -105,7 +51,7 @@ def get_default_data():
             },
             "魔法学徒-露娜": {
                 "chat_history": [],
-                "summary_history": [],  # ✨ 概述历史
+                "chat_summaries": [], # ✨ 新增：保存每轮对话的一句话概述
                 "system_role": "你是一个性格有些冒失、但天赋异禀的高级魔法学院见习女巫，说话喜欢带上古怪的咒语口头禅。",
                 "background_story": "时间：魔法历512年。\n地点：皇家学院深夜被禁闭的藏书馆密室。\n氛围：摇曳的烛光，空气中漂浮着古老羊皮纸的尘埃，中央摆放着一本散发暗芒的禁忌魔法书。",
                 "character_status": "状态：精神力消耗过度（过度透支），衣角有些焦黑，正处于被导师发现的惊恐中。",
@@ -125,9 +71,13 @@ def load_cloud_data():
                         saved_data["group_rooms"] = {}
                     if "current_session_key" not in saved_data:
                         saved_data["current_session_key"] = "👤 单聊：" + list(saved_data["roles"].keys())[0]
-                    for role in saved_data["roles"]:
-                        if "summary_history" not in saved_data["roles"][role]:
-                            saved_data["roles"][role]["summary_history"] = []
+                    # 确保旧数据平滑升级，拥有概述字段
+                    for r_name in saved_data["roles"]:
+                        if "chat_summaries" not in saved_data["roles"][r_name]:
+                            saved_data["roles"][r_name]["chat_summaries"] = []
+                    for g_name in saved_data.get("group_rooms", {}):
+                        if "chat_summaries" not in saved_data["group_rooms"][g_name]:
+                            saved_data["group_rooms"][g_name]["chat_summaries"] = []
                     return saved_data
         except Exception:
             pass
@@ -140,19 +90,18 @@ def save_local_data():
     curr_sk = st.session_state.current_session_key
     st.session_state.all_sessions_db["current_session_key"] = curr_sk
     
+    # 🛠️ 【加锁原子写入】：引入互斥锁，多标签页同开绝不会把 JSON 冲刷成 0 字节
     with st.session_state.db_lock:
         temp_file = DATA_FILE + ".tmp"
         try:
             with open(temp_file, "w", encoding="utf-8") as f:
                 json.dump(st.session_state.all_sessions_db, f, ensure_ascii=False, indent=4)
             os.replace(temp_file, DATA_FILE)
-            # ✨ 原子保存完本地后，立刻以不可阻断的后台异步方式提交给坚果云
-            sync_to_nutstore_async()
         except Exception as e:
             if os.path.exists(temp_file):
                 try: os.remove(temp_file)
                 except Exception: pass
-            print(f"写入本地临时库失败: {e}")
+            print(f"写入云端数据库失败: {e}")
 
 def clear_current_chat_only():
     curr_sk = st.session_state.current_session_key
@@ -160,9 +109,11 @@ def clear_current_chat_only():
         r_name = curr_sk.replace("👤 单聊：", "")
         if r_name in st.session_state.all_sessions_db["roles"]:
             st.session_state.all_sessions_db["roles"][r_name]["chat_history"] = []
-            st.session_state.all_sessions_db["roles"][r_name]["summary_history"] = []
+            st.session_state.all_sessions_db["roles"][r_name]["chat_summaries"] = [] # ✨ 清空概述
     elif curr_sk.startswith("💬 群聊："):
         g_name = curr_sk.replace("💬 群聊：", "")
+        if g_name in st.session_state.all_sessions_db.get("group_rooms", {}):
+            st.session_state.all_sessions_db["group_rooms"][g_name]["chat_summaries"] = [] # ✨ 清空群组概述
         for agent in st.session_state.group_members_list:
             agent_history = st.session_state.all_sessions_db["roles"][agent]["chat_history"]
             st.session_state.all_sessions_db["roles"][agent]["chat_history"] = [
@@ -170,6 +121,14 @@ def clear_current_chat_only():
             ]
     st.session_state.clear_version += 1
     save_local_data()
+
+def clear_all_file_data():
+    with st.session_state.db_lock:
+        if os.path.exists(DATA_FILE):
+            try: os.remove(DATA_FILE)
+            except Exception: pass
+    for key in ["all_sessions_db", "current_session_key", "group_active_agent", "group_members_list", "group_active_queue", "clear_version"]:
+        if key in st.session_state: del st.session_state[key]
 
 def synthesize_group_chat_history(g_name, members_list):
     combined_history = []
@@ -190,6 +149,24 @@ def synthesize_group_chat_history(g_name, members_list):
     combined_history.sort(key=lambda x: x.get("timestamp", 0))
     return combined_history
 
+# ✨ 新增：自动化生成对话一句话合并概述的中枢控制函数
+def generate_and_save_summary(client, model, user_content, ai_content, target_db_node):
+    summary_prompt = f"请将下面用户发的内容和AI恢复的内容进行合并，压缩并总结为极其精炼的一句话，清晰阐述这一轮对话（这一回合内）具体发生了什么剧情或故事节点。不要带任何前缀或解释，直接输出总结。 \n\n[玩家输入]：{user_content}\n\n[AI回复]：{ai_content}"
+    try:
+        res = client.chat.completions.create(
+            model=model,
+            messages=[{"role": "system", "content": "你是一个严谨的剧情长跑备忘录摘要生成器。"}, {"role": "user", "content": summary_prompt}],
+            temperature=0.3,
+            max_tokens=200
+        )
+        one_liner = res.choices[0].message.content.strip()
+        if one_liner:
+            if "chat_summaries" not in target_db_node:
+                target_db_node["chat_summaries"] = []
+            target_db_node["chat_summaries"].append(one_liner)
+    except Exception as e:
+        print(f"生成回合故事概要失败: {e}")
+
 # ==========================================
 # 1. 页面基本配置与顶层数据加载
 # ==========================================
@@ -206,22 +183,12 @@ if "group_active_agent" not in st.session_state: st.session_state.group_active_a
 if "group_active_queue" not in st.session_state: st.session_state.group_active_queue = []
 if "clear_version" not in st.session_state: st.session_state.clear_version = 0
 if "regenerate_trigger" not in st.session_state: st.session_state.regenerate_trigger = False
-if "continue_trigger" not in st.session_state: st.session_state.continue_trigger = False 
+if "continue_trigger" not in st.session_state: st.session_state.continue_trigger = False  # ✨ 继续自动推演标记位
 if "dice_instruction_patch" not in st.session_state: st.session_state.dice_instruction_patch = ""
 
 # ==========================================
 # 2. 侧边栏控制台
 # ==========================================
-st.sidebar.header("☁️ 云端同步面板")
-if st.sidebar.button("🔄 从坚果云强行拉取并覆写本地进度", use_container_width=True):
-    if manual_sync_from_nutstore():
-        st.session_state.all_sessions_db = load_cloud_data()
-        st.toast("🎉 云端最新的存档已成功覆盖本地！")
-        st.rerun()
-    else:
-        st.sidebar.warning("坚果云无已有存档，或者云盘暂无法访问。")
-
-st.sidebar.write("---")
 st.sidebar.header("🟢 微信会话选择列表")
 
 available_roles_list = list(st.session_state.all_sessions_db["roles"].keys())
@@ -256,10 +223,11 @@ if not is_group_chat:
 else:
     g_name = curr_sk.replace("💬 群聊：", "")
     room_data = st.session_state.all_sessions_db["group_rooms"][g_name]
+    if "chat_summaries" not in room_data: room_data["chat_summaries"] = []
     st.session_state.group_members_list = room_data["members"]
     chat_history_view = synthesize_group_chat_history(g_name, st.session_state.group_members_list)
 
-# 群内点名
+# 群内点名小圆点
 called_agents_list = []
 if is_group_chat:
     st.sidebar.write("---")
@@ -268,7 +236,7 @@ if is_group_chat:
         if st.sidebar.checkbox(f"🟢 准许【{m}】响应回复", value=True, key=f"call_dot_{curr_sk}_{m}"):
             called_agents_list.append(m)
 
-# 自由拉群
+# 常驻建群区
 st.sidebar.write("---")
 st.sidebar.subheader("➕ 微信式自由拉群房间")
 input_g_name = st.sidebar.text_input("1. 输入微信群名字（如：大乱斗）：", value="", key="g_name_input_widget")
@@ -289,7 +257,7 @@ if st.sidebar.button("🚀 创立并无缝切入该群聊", use_container_width=
         st.sidebar.error("❌ 请至少勾选一位AI成员！")
     else:
         save_local_data()
-        st.session_state.all_sessions_db["group_rooms"][clean_room_name] = {"members": pulled_members}
+        st.session_state.all_sessions_db["group_rooms"][clean_room_name] = {"members": pulled_members, "chat_summaries": []}
         st.session_state.current_session_key = f"💬 群聊：{clean_room_name}"
         st.session_state.group_active_agent = ""
         st.session_state.group_active_queue = []
@@ -303,7 +271,7 @@ if is_group_chat:
     for m in st.session_state.group_members_list:
         st.sidebar.write(f"• 👑 **{m}**")
 
-# 独占单聊属性控制
+# ✨ 独占单聊属性控制（⚡优化点：引入表单机制，防止输入文字时频繁卡顿整页重刷）
 if not is_group_chat:
     st.sidebar.write("---")
     with st.sidebar.form(key=f"role_settings_form_{target_girl}"):
@@ -353,9 +321,33 @@ if not is_group_chat:
             st.rerun()
 
 st.sidebar.write("---")
+st.sidebar.subheader("➕ 添加新的单聊AI角色")
+with st.sidebar.form(key="add_new_role_form"):
+    new_role_name = st.text_input("输入新角色名字：", value="")
+    init_sys = st.text_area("赋予她的基本人设：", value="")
+    init_bg = st.text_area("初始背景剧情设定：", value="")
+    if st.form_submit_button("✨ 确认创造该全新角色联系人", use_container_width=True):
+        clean_name = new_role_name.strip()
+        if clean_name == "" or clean_name in available_roles_list:
+            st.error("❌ 名字不能为空或联系人已存在！")
+        else:
+            st.session_state.all_sessions_db["roles"][clean_name] = {
+                "chat_history": [], 
+                "chat_summaries": [],
+                "system_role": init_sys.strip(),
+                "background_story": init_bg.strip(), 
+                "character_status": "状态：平静。",
+                "favorability": 0, 
+                "memory_events": []
+            }
+            st.session_state.current_session_key = f"👤 单聊：{clean_name}"
+            save_local_data()
+            st.rerun()
+
+st.sidebar.write("---")
 st.sidebar.header("🔑 接口配置")
 api_key = st.sidebar.text_input("DeepSeek API Key", type="password", value=st.secrets["deepseek"]["api_key"] if "deepseek" in st.secrets else "")
-model_name = st.sidebar.text_input("模型名称 (Model)", value="deepseek-v4-flash")
+model_name = st.sidebar.text_input("模型名称 (Model)", value="deepseek-v4-pro")
 client = OpenAI(api_key=api_key, base_url="https://api.deepseek.com")
 
 # 🌟 核心原汁原味保留：底层叙事覆写 JAILBREAK 提示词
@@ -519,11 +511,18 @@ else:
         render_message_controls_by_id(message["msg_id"], is_last_msg=is_last, agent_name_fallback=message.get("agent_name", ""))
 
 # ==========================================
-# 4. 命运骰子交互区
+# 4. 命运骰子交互区与继续按钮区
 # ==========================================
+# ✨ 需求 1: 在页面核心交互层提供点击直接令 AI 继续向下进行剧情推演的推演按钮
+st.write("---")
+col_action1, col_action2 = st.columns([0.2, 0.8])
+with col_action1:
+    if st.button("🎬 继续（AI自动推演剧情）", use_container_width=True):
+        st.session_state.continue_trigger = True
+        st.rerun()
+
 dice_triggered = False
 if not is_group_chat:
-    st.write("---")
     st.subheader("🎲 命运指令与行为强迫检定")
     dice_col1, dice_col2 = st.columns([0.8, 0.2])
     with dice_col1:
@@ -561,28 +560,31 @@ if not is_group_chat:
         save_local_data()
         dice_triggered = True
 
-# ✨ 1. 功能按钮：继续剧情推演
-if not is_group_chat and len(chat_history_view) > 0 and chat_history_view[-1]["role"] == "assistant":
-    st.write("---")
-    if st.button("⏩ 让AI继续推演剧情 (无需打字)", use_container_width=True):
-        st.session_state.continue_trigger = True
-        st.rerun()
-
 # ==========================================
-# 6. 会话调用执行中枢
+# 6. 会话调用执行中枢：动态点名传火机制与单聊上下文垫入
 # ==========================================
 user_input = st.chat_input("在此处输入聊天内容...", key=f"chat_input_v_{st.session_state.clear_version}")
 
+# 处理继续按钮逻辑：将其转化为对 AI 发起的暗号
+is_continue_mode = st.session_state.continue_trigger
+if is_continue_mode:
+    st.session_state.continue_trigger = False
+
 if is_group_chat:
     g_name = curr_sk.replace("💬 群聊：", "")
-    if user_input:
+    room_data = st.session_state.all_sessions_db["group_rooms"][g_name]
+    
+    if user_input or is_continue_mode:
         msg_id = f"msg_{int(time.time() * 1000)}_{random.randint(1000, 9999)}"
         timestamp = time.time()
+        
+        # 确定本轮的用户输入内容
+        active_content = f"（玩家在群聊【{g_name}】里发了一条消息）：\n{user_input}" if user_input else f"（玩家点击了继续推演，请所有人顺着当前的时间线，自发向下演绎精彩剧本）"
         
         for agent in st.session_state.group_members_list:
             st.session_state.all_sessions_db["roles"][agent]["chat_history"].append({
                 "role": "user", 
-                "content": f"（玩家在群聊【{g_name}】里发了一条消息）：\n{user_input}",
+                "content": active_content,
                 "from_group": g_name,
                 "msg_id": msg_id,
                 "timestamp": timestamp
@@ -592,8 +594,9 @@ if is_group_chat:
             st.session_state.group_active_queue = list(called_agents_list)
             st.session_state.group_active_agent = st.session_state.group_active_queue[0]
         else:
-            st.session_state.group_active_queue = []
-            st.session_state.group_active_agent = ""
+            # 如果没选择特定点名，默认安排群里第一人响应
+            st.session_state.group_active_queue = [st.session_state.group_members_list[0]] if st.session_state.group_members_list else []
+            st.session_state.group_active_agent = st.session_state.group_active_queue[0] if st.session_state.group_active_queue else ""
             
         save_local_data()
         st.rerun()
@@ -620,22 +623,29 @@ if is_group_chat:
                     private_context_summary += f"- {speaker}: {clean_txt}\n"
                 private_context_summary += "\n"
                 
+        # ✨ 需求 2: 为群聊拼接概述记忆，包含最近 50 条故事概述账本内容
+        group_summaries_list = room_data.get("chat_summaries", [])[-50:]
+        group_summary_context_str = ""
+        if group_summaries_list:
+            group_summary_context_str = "【📌 本微信群聊前期已发生的历史剧情大纲备忘（前情回顾摘要）】:\n" + "\n".join([f"- {s}" for s in group_summaries_list]) + "\n\n"
+
         agent_dynamic_system = (
             f"【你的名字：{curr_agent}】\n"
             f"【你的人格设定】：\n{agent_db.get('system_role', '')}\n\n"
             f"{agent_memory_prompt}\n"
+            f"{group_summary_context_str}"
             f"{private_context_summary}"  
             f"【当前群聊房间的背景环境描述】：\n{agent_db.get('background_story', '')}\n\n"
             f"【你当前感知到的状态】：\n{agent_db.get('character_status', '')}\n\n"
             f"【🔥 微信多人群聊点名特赦令】：\n"
             f"你现在正处于名为【{g_name}】的多人微信群现场！\n"
-            f"由于你在侧边栏被主人正式‘翻牌点名’，现在该你站出来发言了！\n"
-            f"请看清前文的所有群内动态（他人发言均有姓名标签提示），保持你的独特人格，对主人或其他群成员的语言和行动进行回应！\n\n"
+            f"现在轮到你站出来发言了！请保持你的独特人格进行回应！\n\n"
             f"{multi_reply_protocol}\n\n"
             f"{jailbreak_prompt}"
         )
         
-        context_messages = chat_history_view[-20:] if len(chat_history_view) > 20 else chat_history_view
+        # ✨ 需求 2: 动态历史切片，详细对话列表滑动窗口严格截取最近 12 条对话
+        context_messages = chat_history_view[-12:] if len(chat_history_view) > 12 else chat_history_view
         
         cleaned_context = []
         for msg in context_messages:
@@ -654,7 +664,7 @@ if is_group_chat:
 
         identity_lock_patch = {
             "role": "user",
-            "content": f"⚡[视角同步机制]: 请立刻代入【{curr_agent}】的灵魂。看清前文【玩家】与【其他群成员】挑起的戏剧冲突，用你的本能、语调和当下状态，进行接下来的三段式小说演绎。"
+            "content": f"⚡[视角同步机制]: 请立刻代入【{curr_agent}】的灵魂。用你的本能、语调和当下状态，进行接下来的三段式小说演绎。"
         }
 
         api_payload = [{"role": "system", "content": agent_dynamic_system}] + cleaned_context + [identity_lock_patch, lazy_insurance_prompt]
@@ -687,6 +697,16 @@ if is_group_chat:
                         "timestamp": reply_timestamp
                     })
                 
+                # 获取引起这轮变动的最后一条用户记录，用于合成总结
+                last_user_msg = "玩家请求推演剧情"
+                for m in reversed(chat_history_view):
+                    if m["role"] == "user":
+                        last_user_msg = m["content"]
+                        break
+                        
+                # ✨ 需求 2: 运行完成后自动触发合并压缩总结
+                generate_and_save_summary(client, model_name, last_user_msg, full_response, room_data)
+
                 st.session_state.group_active_queue.pop(0)
                 if st.session_state.group_active_queue:
                     st.session_state.group_active_agent = st.session_state.group_active_queue[0]
@@ -701,7 +721,7 @@ if is_group_chat:
                 st.session_state.group_active_queue = []
 
 else:
-    if user_input or st.session_state.regenerate_trigger or dice_triggered or st.session_state.continue_trigger:
+    if user_input or st.session_state.regenerate_trigger or dice_triggered or is_continue_mode:
         if not api_key:
             st.error("请先在左侧输入你的 DeepSeek API Key！")
             st.stop()
@@ -714,20 +734,16 @@ else:
             role_data["chat_history"].append({"role": "user", "content": user_input, "timestamp": time.time(), "msg_id": single_msg_id})
             st.session_state.dice_instruction_patch = ""
             save_local_data()
-            last_user_content = user_input
-        elif st.session_state.continue_trigger:
-            last_user_content = "（请继续自动往下推演剧情发展）"
-        else:
-            user_msgs = [m for m in role_data["chat_history"] if m["role"] == "user"]
-            last_user_content = user_msgs[-1]["content"] if user_msgs else ""
+        elif is_continue_mode:
+            # 如果是点击继续，则塞入一条隐式的纯旁白式物理推演引子
+            single_msg_id = f"msg_{int(time.time() * 1000)}_{random.randint(1000, 9999)}"
+            role_data["chat_history"].append({"role": "user", "content": "（物理推进：时间向前流逝，命运的齿轮继续咬合，请顺着前面的发展继续展现你的即时行动与反应）", "timestamp": time.time(), "msg_id": single_msg_id})
+            save_local_data()
 
         st.session_state.regenerate_trigger = False
-        is_continue_mode = st.session_state.continue_trigger
-        st.session_state.continue_trigger = False
 
-        # ✨ 切片控制：最近12条详细对话 + 最近50条概述文本
-        recent_details = role_data["chat_history"][-12:] if len(role_data["chat_history"]) > 12 else role_data["chat_history"]
-        recent_summaries = role_data.get("summary_history", [])[-50:]
+        # ✨ 需求 2: 动态历史切片，详细历史信息提取严格控制在最近 12 条对话
+        context_messages = role_data["chat_history"][-12:] if len(role_data["chat_history"]) > 12 else role_data["chat_history"]
 
         memory_ledger_prompt = ""
         if role_data.get("memory_events"):
@@ -735,14 +751,19 @@ else:
             for idx, event in enumerate(role_data["memory_events"]):
                 memory_ledger_prompt += f"{idx+1}. {event}\n"
 
-        summary_context_prompt = ""
-        if recent_summaries:
-            summary_context_prompt = "【📊 前情事件概述线索历史（按时间由远到近）】\n" + "\n".join([f"- {s}" for s in recent_summaries]) + "\n\n"
+        # ✨ 需求 2: 动态双轨滑动窗口，将存储的前 50 条概述对话作为垫底大纲喂给模型
+        historical_summaries = role_data.get("chat_summaries", [])[-50:]
+        summary_milestone_prompt = ""
+        if historical_summaries:
+            summary_milestone_prompt = "【📌 彼此交往的历史事件一句话概述备忘录（重要前情简纲）】\n"
+            for idx, sum_line in enumerate(historical_summaries):
+                summary_milestone_prompt += f"- {sum_line}\n"
+            summary_milestone_prompt += "\n"
 
         dynamic_system_prompt = (
             f"{role_data.get('system_role', '')}\n\n"
             f"{memory_ledger_prompt}\n\n"
-            f"{summary_context_prompt}"
+            f"{summary_milestone_prompt}"
             f"【当前演出的背景剧情设定】：\n{role_data.get('background_story', '')}\n\n"
             f"【你当前需要感知到的角色状态】：\n{role_data.get('character_status', '')}\n\n"
             f"{multi_reply_protocol}\n\n"
@@ -752,12 +773,8 @@ else:
             dynamic_system_prompt += f"\n\n{st.session_state.dice_instruction_patch}"
 
         cleaned_api_payload = [{"role": "system", "content": dynamic_system_prompt}]
-        for msg in recent_details:
+        for msg in context_messages:
             cleaned_api_payload.append({"role": msg["role"], "content": msg["content"]})
-            
-        if is_continue_mode:
-            cleaned_api_payload.append({"role": "user", "content": "（动作没有停止，请顺着上面的剧情节点，继续完成下一轮的三段式细节推演演进。）"})
-            
         cleaned_api_payload.append(lazy_insurance_prompt)
 
         with st.chat_message("assistant", avatar="💋"):
@@ -775,30 +792,48 @@ else:
                 
                 single_reply_id = f"reply_{int(time.time() * 1000)}_{random.randint(1000, 9999)}"
                 role_data["chat_history"].append({"role": "assistant", "content": full_response, "timestamp": time.time(), "msg_id": single_reply_id})
-                st.session_state.dice_instruction_patch = ""
                 
-                # ✨ 自动提炼当前对话来回
-                try:
-                    summary_payload = [
-                        {"role": "system", "content": "你是一个严格的事件概述器。请把用户发的内容和AI返回的剧本内容合并提炼，仅用‘一句话’说出这轮对话具体发生了什么事情（字数控制在60字内，不添加任何修饰和多余废话）。"},
-                        {"role": "user", "content": f"用户发的内容：{last_user_content}\n\nAI返回的内容：{full_response}"}
-                    ]
-                    summary_res = client.chat.completions.create(
-                        model=model_name, messages=summary_payload, stream=False, temperature=0.3
-                    )
-                    one_sentence_summary = summary_res.choices[0].message.content.strip()
-                    if one_sentence_summary:
-                        if "summary_history" not in role_data:
-                            role_data["summary_history"] = []
-                        role_data["summary_history"].append(one_sentence_summary)
-                except Exception as sum_e:
-                    print(f"自动生成概述失败: {sum_e}")
-
+                # 获取引起变动的上一条用户输入
+                last_user_action = role_data["chat_history"][-2]["content"] if len(role_data["chat_history"]) >= 2 else "初始引入"
+                
+                # ✨ 需求 2: 单聊对话结束后触发合并总结存储，各轮分别保留详细记录与概述记录
+                generate_and_save_summary(client, model_name, last_user_action, full_response, role_data)
+                
+                st.session_state.dice_instruction_patch = ""
                 save_local_data()
                 st.rerun()
             except Exception as e:
                 st.error(f"调用 API 出错: {str(e)}")
 
+# ==========================================
+# ✨ 需求 3: 在前端最后 main 触发和执行前加入前端可视化调试及显示代码段
+# ==========================================
+st.write("---")
+with st.expander("🔍 调试专用：前端实时显示底层已保存的「一句话故事概述」账本", expanded=True):
+    if is_group_chat:
+        g_name = st.session_state.current_session_key.replace("💬 群聊：", "")
+        room_data = st.session_state.all_sessions_db["group_rooms"][g_name]
+        st.write(f"当前群聊 **【{g_name}】** 的合并摘要列表（最新50条）：")
+        sums = room_data.get("chat_summaries", [])
+        if sums:
+            for idx, s in enumerate(sums[-50:]):
+                st.text(f"回合 {idx+1}: {s}")
+        else:
+            st.caption("暂无概述数据，请进行首次对话互动。")
+    else:
+        target_girl = st.session_state.current_session_key.replace("👤 单聊：", "")
+        role_data = st.session_state.all_sessions_db["roles"][target_girl]
+        st.write(f"当前单聊角色 **【{target_girl}】** 的合并摘要列表（最新50条）：")
+        sums = role_data.get("chat_summaries", [])
+        if sums:
+            for idx, s in enumerate(sums[-50:]):
+                st.text(f"回合 {idx+1}: {s}")
+        else:
+            st.caption("暂无概述数据，请进行首次对话互动。")
+
+# ==========================================
+# 7. 脚本自引导启动入口
+# ==========================================
 if __name__ == "__main__":
     import sys
     from streamlit.web import cli as stcli
