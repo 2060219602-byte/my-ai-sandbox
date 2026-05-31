@@ -697,14 +697,14 @@ if is_group_chat:
                         "timestamp": reply_timestamp
                     })
                 
-                # 获取引起这轮变动的最后一条用户记录，用于合成总结
+                # 获取引起这轮变动的最后一条用户记录
                 last_user_msg = "玩家请求推演剧情"
                 for m in reversed(chat_history_view):
                     if m["role"] == "user":
                         last_user_msg = m["content"]
                         break
                         
-                # ✨ 需求 2: 运行完成后自动触发合并压缩总结
+                # ✨ 调整顺序：先生成并存入总结，再清理队列，最后统一存盘刷新
                 generate_and_save_summary(client, model_name, last_user_msg, full_response, room_data)
 
                 st.session_state.group_active_queue.pop(0)
@@ -796,12 +796,12 @@ else:
                 # 获取引起变动的上一条用户输入
                 last_user_action = role_data["chat_history"][-2]["content"] if len(role_data["chat_history"]) >= 2 else "初始引入"
                 
-                # ✨ 需求 2: 单聊对话结束后触发合并总结存储，各轮分别保留详细记录与概述记录
+                # ✨ 调整顺序：先生成合并总结，重置补丁标记，最后执行数据落盘与重启
                 generate_and_save_summary(client, model_name, last_user_action, full_response, role_data)
                 
                 st.session_state.dice_instruction_patch = ""
-                save_local_data()
-                st.rerun()
+                save_local_data()  # 数据落盘
+                st.rerun()  # 确保页面重新加载时立刻能读取到刚才保存的 chat_summaries
             except Exception as e:
                 st.error(f"调用 API 出错: {str(e)}")
 
