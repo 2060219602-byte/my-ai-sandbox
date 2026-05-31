@@ -169,7 +169,7 @@ def extract_ai_llm_summary(client, model_name, user_text, ai_text):
             ],
             stream=False, # 总结采用单次返回形式，方便直接捕获
             temperature=0.3,
-            max_tokens=200
+            max_tokens=500
         )
         final_summary = completion.choices[0].message.content.strip()
         return final_summary
