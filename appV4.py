@@ -629,7 +629,7 @@ if is_group_chat:
                 private_context_summary += "\n"
                 
         # ✨ 需求 2: 动态历史切片，前情回顾读取最近 50 条故事概述账本内容
-        group_summaries_list = room_data.get("chat_summaries", [])[-50:]
+        group_summaries_list = room_data.get("chat_summaries", [])[-80:]
         group_summary_context_str = ""
         if group_summaries_list:
             group_summary_context_str = "【📌 本微信群聊前期已发生的历史剧情大纲备忘（前情回顾摘要）】:\n" + "\n".join([f"- {s}" for s in group_summaries_list]) + "\n\n"
