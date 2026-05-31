@@ -795,7 +795,7 @@ if is_group_chat:
 
 else:
     # ==========================================
-    # 👤 单聊会话调用执行中枢（强力身份锚定版）
+    # 👤 单聊会话调用执行中枢（同步强落盘版）
     # ==========================================
     if user_input or st.session_state.regenerate_trigger or dice_triggered or st.session_state.continue_trigger:
         if not api_key:
@@ -847,7 +847,7 @@ else:
         for msg in context_messages:
             cleaned_api_payload.append({"role": msg["role"], "content": msg["content"]})
             
-        # 💡【核心修正点】：无论是普通对话还是继续推演，都要在 payload 的最后对主模型（Pro）下死命令，彻底锁死第一人称
+        # 💡【视角红线硬指令】
         if st.session_state.continue_trigger:
             identity_lock_content = (
                 f"⚡[视角同步机制]: 请立刻代入【{target_girl}】的灵魂！用户目前保持沉默没有新输入。\n"
@@ -877,19 +877,61 @@ else:
                         response_placeholder.markdown(full_response + "▌")
                 response_placeholder.markdown(full_response)
                 
-                # A. 记录详细对话
+                # A. 记录详细对话到本地内存
                 single_reply_id = f"reply_{int(time.time() * 1000)}_{random.randint(1000, 9999)}"
                 role_data["chat_history"].append({"role": "assistant", "content": full_response, "timestamp": time.time(), "msg_id": single_reply_id})
                 st.session_state.dice_instruction_patch = ""
                 
-                # B. 提取输入文本并调用总结函数
-                last_input_text = context_messages[-1]["content"] if context_messages else "用户选择让AI继续推演"
-                run_background_summary(client, last_input_text, full_response, target_girl, is_group=False)
-                
-                # C. 状态收尾并保存
+                # B. 🚀【时序重组】：先用独立的局部代码算完总结，确认写进内存列表后，才允许save
+                with st.spinner("💾 正在合并本轮长篇对话概述..."):
+                    last_input_text = context_messages[-1]["content"] if context_messages else "用户触发无字继续推演"
+                    
+                    # 强行对输入源打标，杜绝人称看反
+                    formatted_dialogue = (
+                        f"【本次互动原始记录】\n"
+                        f"● 玩家(😎)的行为或说话内容：\"{last_input_text}\"\n"
+                        f"● AI角色({target_girl}💋)的具体剧情反馈：\"{full_response}\""
+                    )
+
+                    summary_prompt = (
+                        f"你是一个纯净的后台日志摘要提取器。请根据提供的原始记录，将本轮互动发生的核心剧情提炼为一句话大事件概述。\n\n"
+                        f"【❌ 绝对禁令】\n"
+                        f"- 严禁主谓宾颠倒！看清当前与玩家互动的AI角色名字叫【{target_girl}】。是【{target_girl}】在对玩家做出各种剧场动作，而不是相反！\n"
+                        f"- 严禁凭空捏造！如果玩家只说了“你好”或无字推演，概述重点应放在【{target_girl}】做出了什么剧情推进上。\n"
+                        f"- 严禁使用“请面”、“做戏”等生硬弱智的缩写！\n\n"
+                        f"【📋 严格输出格式（限制在40字以内）】\n"
+                        f"请直接采取类似以下格式输出，不要任何标点、废话或括号解释：\n"
+                        f"“玩家[做了什么]，{target_girl}[做出了什么剧情反馈/推进了什么核心事件]。”"
+                    )
+                    
+                    try:
+                        completion = client.chat.completions.create(
+                            model="deepseek-v4-flash",
+                            messages=[
+                                {"role": "system", "content": summary_prompt},
+                                {"role": "user", "content": formatted_dialogue}
+                            ],
+                            temperature=0.0,
+                            max_tokens=100
+                        )
+                        summary_result = completion.choices[0].message.content.strip()
+                        summary_result = summary_result.replace("“", "").replace("”", "").replace("`", "")
+                        
+                        if summary_result:
+                            new_sm_node = {
+                                "sm_id": f"sm_{int(time.time()*1000)}_{random.randint(1000,9999)}",
+                                "content": summary_result,
+                                "timestamp": time.time()
+                            }
+                            role_data["summary_history"].append(new_sm_node)
+                    except Exception as summary_err:
+                        st.error(f"后台摘要服务异常: {str(summary_err)}")
+
+                # C. 🔒 此时详细对话和概述均已在内存就绪，执行坚果云最终网络上报，最后重刷页面
                 st.session_state.continue_trigger = False
                 save_local_data()
                 st.rerun()
+                
             except Exception as e:
                 st.error(f"调用 API 出错: {str(e)}")
                 st.session_state.continue_trigger = False
