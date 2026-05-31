@@ -167,7 +167,7 @@ def generate_and_save_summary(client, model, user_content, ai_content, target_db
 
     # 🧼 【前置洗稿步骤 2】：把 AI 回复里的 1️⃣ 2️⃣ 3️⃣ 标号去掉，降低它的格式幻觉
     clean_ai = str(ai_content).replace("1️⃣", "").replace("2️⃣", "").replace("3️⃣", "").strip()
-    clean_ai = clean_ai[:500] # 摘要模型只需要看前 500 字的核心反馈和动作即可
+    clean_ai = clean_ai[:1000] # 摘要模型只需要看前 500 字的核心反馈和动作即可
 
     # 🦾 【上帝视角强制大纲指令】：不给模型任何复述或代入角色的机会
     summary_expert_prompt = (
