@@ -73,7 +73,7 @@ def get_default_data():
     }
 
 def load_cloud_data():
-    """✨重构：从远程坚果云服务器下载并解析最新的数据库文件"""
+    """✨强化版：从远程坚果云下载数据，若失败直接在前端弹窗提示原因"""
     try:
         response = requests.get(WEBDAV_URL, auth=WEBDAV_AUTH, timeout=10)
         if response.status_code == 200:
@@ -83,17 +83,22 @@ def load_cloud_data():
                     saved_data["group_rooms"] = {}
                 if "current_session_key" not in saved_data:
                     saved_data["current_session_key"] = "👤 单聊：" + list(saved_data["roles"].keys())[0]
-                # 平滑升级旧数据结构
                 for r_name in saved_data["roles"]:
                     if "summary_history" not in saved_data["roles"][r_name]:
                         saved_data["roles"][r_name]["summary_history"] = []
                 return saved_data
+        elif response.status_code == 404:
+            # 404 说明连接通了，但坚果云里还没有这个文件，这是正常的（第一次运行）
+            st.toast("ℹ️ 坚果云中暂无存档，已初始化全新本地剧本。")
+        else:
+            # 关键：如果是401（密码错）、403（无权限），直接在前端打印
+            st.error(f"❌ 坚果云读取失败！状态码: {response.status_code}，请检查Secrets配置或文件夹是否存在。")
     except Exception as e:
-        print(f"从坚果云读取数据流失败(将启用默认数据): {e}")
+        st.error(f"❌ 无法连接到坚果云WebDAV服务器: {str(e)}")
     return get_default_data()
 
 def save_local_data():
-    """✨重构：将内存快照通过 HTTP PUT 协议瞬间同步发射给坚果云云端"""
+    """✨强化版：上传数据到坚果云，若失败当场拦截并报错"""
     if "all_sessions_db" not in st.session_state or "current_session_key" not in st.session_state:
         return
 
@@ -103,12 +108,19 @@ def save_local_data():
     with st.session_state.db_lock:
         try:
             json_data = json.dumps(st.session_state.all_sessions_db, ensure_ascii=False, indent=4)
-            # 跨越公网进行原子覆盖上报
             response = requests.put(WEBDAV_URL, data=json_data.encode('utf-8'), auth=WEBDAV_AUTH, timeout=15)
-            if response.status_code not in [200, 201, 204]:
-                print(f"WebDAV上传坚果云失败，状态响应码: {response.status_code}")
+            
+            if response.status_code in [200, 201, 204]:
+                st.toast("💾 数据已成功同步并安全锁入坚果云盘！")
+            else:
+                # 如果坚果云返回非200，当场轰炸前端
+                st.error(f"🚨 存档未能写入坚果云！错误码: {response.status_code}")
+                if response.status_code == 409:
+                    st.warning("💡 提示 409：说明你在坚果云根目录下【没有】创建名为 PythonSandbox 的文件夹！请去手动创建！")
+                elif response.status_code == 401:
+                    st.warning("💡 提示 401：说明你在 Streamlit Secrets 填写的‘应用密码’是错的，或者填成了网页登录密码！")
         except Exception as e:
-            print(f"网络写入坚果云服务器出现异常: {e}")
+            st.error(f"🚨 坚果云上传发生网络崩溃: {str(e)}")
 
 def clear_current_chat_only():
     curr_sk = st.session_state.current_session_key
