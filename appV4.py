@@ -5,13 +5,13 @@ import os
 import random
 import time  # ✨ 引入时间戳用于群聊历史的物理时间线排序
 import threading  # ✨ 引入线程锁，彻底防止多并发导致的数据文件归零
-import requests  # ✨ Streamlit 自带，无需在 requirements 额外安装
+import requests  # ✨ Streamlit 自带，原生请求坚果云，无需额外的 requirements.txt
 
 # ☁️ 定义服务器本地（云端）保存数据的隐藏 JSON 文件路径
 DATA_FILE = "sandbox_private_db.json"
 
 # ==========================================
-# 坚果云 (WebDAV) 原生同步核心逻辑（零额外依赖）
+# 坚果云 (WebDAV) 原生同步核心逻辑（修正版）
 # ==========================================
 def get_nutstore_auth():
     if "nutstore" in st.secrets:
@@ -22,37 +22,43 @@ def sync_from_nutstore():
     auth = get_nutstore_auth()
     if auth:
         try:
-            base_url = 'https://dav.jianguoyun.com/dav/PythonSandbox/'
-            # 1. 尝试探测/创建 PythonSandbox 文件夹 (WebDAV MKCOL 协议)
-            requests.request("MKCOL", 'https://dav.jianguoyun.com/dav/PythonSandbox', auth=auth)
+            # 1. 尝试创建 PythonSandbox 文件夹，如果已存在(405)或成功(201)都属于正常
+            folder_url = 'https://dav.jianguoyun.com/dav/PythonSandbox'
+            requests.request("MKCOL", folder_url, auth=auth)
             
             # 2. 从坚果云下载文件
-            remote_url = f"{base_url}{DATA_FILE}"
+            remote_url = f"{folder_url}/{DATA_FILE}"
             res = requests.get(remote_url, auth=auth)
             if res.status_code == 200:
                 with open(DATA_FILE, "wb") as f:
                     f.write(res.content)
+                return True
         except Exception as e:
-            st.error(f"从坚果云下载同步数据失败: {e}")
+            print(f"从坚果云下载同步数据失败: {e}")
+    return False
 
 def sync_to_nutstore():
     auth = get_nutstore_auth()
     if auth and os.path.exists(DATA_FILE):
         try:
-            base_url = 'https://dav.jianguoyun.com/dav/PythonSandbox/'
-            remote_url = f"{base_url}{DATA_FILE}"
-            
+            remote_url = f"https://dav.jianguoyun.com/dav/PythonSandbox/{DATA_FILE}"
             # 使用 HTTP PUT 协议直接推送文件流至坚果云
             with open(DATA_FILE, "rb") as f:
                 requests.put(remote_url, auth=auth, data=f)
         except Exception as e:
             print(f"上传数据至坚果云失败: {e}")
 
-# 🔒 初始化全局线程锁与初始化坚果云下载
+# ✨ 核心修复：单例初始化。确保坚果云数据在整个 App 运行期间只在“最开始”下载一次，绝不触发循环刷新
+@st.cache_resource
+def init_cloud_sync():
+    sync_from_nutstore()
+    return True
+
+_ = init_cloud_sync()
+
+# 🔒 初始化全局线程锁
 if "db_lock" not in st.session_state:
     st.session_state.db_lock = threading.Lock()
-    with st.session_state.db_lock:
-        sync_from_nutstore()
 
 # 🔒 线上全盘拦截密码锁
 if "app_password" in st.secrets:
@@ -135,7 +141,7 @@ def save_local_data():
             with open(temp_file, "w", encoding="utf-8") as f:
                 json.dump(st.session_state.all_sessions_db, f, ensure_ascii=False, indent=4)
             os.replace(temp_file, DATA_FILE)
-            # 本地保存成功后，异步/顺带推送到坚果云
+            # 本地保存成功后，同步推送到坚果云
             sync_to_nutstore()
         except Exception as e:
             if os.path.exists(temp_file):
@@ -290,7 +296,7 @@ if is_group_chat:
     for m in st.session_state.group_members_list:
         st.sidebar.write(f"• 👑 **{m}**")
 
-# ✨ 独占单聊属性控制（⚡优化点：引入表单机制，防止输入文字时频繁卡顿整页重刷）
+# ✨ 独占单聊属性控制
 if not is_group_chat:
     st.sidebar.write("---")
     with st.sidebar.form(key=f"role_settings_form_{target_girl}"):
@@ -549,7 +555,7 @@ if not is_group_chat:
         save_local_data()
         dice_triggered = True
 
-# ✨ 1. 功能按钮新增：如果上一条是AI的发言，提供“继续”按钮
+# ✨ 1. 功能按钮：如果上一条是AI的发言，提供“继续”按钮
 if not is_group_chat and len(chat_history_view) > 0 and chat_history_view[-1]["role"] == "assistant":
     st.write("---")
     if st.button("⏩ 让AI继续推演剧情 (无需打字)", use_container_width=True):
@@ -557,7 +563,7 @@ if not is_group_chat and len(chat_history_view) > 0 and chat_history_view[-1]["r
         st.rerun()
 
 # ==========================================
-# 6. 会话调用执行中枢：动态点名传火机制与单聊上下文垫入
+# 6. 会话调用执行中枢
 # ==========================================
 user_input = st.chat_input("在此处输入聊天内容...", key=f"chat_input_v_{st.session_state.clear_version}")
 
@@ -689,7 +695,7 @@ if is_group_chat:
                 st.session_state.group_active_queue = []
 
 else:
-    # ✨ 2. 修改触发判定：加入了点击“继续按钮”的逻辑 (continue_trigger)
+    # ✨ 修改触发判定：加入了点击“继续按钮”的逻辑 (continue_trigger)
     if user_input or st.session_state.regenerate_trigger or dice_triggered or st.session_state.continue_trigger:
         if not api_key:
             st.error("请先在左侧输入你的 DeepSeek API Key！")
@@ -717,7 +723,7 @@ else:
         is_continue_mode = st.session_state.continue_trigger
         st.session_state.continue_trigger = False
 
-        # ✨ 2. 概述与详细切片控制：最近12条详细对话 + 最近50条概述文本
+        # ✨ 概述与详细切片控制：最近12条详细对话 + 最近50条概述文本
         recent_details = role_data["chat_history"][-12:] if len(role_data["chat_history"]) > 12 else role_data["chat_history"]
         recent_summaries = role_data.get("summary_history", [])[-50:]
 
@@ -771,7 +777,7 @@ else:
                 role_data["chat_history"].append({"role": "assistant", "content": full_response, "timestamp": time.time(), "msg_id": single_reply_id})
                 st.session_state.dice_instruction_patch = ""
                 
-                # ✨ 2. 自动合并当前来回为一句话总结
+                # ✨ 自动合并当前来回为一句话总结
                 try:
                     summary_payload = [
                         {"role": "system", "content": "你是一个严格的事件概述器。请把用户发的内容和AI返回的剧本内容合并提炼，仅用‘一句话’说出这轮对话具体发生了什么事情（字数控制在60字内，不添加任何修饰和多余废话）。"},
