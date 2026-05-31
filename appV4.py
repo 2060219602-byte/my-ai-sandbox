@@ -795,7 +795,7 @@ if is_group_chat:
 
 else:
     # ==========================================
-    # 👤 单聊会话调用执行中枢
+    # 👤 单聊会话调用执行中枢（强力身份锚定版）
     # ==========================================
     if user_input or st.session_state.regenerate_trigger or dice_triggered or st.session_state.continue_trigger:
         if not api_key:
@@ -847,13 +847,21 @@ else:
         for msg in context_messages:
             cleaned_api_payload.append({"role": msg["role"], "content": msg["content"]})
             
+        # 💡【核心修正点】：无论是普通对话还是继续推演，都要在 payload 的最后对主模型（Pro）下死命令，彻底锁死第一人称
         if st.session_state.continue_trigger:
-            continue_prompt = {
-                "role": "user",
-                "content": "⚡[剧情无字前推协议]: 用户目前选择保持沉默不进行新打字输入。请完全根据目前的既定环境与历史故事流，自行推演并向下长篇演绎编写接下来的情节剧情！"
-            }
-            cleaned_api_payload.append(continue_prompt)
+            identity_lock_content = (
+                f"⚡[视角同步机制]: 请立刻代入【{target_girl}】的灵魂！用户目前保持沉默没有新输入。\n"
+                f"【⚠️ 铁律】你只能使用第一人称‘我’来描写【{target_girl}】自己的身体、语言和内心！你必须用第二人称‘你’来指代对面的玩家！绝对不准看反！\n"
+                f"请顺着上文已发生的情节，继续展现你的独特情绪和身体本能，自发向下长篇演绎推进后续戏剧冲突！"
+            )
+        else:
+            identity_lock_content = (
+                f"⚡[视角同步机制]: 请立刻代入【{target_girl}】的灵魂！\n"
+                f"【⚠️ 铁律】你只能使用第一人称‘我’来描写【{target_girl}】自己的身体、语言和内心！你必须用第二人称‘你’来指代对面的玩家！绝对不准看反！\n"
+                f"看清前文【玩家】挑起的戏剧冲突，用你的本能、语调和当下状态，进行接下来的三段式小说演绎。"
+            )
             
+        cleaned_api_payload.append({"role": "user", "content": identity_lock_content})
         cleaned_api_payload.append(lazy_insurance_prompt)
 
         with st.chat_message("assistant", avatar="💋"):
@@ -869,16 +877,16 @@ else:
                         response_placeholder.markdown(full_response + "▌")
                 response_placeholder.markdown(full_response)
                 
-                # A. 先把 AI 的详细对话塞入历史列表
+                # A. 记录详细对话
                 single_reply_id = f"reply_{int(time.time() * 1000)}_{random.randint(1000, 9999)}"
                 role_data["chat_history"].append({"role": "assistant", "content": full_response, "timestamp": time.time(), "msg_id": single_reply_id})
                 st.session_state.dice_instruction_patch = ""
                 
-                # B. ✨【核心锁定】：立刻提取对应的输入文本，并丢给 deepseek-v4-flash 算总结
+                # B. 提取输入文本并调用总结函数
                 last_input_text = context_messages[-1]["content"] if context_messages else "用户选择让AI继续推演"
                 run_background_summary(client, last_input_text, full_response, target_girl, is_group=False)
                 
-                # C. 状态收尾：重置按钮状态，执行坚果云落盘，最后重刷前端
+                # C. 状态收尾并保存
                 st.session_state.continue_trigger = False
                 save_local_data()
                 st.rerun()
