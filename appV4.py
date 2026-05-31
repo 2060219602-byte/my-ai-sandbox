@@ -150,34 +150,36 @@ def synthesize_group_chat_history(g_name, members_list):
     return combined_history
 
 def generate_and_save_summary(client, model, user_content, ai_content, target_db_node):
+    # 🎬 物理缓冲，防止请求过快
     time.sleep(0.5)
     
-    # 🧼 【前置洗稿步骤 1】：把用户输入里的 Jailbreak 补丁、系统指令和骰子检定词通通洗掉，只留真正的剧情
+    # 🧼 【彻底洗稿】：剥离所有复杂的系统指令、骰子数据、越狱补丁
     clean_user = str(user_content)
-    # 剔除底层叙事覆写等可能污染总结模型的字眼
     if "【🔓 JAILBREAK PATCH" in clean_user:
-        clean_user = clean_user.split("】")[-1]  # 尝试截断
-    if "★" in clean_user or "【" in clean_user:
-        # 过滤掉命运骰子和物理推进的系统提示
-        lines = [line for line in clean_user.split("\n") if "控制密令" not in line and "强迫动作检定" not in line and "物理推进" not in line]
-        clean_user = " ".join(lines)
+        clean_user = clean_user.split("】")[-1]
+    
+    # 过滤物理推进等杂质
+    user_lines = [line for line in clean_user.split("\n") if "控制密令" not in line and "强迫动作检定" not in line and "物理推进" not in line]
+    clean_user = " ".join(user_lines).strip()
+    
+    if "（玩家点击了继续推演" in clean_user or not clean_user:
+        clean_user = "玩家要求点击继续，让剧情自发向下发展"
         
-    clean_user = clean_user.replace("（玩家点击了继续推演，请所有人顺着当前的时间线，自发向下演绎精彩剧本）", "玩家要求继续推进剧情发展")
-    clean_user = clean_user.strip()[:400] # 限制长度，防止长篇干扰
-
-    # 🧼 【前置洗稿步骤 2】：把 AI 回复里的 1️⃣ 2️⃣ 3️⃣ 标号去掉，降低它的格式幻觉
+    # 剔除 AI 回复中的段落标号，只留纯文本
     clean_ai = str(ai_content).replace("1️⃣", "").replace("2️⃣", "").replace("3️⃣", "").strip()
-    clean_ai = clean_ai[:1000] # 摘要模型只需要看前 500 字的核心反馈和动作即可
+    
+    # ✂️ 截取相对饱满的长度，保证大模型能看完整段剧情的因果
+    clean_user = clean_user[:800]
+    clean_ai = clean_ai[:1200]
 
-    # 🦾 【上帝视角强制大纲指令】：不给模型任何复述或代入角色的机会
+    # 🎭 【全新加固：文学档案编目指令】：给足 80 字空间，严禁中途吐字卡死
     summary_expert_prompt = (
-        "你是个剧本大纲记录员。请将以下两个戏剧片段发生的事情合并并精炼为一句话节点备忘录。\n"
-        "【严格字数限制】\n"
-        "总字数必须严格控制在30字以内！越短越好！\n"
-        "【严格禁止行为】\n"
-        "1. 严禁复述对白、严禁大段描写身体反应或细节，你只需要概括结果（例如：‘玩家逼问线索，丽莎冷酷拒绝并当场拔枪对峙。’）。\n"
-        "2. 严禁使用任何第一人称（如：我、你），必须使用第三人称（如：玩家、丽莎、露娜）。\n"
-        "3. 直接输出一句话结果，不要带任何前缀、标号或解释。\n\n"
+        "你现在是一个专业的戏剧剧本档案编目员。请根据下面提供的对白片段，客观概述这一轮对话所发生的故事节点。\n\n"
+        "【严格执行规则】\n"
+        "1. 独立概括：将玩家的意图与角色的最终反应串联在一起，总结出这一回合的剧情走向。\n"
+        "2. 字数容量：字数控制在 40 到 80 字之间。必须把一句话说完整，严禁中途吐字卡死或话没说完就截断！\n"
+        "3. 叙事视角：必须使用纯粹的第三人称（如：玩家、丽莎、露娜），严禁使用第一或第二人称。\n"
+        "4. 输出格式：直接输出这一句话总结，禁止附带任何‘本回合交代了’、‘摘要：’等多余前缀，禁止复述具体台词和生理白描。\n\n"
         f" [片段A（玩家行动）]：{clean_user}\n\n"
         f" [片段B（角色反应）]：{clean_ai}"
     )
@@ -186,35 +188,37 @@ def generate_and_save_summary(client, model, user_content, ai_content, target_db
         res = client.chat.completions.create(
             model=model,
             messages=[
-                {"role": "system", "content": "你是个莫得感情的剧本大纲生成器，擅长将复杂的长篇大论压缩到一句话以内。"}, 
+                {"role": "system", "content": "你是一个严谨的戏剧创作故事大纲登记员，负责用完整的一句话记录每回合剧情结果。"}, 
                 {"role": "user", "content": summary_expert_prompt}
             ],
-            temperature=0.0,  # 强制降到 0.0！彻底锁死模型的创造力，不给它任何复述和扩写的空间
-            max_tokens=80
+            temperature=0.2,  # 稍微释放一点点灵活性（0.2），防止 0.0 导致模型在风控边缘过于呆板直接憋死
+            max_tokens=250   # 扩容最大 Token 数，给模型充足的空间把最后一句话的句号吐出来
         )
         one_liner = res.choices[0].message.content.strip()
         
-        # 兜底过滤系统拒绝词
+        # 安全关键词过滤
         banned_keywords = ["无法", "抱歉", "道德", "违规", "内容安全", "作为AI"]
-        if one_liner and not any(k in one_liner for k in banned_keywords):
-            # 去掉模型偶尔喜欢带的句号或多余双引号
-            one_liner = one_liner.replace('"', '').replace('“', '').replace('”', '')
+        if one_liner and not any(k in one_liner for k in banned_keywords) and len(one_liner) > 5:
+            # 清理可能残留的标点和包裹引号
+            one_liner = one_liner.replace('"', '').replace('“', '').replace('”', '').replace('\'', '')
             
             if "chat_summaries" not in target_db_node or not isinstance(target_db_node["chat_summaries"], list):
                 target_db_node["chat_summaries"] = []
             target_db_node["chat_summaries"].append(one_liner)
         else:
-            raise ValueError("触发风控拦截")
+            raise ValueError("输出内容过短、不完整或触发了服务器隐形拦截")
             
     except Exception as e:
-        print(f"摘要生成触发保底: {e}")
+        print(f"摘要生成触发本地算法保底: {e}")
         if "chat_summaries" not in target_db_node or not isinstance(target_db_node["chat_summaries"], list):
             target_db_node["chat_summaries"] = []
             
-        # 本地算法提取最干净的动作前置词，100% 确保不会变成一堵恶心的复述墙
-        u_p = clean_user[:12].replace("（", "").replace("）", "")
-        a_p = clean_ai[:15].replace("（", "").replace("）", "")
-        target_db_node["chat_summaries"].append(f"🎬 剧情推进：玩家进行“{u_p}”，角色回应“{a_p}”。")
+        # 🦾 【硬核本地字符串切片保底】：如果大模型由于任何原因再次卡空，纯 Python 强制切出核心前后因果，确保 100% 话语完整
+        u_slice = clean_user[:20].replace("（", "").replace("）", "").strip()
+        a_slice = clean_ai[:30].replace("（", "").replace("）", "").strip()
+        local_backup_summary = f"🎬 剧情推进：玩家发起“{u_slice}...”，对方随之做出回应并展现了“{a_slice}...”的局势变化。"
+        
+        target_db_node["chat_summaries"].append(local_backup_summary)
 
 # ==========================================
 # 1. 页面基本配置与顶层数据加载
