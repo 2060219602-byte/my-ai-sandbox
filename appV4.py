@@ -5,7 +5,7 @@ import os
 import random
 import time  # ✨ 引入时间戳用于群聊历史的物理时间线排序
 import threading  # ✨ 引入线程锁，彻底防止多并发导致的数据文件归零
-from webdav3.client import Client as WebDAVClient
+from webdav4.client import Client as WebDAVClient  # ✨ 改用更稳定的 webdav4
 
 # ☁️ 定义服务器本地（云端）保存数据的隐藏 JSON 文件路径
 DATA_FILE = "sandbox_private_db.json"
@@ -15,24 +15,24 @@ DATA_FILE = "sandbox_private_db.json"
 # ==========================================
 def get_webdav_client():
     if "nutstore" in st.secrets:
-        options = {
-            'webdav_url': 'https://dav.jianguoyun.com/dav/',
-            'webdav_username': st.secrets["nutstore"]["username"],
-            'webdav_password': st.secrets["nutstore"]["password"]
-        }
-        return WebDAVClient(options)
+        # ✨ webdav4 采用 base_url 参数，格式非常标准
+        return WebDAVClient(
+            base_url='https://dav.jianguoyun.com/dav/',
+            auth=(st.secrets["nutstore"]["username"], st.secrets["nutstore"]["password"])
+        )
     return None
 
 def sync_from_nutstore():
     client = get_webdav_client()
     if client:
         try:
-            # 确保远程文件夹 PythonSandbox 存在
-            if not client.check("PythonSandbox"):
+            # ✨ webdav4 使用 exists() 和 mkdir()
+            if not client.exists("PythonSandbox"):
                 client.mkdir("PythonSandbox")
             
             remote_path = f"PythonSandbox/{DATA_FILE}"
-            if client.check(remote_path):
+            if client.exists(remote_path):
+                # ✨ 下载文件
                 client.download_file(remote_path, DATA_FILE)
         except Exception as e:
             st.error(f"从坚果云下载同步数据失败: {e}")
@@ -42,6 +42,7 @@ def sync_to_nutstore():
     if client and os.path.exists(DATA_FILE):
         try:
             remote_path = f"PythonSandbox/{DATA_FILE}"
+            # ✨ 上传文件（默认覆盖）
             client.upload_file(DATA_FILE, remote_path)
         except Exception as e:
             print(f"上传数据至坚果云失败: {e}")
