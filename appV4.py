@@ -5,45 +5,46 @@ import os
 import random
 import time  # ✨ 引入时间戳用于群聊历史的物理时间线排序
 import threading  # ✨ 引入线程锁，彻底防止多并发导致的数据文件归零
-from webdav4.client import Client as WebDAVClient  # ✨ 改用更稳定的 webdav4
+import requests  # ✨ Streamlit 自带，无需在 requirements 额外安装
 
 # ☁️ 定义服务器本地（云端）保存数据的隐藏 JSON 文件路径
 DATA_FILE = "sandbox_private_db.json"
 
 # ==========================================
-# 坚果云 (WebDAV) 同步核心逻辑
+# 坚果云 (WebDAV) 原生同步核心逻辑（零额外依赖）
 # ==========================================
-def get_webdav_client():
+def get_nutstore_auth():
     if "nutstore" in st.secrets:
-        # ✨ webdav4 采用 base_url 参数，格式非常标准
-        return WebDAVClient(
-            base_url='https://dav.jianguoyun.com/dav/',
-            auth=(st.secrets["nutstore"]["username"], st.secrets["nutstore"]["password"])
-        )
+        return (st.secrets["nutstore"]["username"], st.secrets["nutstore"]["password"])
     return None
 
 def sync_from_nutstore():
-    client = get_webdav_client()
-    if client:
+    auth = get_nutstore_auth()
+    if auth:
         try:
-            # ✨ webdav4 使用 exists() 和 mkdir()
-            if not client.exists("PythonSandbox"):
-                client.mkdir("PythonSandbox")
+            base_url = 'https://dav.jianguoyun.com/dav/PythonSandbox/'
+            # 1. 尝试探测/创建 PythonSandbox 文件夹 (WebDAV MKCOL 协议)
+            requests.request("MKCOL", 'https://dav.jianguoyun.com/dav/PythonSandbox', auth=auth)
             
-            remote_path = f"PythonSandbox/{DATA_FILE}"
-            if client.exists(remote_path):
-                # ✨ 下载文件
-                client.download_file(remote_path, DATA_FILE)
+            # 2. 从坚果云下载文件
+            remote_url = f"{base_url}{DATA_FILE}"
+            res = requests.get(remote_url, auth=auth)
+            if res.status_code == 200:
+                with open(DATA_FILE, "wb") as f:
+                    f.write(res.content)
         except Exception as e:
             st.error(f"从坚果云下载同步数据失败: {e}")
 
 def sync_to_nutstore():
-    client = get_webdav_client()
-    if client and os.path.exists(DATA_FILE):
+    auth = get_nutstore_auth()
+    if auth and os.path.exists(DATA_FILE):
         try:
-            remote_path = f"PythonSandbox/{DATA_FILE}"
-            # ✨ 上传文件（默认覆盖）
-            client.upload_file(DATA_FILE, remote_path)
+            base_url = 'https://dav.jianguoyun.com/dav/PythonSandbox/'
+            remote_url = f"{base_url}{DATA_FILE}"
+            
+            # 使用 HTTP PUT 协议直接推送文件流至坚果云
+            with open(DATA_FILE, "rb") as f:
+                requests.put(remote_url, auth=auth, data=f)
         except Exception as e:
             print(f"上传数据至坚果云失败: {e}")
 
