@@ -184,9 +184,9 @@ def synthesize_group_summary_history(g_name, members_list):
     return combined_summary
 
 def run_background_summary(client, user_text, ai_text, role_target, is_group=False, g_name=""):
-    """[终极修复版] 强行对输入源打标，杜绝人称看反，使用严厉的结构化模版约束模型"""
+    """[语法修复版] 强行对输入源打标，杜绝人称看反，使用严厉的结构化模版约束模型"""
     try:
-        # 1. 强行在代码层面对输入数据进行“身份贴条”，防止模型因为文本里的名字产生混觉
+        # 1. 强行在代码层面对输入数据进行“身份贴条”，防止模型因为文本里的名字产生幻觉
         formatted_dialogue = (
             f"【本次互动原始记录】\n"
             f"● 玩家(😎)的行为或说话内容：\"{user_text}\"\n"
@@ -194,14 +194,14 @@ def run_background_summary(client, user_text, ai_text, role_target, is_group=Fal
         )
 
         # 2. 用严厉的规则和结构化填空模版压制模型的瞎编和缩写倾向
+        # 💡 修复点：通过在括号内使用多个独立的 f"..." 拼接，既美观又不会触发 Python 的换行语法报错
         summary_prompt = (
             f"你是一个纯净的后台日志摘要提取器。请根据提供的原始记录，将本轮互动发生的核心剧情提炼为一句话大事件概述。\n\n"
             f"【❌ 绝对禁令】\n"
             f"- 严禁主谓宾颠倒！看清当前与玩家互动的AI角色名字叫【{role_target}】。是【{role_target}】在对玩家做出各种剧场动作，而不是相反！\n"
             f"- 严禁凭空捏造！如果玩家只说了“你好”或无字推演，概述重点应放在【{role_target}】做出了什么剧情推进上。\n"
             f"- 严禁使用“请面”、“做戏”等生硬弱智的缩写！\n\n"
-            f"【📋 严格输出格式（限制在40字以内）
-】\n"
+            f"【📋 严格输出格式（限制在40字以内）】\n"
             f"请直接采取类似以下格式输出，不要任何标点、废话或括号解释：\n"
             f"“玩家[做了什么]，{role_target}[做出了什么剧情反馈/推进了什么核心事件]。”"
         )
@@ -212,7 +212,7 @@ def run_background_summary(client, user_text, ai_text, role_target, is_group=Fal
                 {"role": "system", "content": summary_prompt},
                 {"role": "user", "content": formatted_dialogue}
             ],
-            temperature=0.3,  # ✨ 降到0.0！彻底锁死模型的随机性和创造力，让它变成纯工具人
+            temperature=0.0,  # ✨ 降到0.0！彻底锁死模型的随机性和创造力，让它变成纯工具人
             max_tokens=100
         )
         summary_result = completion.choices[0].message.content.strip()
