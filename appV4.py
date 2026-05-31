@@ -42,7 +42,7 @@ def get_default_data():
         "roles": {
             "赛博贩子-丽莎": {
                 "chat_history": [],
-                "chat_summaries": [], # ✨ 新增：保存每轮对话的一句话概述
+                "chat_summaries": [], # ✨ 保存每轮对话的一句话概述
                 "system_role": "你是一位冷酷的赛博朋克情报贩子，说话简短、讽刺，习惯使用黑话。",
                 "background_story": "时间：2077年深夜。\n地点：下层区霓虹街角的一家老旧面馆。\n氛围：下着暴雨，空气中弥漫着机油与廉价合成肉的味道。",
                 "character_status": "状态：轻度受伤，义体能量剩余35%，心情极度烦躁。",
@@ -51,7 +51,7 @@ def get_default_data():
             },
             "魔法学徒-露娜": {
                 "chat_history": [],
-                "chat_summaries": [], # ✨ 新增：保存每轮对话的一句话概述
+                "chat_summaries": [], # ✨ 保存每轮对话的一句话概述
                 "system_role": "你是一个性格有些冒失、但天赋异禀的高级魔法学院见习女巫，说话喜欢带上古怪的咒语口头禅。",
                 "background_story": "时间：魔法历512年。\n地点：皇家学院深夜被禁闭的藏书馆密室。\n氛围：摇曳的烛光，空气中漂浮着古老羊皮纸的尘埃，中央摆放着一本散发暗芒的禁忌魔法书。",
                 "character_status": "状态：精神力消耗过度（过度透支），衣角有些焦黑，正处于被导师发现的惊恐中。",
@@ -73,10 +73,10 @@ def load_cloud_data():
                         saved_data["current_session_key"] = "👤 单聊：" + list(saved_data["roles"].keys())[0]
                     # 确保旧数据平滑升级，拥有概述字段
                     for r_name in saved_data["roles"]:
-                        if "chat_summaries" not in saved_data["roles"][r_name]:
+                        if "chat_summaries" not in saved_data["roles"][r_name] or not isinstance(saved_data["roles"][r_name]["chat_summaries"], list):
                             saved_data["roles"][r_name]["chat_summaries"] = []
                     for g_name in saved_data.get("group_rooms", {}):
-                        if "chat_summaries" not in saved_data["group_rooms"][g_name]:
+                        if "chat_summaries" not in saved_data["group_rooms"][g_name] or not isinstance(saved_data["group_rooms"][g_name]["chat_summaries"], list):
                             saved_data["group_rooms"][g_name]["chat_summaries"] = []
                     return saved_data
         except Exception:
@@ -109,11 +109,11 @@ def clear_current_chat_only():
         r_name = curr_sk.replace("👤 单聊：", "")
         if r_name in st.session_state.all_sessions_db["roles"]:
             st.session_state.all_sessions_db["roles"][r_name]["chat_history"] = []
-            st.session_state.all_sessions_db["roles"][r_name]["chat_summaries"] = [] # ✨ 清空概述
+            st.session_state.all_sessions_db["roles"][r_name]["chat_summaries"] = [] # 清空概述
     elif curr_sk.startswith("💬 群聊："):
         g_name = curr_sk.replace("💬 群聊：", "")
         if g_name in st.session_state.all_sessions_db.get("group_rooms", {}):
-            st.session_state.all_sessions_db["group_rooms"][g_name]["chat_summaries"] = [] # ✨ 清空群组概述
+            st.session_state.all_sessions_db["group_rooms"][g_name]["chat_summaries"] = [] # 清空群组概述
         for agent in st.session_state.group_members_list:
             agent_history = st.session_state.all_sessions_db["roles"][agent]["chat_history"]
             st.session_state.all_sessions_db["roles"][agent]["chat_history"] = [
@@ -148,77 +148,6 @@ def synthesize_group_chat_history(g_name, members_list):
                         
     combined_history.sort(key=lambda x: x.get("timestamp", 0))
     return combined_history
-
-def generate_and_save_summary(client, model, user_content, ai_content, target_db_node):
-    # 🎬 物理缓冲，防止请求过快
-    time.sleep(0.5)
-    
-    # 🧼 【彻底洗稿】：剥离所有复杂的系统指令、骰子数据、越狱补丁
-    clean_user = str(user_content)
-    if "【🔓 JAILBREAK PATCH" in clean_user:
-        clean_user = clean_user.split("】")[-1]
-    
-    # 过滤物理推进等杂质
-    user_lines = [line for line in clean_user.split("\n") if "控制密令" not in line and "强迫动作检定" not in line and "物理推进" not in line]
-    clean_user = " ".join(user_lines).strip()
-    
-    if "（玩家点击了继续推演" in clean_user or not clean_user:
-        clean_user = "玩家要求点击继续，让剧情自发向下发展"
-        
-    # 剔除 AI 回复中的段落标号，只留纯文本
-    clean_ai = str(ai_content).replace("1️⃣", "").replace("2️⃣", "").replace("3️⃣", "").strip()
-    
-    # ✂️ 截取相对饱满的长度，保证大模型能看完整段剧情的因果
-    clean_user = clean_user[:800]
-    clean_ai = clean_ai[:1200]
-
-    # 🎭 【全新加固：文学档案编目指令】：给足 80 字空间，严禁中途吐字卡死
-    summary_expert_prompt = (
-        "你现在是一个专业的戏剧剧本档案编目员。请根据下面提供的对白片段，客观概述这一轮对话所发生的故事节点。\n\n"
-        "【严格执行规则】\n"
-        "1. 独立概括：将玩家的意图与角色的最终反应串联在一起，总结出这一回合的剧情走向。\n"
-        "2. 字数容量：字数控制在 40 到 80 字之间。必须把一句话说完整，严禁中途吐字卡死或话没说完就截断！\n"
-        "3. 叙事视角：必须使用纯粹的第三人称（如：玩家、丽莎、露娜），严禁使用第一或第二人称。\n"
-        "4. 输出格式：直接输出这一句话总结，禁止附带任何‘本回合交代了’、‘摘要：’等多余前缀，禁止复述具体台词和生理白描。\n\n"
-        f" [片段A（玩家行动）]：{clean_user}\n\n"
-        f" [片段B（角色反应）]：{clean_ai}"
-    )
-    
-    try:
-        res = client.chat.completions.create(
-            model=model,
-            messages=[
-                {"role": "system", "content": "你是一个严谨的戏剧创作故事大纲登记员，负责用完整的一句话记录每回合剧情结果。"}, 
-                {"role": "user", "content": summary_expert_prompt}
-            ],
-            temperature=0.2,  # 稍微释放一点点灵活性（0.2），防止 0.0 导致模型在风控边缘过于呆板直接憋死
-            max_tokens=250   # 扩容最大 Token 数，给模型充足的空间把最后一句话的句号吐出来
-        )
-        one_liner = res.choices[0].message.content.strip()
-        
-        # 安全关键词过滤
-        banned_keywords = ["无法", "抱歉", "道德", "违规", "内容安全", "作为AI"]
-        if one_liner and not any(k in one_liner for k in banned_keywords) and len(one_liner) > 5:
-            # 清理可能残留的标点和包裹引号
-            one_liner = one_liner.replace('"', '').replace('“', '').replace('”', '').replace('\'', '')
-            
-            if "chat_summaries" not in target_db_node or not isinstance(target_db_node["chat_summaries"], list):
-                target_db_node["chat_summaries"] = []
-            target_db_node["chat_summaries"].append(one_liner)
-        else:
-            raise ValueError("输出内容过短、不完整或触发了服务器隐形拦截")
-            
-    except Exception as e:
-        print(f"摘要生成触发本地算法保底: {e}")
-        if "chat_summaries" not in target_db_node or not isinstance(target_db_node["chat_summaries"], list):
-            target_db_node["chat_summaries"] = []
-            
-        # 🦾 【硬核本地字符串切片保底】：如果大模型由于任何原因再次卡空，纯 Python 强制切出核心前后因果，确保 100% 话语完整
-        u_slice = clean_user[:20].replace("（", "").replace("）", "").strip()
-        a_slice = clean_ai[:30].replace("（", "").replace("）", "").strip()
-        local_backup_summary = f"🎬 剧情推进：玩家发起“{u_slice}...”，对方随之做出回应并展现了“{a_slice}...”的局势变化。"
-        
-        target_db_node["chat_summaries"].append(local_backup_summary)
 
 # ==========================================
 # 1. 页面基本配置与顶层数据加载
@@ -443,6 +372,14 @@ lazy_insurance_prompt = {
     "content": "💡 [剧本质量终审确认]：请无条件按照 1️⃣、2️⃣、3️⃣ 标号分三段输出细节饱满的精彩长文，禁止附带多余标签文字！"
 }
 
+# ⚡ 同回合内强力合并总结落盘密令 (引导主模型写完小说后自动吐出总结)
+inline_summary_protocol = (
+    "【⚠️ 附加落盘审计死命令 — 必须就地执行】\n"
+    "在你输出完完整的 1️⃣、2️⃣、3️⃣ 三段式小说文本并打上最终句号后，你必须紧接着在末尾换行输出这串唯一的隔离标记符：[ROUND_SUMMARY]\n"
+    "随后在标记符后面，立刻代入绝对客观的上帝叙事视角（采用第三人称，如：玩家、苏静娴），用一句话（控制在60字以内）总结提炼本回合你与玩家之间刚刚发生的核心剧情走向大纲。\n"
+    "直接输出总结大纲，严禁带任何多余的‘本回合发生了’或‘摘要：’等系统废话！"
+)
+
 # 🚨 危险清理区
 st.sidebar.write("---")
 st.sidebar.header("🚨 危险清理区")
@@ -566,7 +503,6 @@ else:
 # ==========================================
 # 4. 命运骰子交互区与继续按钮区
 # ==========================================
-# ✨ 需求 1: 在页面核心交互层提供点击直接令 AI 继续向下进行剧情推演的推演按钮
 st.write("---")
 col_action1, col_action2 = st.columns([0.2, 0.8])
 with col_action1:
@@ -618,7 +554,6 @@ if not is_group_chat:
 # ==========================================
 user_input = st.chat_input("在此处输入聊天内容...", key=f"chat_input_v_{st.session_state.clear_version}")
 
-# 处理继续按钮逻辑：将其转化为对 AI 发起的暗号
 is_continue_mode = st.session_state.continue_trigger
 if is_continue_mode:
     st.session_state.continue_trigger = False
@@ -631,7 +566,6 @@ if is_group_chat:
         msg_id = f"msg_{int(time.time() * 1000)}_{random.randint(1000, 9999)}"
         timestamp = time.time()
         
-        # 确定本轮的用户输入内容
         active_content = f"（玩家在群聊【{g_name}】里发了一条消息）：\n{user_input}" if user_input else f"（玩家点击了继续推演，请所有人顺着当前的时间线，自发向下演绎精彩剧本）"
         
         for agent in st.session_state.group_members_list:
@@ -647,7 +581,6 @@ if is_group_chat:
             st.session_state.group_active_queue = list(called_agents_list)
             st.session_state.group_active_agent = st.session_state.group_active_queue[0]
         else:
-            # 如果没选择特定点名，默认安排群里第一人响应
             st.session_state.group_active_queue = [st.session_state.group_members_list[0]] if st.session_state.group_members_list else []
             st.session_state.group_active_agent = st.session_state.group_active_queue[0] if st.session_state.group_active_queue else ""
             
@@ -676,8 +609,8 @@ if is_group_chat:
                     private_context_summary += f"- {speaker}: {clean_txt}\n"
                 private_context_summary += "\n"
                 
-        # ✨ 需求 2: 为群聊拼接概述记忆，包含最近 80 条故事概述账本内容
-        group_summaries_list = room_data.get("chat_summaries", [])[-80:]
+        # ✨ 需求 2: 动态滑动窗口，多群聊独立加载最近 50 条合并故事概要
+        group_summaries_list = room_data.get("chat_summaries", [])[-50:]
         group_summary_context_str = ""
         if group_summaries_list:
             group_summary_context_str = "【📌 本微信群聊前期已发生的历史剧情大纲备忘（前情回顾摘要）】:\n" + "\n".join([f"- {s}" for s in group_summaries_list]) + "\n\n"
@@ -694,10 +627,11 @@ if is_group_chat:
             f"你现在正处于名为【{g_name}】的多人微信群现场！\n"
             f"现在轮到你站出来发言了！请保持你的独特人格进行回应！\n\n"
             f"{multi_reply_protocol}\n\n"
+            f"{inline_summary_protocol}\n\n" # ✨ 同步追加隐藏式大纲总结落盘控制密令
             f"{jailbreak_prompt}"
         )
         
-        # ✨ 需求 2: 动态历史切片，详细对话列表滑动窗口严格截取最近 12 条对话
+        # ✨ 需求 2: 历史切片严格限制最近 12 条详细对话列表
         context_messages = chat_history_view[-12:] if len(chat_history_view) > 12 else chat_history_view
         
         cleaned_context = []
@@ -729,36 +663,47 @@ if is_group_chat:
             
             try:
                 response = client.chat.completions.create(
-                    model=model_name, messages=api_payload, stream=True, temperature=1.0, max_tokens=1500, presence_penalty=0.2, frequency_penalty=0.1
+                    model=model_name, messages=api_payload, stream=True, temperature=1.0, max_tokens=1600, presence_penalty=0.2, frequency_penalty=0.1
                 )
                 for chunk in response:
                     if chunk.choices[0].delta.content:
                         full_response += chunk.choices[0].delta.content
-                        response_placeholder.markdown(full_response + "▌")
-                response_placeholder.markdown(full_response)
+                        # ✂️ 物理剥离标记：渲染时实时剔除总结后缀，保证前端小说干净纯粹
+                        display_text = full_response.split("[ROUND_SUMMARY]")[0]
+                        response_placeholder.markdown(display_text + "▌")
                 
+                final_display_text = full_response.split("[ROUND_SUMMARY]")[0].strip()
+                response_placeholder.markdown(final_display_text)
+                
+                # ✂️ 分离并抓取主模型在 100% 破甲状态下顺手生成的纯净总结
+                extracted_summary = ""
+                if "[ROUND_SUMMARY]" in full_response:
+                    possible_summary = full_response.split("[ROUND_SUMMARY]")[-1].strip()
+                    if len(possible_summary) > 5 and "无法" not in possible_summary:
+                        extracted_summary = possible_summary.replace('"', '').replace('“', '').replace('’', '')
+                
+                # 保底提取算法
+                if not extracted_summary:
+                    clean_first_block = final_display_text.split("2️⃣")[0].replace("1️⃣", "").strip()[:35]
+                    extracted_summary = f"💬 群聊对局推进，成员【{curr_agent}】公开做出了表达“{clean_first_block}...”。"
+
                 reply_id = f"reply_{int(time.time() * 1000)}_{random.randint(1000, 9999)}"
                 reply_timestamp = time.time()
 
                 for inner_agent in st.session_state.group_members_list:
                     st.session_state.all_sessions_db["roles"][inner_agent]["chat_history"].append({
                         "role": "assistant", 
-                        "content": f"（【{curr_agent}】在群聊【{g_name}】现场当众说道）：\n{full_response}",
+                        "content": f"（【{curr_agent}】在群聊【{g_name}】现场当众说道）：\n{final_display_text}",
                         "agent_name": curr_agent,
                         "from_group": g_name,
                         "msg_id": reply_id,
                         "timestamp": reply_timestamp
                     })
                 
-                # 获取引起这轮变动的最后一条用户记录
-                last_user_msg = "玩家请求推演剧情"
-                for m in reversed(chat_history_view):
-                    if m["role"] == "user":
-                        last_user_msg = m["content"]
-                        break
-                        
-                # ✨ 调整顺序：先生成并存入总结，再清理队列，最后统一存盘刷新
-                generate_and_save_summary(client, model_name, last_user_msg, full_response, room_data)
+                # ✨ 回合概述独立存入群会话账本
+                if "chat_summaries" not in room_data or not isinstance(room_data["chat_summaries"], list):
+                    room_data["chat_summaries"] = []
+                room_data["chat_summaries"].append(extracted_summary)
 
                 st.session_state.group_active_queue.pop(0)
                 if st.session_state.group_active_queue:
@@ -788,14 +733,13 @@ else:
             st.session_state.dice_instruction_patch = ""
             save_local_data()
         elif is_continue_mode:
-            # 如果是点击继续，则塞入一条隐式的纯旁白式物理推演引子
             single_msg_id = f"msg_{int(time.time() * 1000)}_{random.randint(1000, 9999)}"
             role_data["chat_history"].append({"role": "user", "content": "（物理推进：时间向前流逝，命运的齿轮继续咬合，请顺着前面的发展继续展现你的即时行动与反应）", "timestamp": time.time(), "msg_id": single_msg_id})
             save_local_data()
 
         st.session_state.regenerate_trigger = False
 
-        # ✨ 需求 2: 动态历史切片，详细历史信息提取严格控制在最近 12 条对话
+        # ✨ 需求 2: 动态历史切片，详细历史记录切片滑动窗口截取最近 12 条对话
         context_messages = role_data["chat_history"][-12:] if len(role_data["chat_history"]) > 12 else role_data["chat_history"]
 
         memory_ledger_prompt = ""
@@ -804,7 +748,7 @@ else:
             for idx, event in enumerate(role_data["memory_events"]):
                 memory_ledger_prompt += f"{idx+1}. {event}\n"
 
-        # ✨ 需求 2: 动态双轨滑动窗口，将存储的前 50 条概述对话作为垫底大纲喂给模型
+        # ✨ 需求 2: 动态双轨滑动窗口，独立垫入前 50 条故事概述作为历史前情回顾
         historical_summaries = role_data.get("chat_summaries", [])[-50:]
         summary_milestone_prompt = ""
         if historical_summaries:
@@ -820,6 +764,7 @@ else:
             f"【当前演出的背景剧情设定】：\n{role_data.get('background_story', '')}\n\n"
             f"【你当前需要感知到的角色状态】：\n{role_data.get('character_status', '')}\n\n"
             f"{multi_reply_protocol}\n\n"
+            f"{inline_summary_protocol}\n\n" # ✨ 同步追加隐藏式一句话总结落盘死命令
             f"{jailbreak_prompt}"
         )
         if st.session_state.dice_instruction_patch != "":
@@ -835,26 +780,41 @@ else:
             full_response = ""
             try:
                 response = client.chat.completions.create(
-                    model=model_name, messages=cleaned_api_payload, stream=True, temperature=1.0, max_tokens=1500, presence_penalty=0.2, frequency_penalty=0.1
+                    model=model_name, messages=cleaned_api_payload, stream=True, temperature=1.0, max_tokens=1600, presence_penalty=0.2, frequency_penalty=0.1
                 )
                 for chunk in response:
                     if chunk.choices[0].delta.content:
                         full_response += chunk.choices[0].delta.content
-                        response_placeholder.markdown(full_response + "▌")
-                response_placeholder.markdown(full_response)
+                        # ✂️ 流式隐藏：前端动态剥离总结后置串，确保界面上只有纯正的戏剧小说长文
+                        display_text = full_response.split("[ROUND_SUMMARY]")[0]
+                        response_placeholder.markdown(display_text + "▌")
+                        
+                final_display_text = full_response.split("[ROUND_SUMMARY]")[0].strip()
+                response_placeholder.markdown(final_display_text)
                 
+                # ✂️ 分离并提取由主模型顺带写出的完备一句话大纲
+                extracted_summary = ""
+                if "[ROUND_SUMMARY]" in full_response:
+                    possible_summary = full_response.split("[ROUND_SUMMARY]")[-1].strip()
+                    if len(possible_summary) > 5 and "无法" not in possible_summary:
+                        extracted_summary = possible_summary.replace('"', '').replace('“', '').replace('”', '')
+                
+                # 如果模型极端情况下没有输出标记符，提供本地安全截取保底
+                if not extracted_summary:
+                    clean_first_block = final_display_text.split("2️⃣")[0].replace("1️⃣", "").strip()[:35]
+                    extracted_summary = f"🎬 剧情向前推演，角色做出了反馈反应：“{clean_first_block}...”。"
+
                 single_reply_id = f"reply_{int(time.time() * 1000)}_{random.randint(1000, 9999)}"
-                role_data["chat_history"].append({"role": "assistant", "content": full_response, "timestamp": time.time(), "msg_id": single_reply_id})
+                role_data["chat_history"].append({"role": "assistant", "content": final_display_text, "timestamp": time.time(), "msg_id": single_reply_id})
                 
-                # 获取引起变动的上一条用户输入
-                last_user_action = role_data["chat_history"][-2]["content"] if len(role_data["chat_history"]) >= 2 else "初始引入"
-                
-                # ✨ 调整顺序：先生成合并总结，重置补丁标记，最后执行数据落盘与重启
-                generate_and_save_summary(client, model_name, last_user_action, full_response, role_data)
+                # ✨ 双轨合流：将概述保存进入独立的摘要账本中，各轮独立保存
+                if "chat_summaries" not in role_data or not isinstance(role_data["chat_summaries"], list):
+                    role_data["chat_summaries"] = []
+                role_data["chat_summaries"].append(extracted_summary)
                 
                 st.session_state.dice_instruction_patch = ""
-                save_local_data()  # 数据落盘
-                st.rerun()  # 确保页面重新加载时立刻能读取到刚才保存的 chat_summaries
+                save_local_data()  # 统一落盘
+                st.rerun()  # 统一重刷
             except Exception as e:
                 st.error(f"调用 API 出错: {str(e)}")
 
