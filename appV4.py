@@ -184,11 +184,18 @@ def synthesize_group_summary_history(g_name, members_list):
     return combined_summary
 
 def run_background_summary(client, user_text, ai_text, role_target, is_group=False, g_name=""):
-    """使用 deepseek-v4-flash 模型，实时自动提炼并合成本轮对话的一句话概述结论"""
+    """[已修复人称与语义] 使用 deepseek-v4-flash 模型，实时自动提炼并合成本轮对话的一句话概述结论"""
     try:
+        # ✨ 强化提示词：严格限定视角与核心语义，杜绝主谓宾颠倒与生硬缩写
         summary_prompt = (
-            "你是一个纯净的后台日志摘要提取器。请把下面提供的一轮剧本对话（包含用户的行动或指令与AI对应的长篇剧情演绎反馈），"
-            "合并、精准、凝练地总结为一句话，说明这一轮交互中发生了什么具体的核心事情。字数限制在 50 字以内，不要任何多余的寒暄和标点废话。"
+            f"你是一个纯净的后台日志摘要提取器。请把下面提供的一轮剧本对话合并、精准地总结为一句话大事件概述。\n"
+            f"【强制人称规范】：\n"
+            f"- 剧本中的“用户/玩家/😎”统称为‘玩家’。\n"
+            f"- 当前正在互动的AI角色统称为‘{role_target}’。\n"
+            f"【强制语义规范】：\n"
+            f"- 必须分清是谁对谁发起了什么动作，严禁主谓宾颠倒（例如：分清是谁请谁吃面）。\n"
+            f"- 语言要通顺自然，严禁使用像‘请面’、‘做戏’这样生硬且有歧义的缩写。\n"
+            f"限制在 40 字以内，直接输出最终概述句子，不要任何多余的寒暄和标点废话。"
         )
         dialogue_content = f"【上文交互/行动】:\n{user_text}\n\n【AI生成的具体剧情回复】:\n{ai_text}"
         
@@ -198,7 +205,7 @@ def run_background_summary(client, user_text, ai_text, role_target, is_group=Fal
                 {"role": "system", "content": summary_prompt},
                 {"role": "user", "content": dialogue_content}
             ],
-            temperature=0.3,
+            temperature=0.2, # 降低温度，让它更死板、更严谨
             max_tokens=150
         )
         summary_result = completion.choices[0].message.content.strip()
@@ -214,8 +221,8 @@ def run_background_summary(client, user_text, ai_text, role_target, is_group=Fal
             if role_target in st.session_state.all_sessions_db["roles"]:
                 st.session_state.all_sessions_db["roles"][role_target]["summary_history"].append(new_sm_node)
     except Exception as e:
-        print(f"[警告] 异步后台调用 deepseek-v4-flash 概述合并生成失败: {e}")
-
+        print(f"[警告] 概述合并生成失败: {e}")
+        
 # ==========================================
 # 1. 页面基本配置与顶层数据加载
 # ==========================================
