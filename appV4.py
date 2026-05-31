@@ -663,9 +663,11 @@ if is_group_chat:
                     cleaned_context.append({"role": "user", "content": g_view_text})
 
         identity_lock_patch = {
-            "role": "user",
-            "content": f"⚡[视角同步机制]: 请立刻代入【{curr_agent}】的灵魂。用你的本能、语调和当下状态，进行接下来的三段式小说演绎。"
-        }
+    "role": "user",
+    "content": f"⚡[视角同步机制]:\n"
+               f"1. 请立刻代入【{curr_agent}】的灵魂。用你的本能、语调和当下状态，进行接下来的三段式小说演绎。\n"
+               f"2. 【绝对人称规范】：在所有台词与内心独白中，【我】代表你自己（即{curr_agent}），【你】代表用户（即玩家）。严禁将自己的行为说成‘你’，严禁将用户的行为说成‘我’！绝对不能搞反人称代词！"
+}
 
         api_payload = [{"role": "system", "content": agent_dynamic_system}] + cleaned_context + [identity_lock_patch, lazy_insurance_prompt]
         
