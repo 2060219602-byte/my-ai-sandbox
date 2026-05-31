@@ -657,8 +657,8 @@ if is_group_chat:
                     private_context_summary += f"- {speaker}: {clean_txt}\n"
                 private_context_summary += "\n"
                 
-        # ✨ 需求 2: 为群聊拼接概述记忆，包含最近 50 条故事概述账本内容
-        group_summaries_list = room_data.get("chat_summaries", [])[-50:]
+        # ✨ 需求 2: 为群聊拼接概述记忆，包含最近 80 条故事概述账本内容
+        group_summaries_list = room_data.get("chat_summaries", [])[-80:]
         group_summary_context_str = ""
         if group_summaries_list:
             group_summary_context_str = "【📌 本微信群聊前期已发生的历史剧情大纲备忘（前情回顾摘要）】:\n" + "\n".join([f"- {s}" for s in group_summaries_list]) + "\n\n"
