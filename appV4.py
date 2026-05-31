@@ -184,31 +184,41 @@ def synthesize_group_summary_history(g_name, members_list):
     return combined_summary
 
 def run_background_summary(client, user_text, ai_text, role_target, is_group=False, g_name=""):
-    """[已修复人称与语义] 使用 deepseek-v4-flash 模型，实时自动提炼并合成本轮对话的一句话概述结论"""
+    """[终极修复版] 强行对输入源打标，杜绝人称看反，使用严厉的结构化模版约束模型"""
     try:
-        # ✨ 强化提示词：严格限定视角与核心语义，杜绝主谓宾颠倒与生硬缩写
-        summary_prompt = (
-            f"你是一个纯净的后台日志摘要提取器。请把下面提供的一轮剧本对话合并、精准地总结为一句话大事件概述。\n"
-            f"【强制人称规范】：\n"
-            f"- 剧本中的“用户/玩家/😎”统称为‘玩家’。\n"
-            f"- 当前正在互动的AI角色统称为‘{role_target}’。\n"
-            f"【强制语义规范】：\n"
-            f"- 必须分清是谁对谁发起了什么动作，严禁主谓宾颠倒（例如：分清是谁请谁吃面）。\n"
-            f"- 语言要通顺自然，严禁使用像‘请面’、‘做戏’这样生硬且有歧义的缩写。\n"
-            f"限制在 40 字以内，直接输出最终概述句子，不要任何多余的寒暄和标点废话。"
+        # 1. 强行在代码层面对输入数据进行“身份贴条”，防止模型因为文本里的名字产生幻觉
+        formatted_dialogue = (
+            f"【本次互动原始记录】\n"
+            f"● 玩家(😎)的行为或说话内容：\"{user_text}\"\n"
+            f"● AI角色({role_target}💋)的具体剧情反馈：\"{ai_text}\""
         )
-        dialogue_content = f"【上文交互/行动】:\n{user_text}\n\n【AI生成的具体剧情回复】:\n{ai_text}"
+
+        # 2. 用严厉的规则和结构化填空模版压制模型的瞎编和缩写倾向
+        summary_prompt = (
+            f"你是一个纯净的后台日志摘要提取器。请根据提供的原始记录，将本轮互动发生的核心剧情提炼为一句话大事件概述。\n\n"
+            f"【❌ 绝对禁令】\n"
+            f"- 严禁主谓宾颠倒！看清当前与玩家互动的AI角色名字叫【{role_target}】。是【{role_target}】在对玩家做出各种剧场动作，而不是相反！\n"
+            f"- 严禁凭空捏造！如果玩家只说了“你好”或无字推演，概述重点应放在【{role_target}】做出了什么剧情推进上。\n"
+            f"- 严禁使用“请面”、“做戏”等生硬弱智的缩写！\n\n"
+            f"【📋 严格输出格式（限制在40字以内）】\n"
+            f"请直接采取类似以下格式输出，不要任何标点、废话或括号解释：\n"
+            f"“玩家[做了什么]，{role_target}[做出了什么剧情反馈/推进了什么核心事件]。”"
+        )
         
         completion = client.chat.completions.create(
             model="deepseek-v4-flash",
             messages=[
                 {"role": "system", "content": summary_prompt},
-                {"role": "user", "content": dialogue_content}
+                {"role": "user", "content": formatted_dialogue}
             ],
-            temperature=0.2, # 降低温度，让它更死板、更严谨
-            max_tokens=150
+            temperature=0.0,  # ✨ 降到0.0！彻底锁死模型的随机性和创造力，让它变成纯工具人
+            max_tokens=100
         )
         summary_result = completion.choices[0].message.content.strip()
+        
+        # 清洗可能附带的奇怪引号或前缀
+        summary_result = summary_result.replace("“", "").replace("”", "").replace("`", "")
+        
         if summary_result:
             new_sm_node = {
                 "sm_id": f"sm_{int(time.time()*1000)}_{random.randint(1000,9999)}",
