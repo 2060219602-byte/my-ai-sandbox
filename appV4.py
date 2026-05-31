@@ -5,30 +5,52 @@ import os
 import random
 import time  # ✨ 引入时间戳用于群聊历史的物理时间线排序
 import threading  # ✨ 引入线程锁，彻底防止多并发导致的数据文件归零
+from webdav3.client import Client as WebDAVClient
 
-# ☁️ 尝试导入 WebDAV 客户端 (坚果云云端同步)
-try:
-    from webdav3.client import Client
-except ImportError:
-    st.error("⚠️ 缺少 webdavclient3 库！请在 requirements.txt 中添加 webdavclient3")
-
-# ☁️ 定义服务器本地保存数据的隐藏 JSON 文件路径
+# ☁️ 定义服务器本地（云端）保存数据的隐藏 JSON 文件路径
 DATA_FILE = "sandbox_private_db.json"
-REMOTE_FILE_PATH = "/PythonSandbox/sandbox_private_db.json"
 
-# ☁️ 初始化坚果云 WebDAV 客户端
-dav_user = st.secrets.get("username", "")
-dav_pwd = st.secrets.get("password", "")
-dav_options = {
-    'webdav_hostname': "https://dav.jianguoyun.com/dav/",
-    'webdav_login':    dav_user,
-    'webdav_password': dav_pwd
-}
-webdav_client = Client(dav_options) if dav_user and dav_pwd else None
+# ==========================================
+# 坚果云 (WebDAV) 同步核心逻辑
+# ==========================================
+def get_webdav_client():
+    if "nutstore" in st.secrets:
+        options = {
+            'webdav_url': 'https://dav.jianguoyun.com/dav/',
+            'webdav_username': st.secrets["nutstore"]["username"],
+            'webdav_password': st.secrets["nutstore"]["password"]
+        }
+        return WebDAVClient(options)
+    return None
 
-# 🔒 初始化全局线程锁
+def sync_from_nutstore():
+    client = get_webdav_client()
+    if client:
+        try:
+            # 确保远程文件夹 PythonSandbox 存在
+            if not client.check("PythonSandbox"):
+                client.mkdir("PythonSandbox")
+            
+            remote_path = f"PythonSandbox/{DATA_FILE}"
+            if client.check(remote_path):
+                client.download_file(remote_path, DATA_FILE)
+        except Exception as e:
+            st.error(f"从坚果云下载同步数据失败: {e}")
+
+def sync_to_nutstore():
+    client = get_webdav_client()
+    if client and os.path.exists(DATA_FILE):
+        try:
+            remote_path = f"PythonSandbox/{DATA_FILE}"
+            client.upload_file(DATA_FILE, remote_path)
+        except Exception as e:
+            print(f"上传数据至坚果云失败: {e}")
+
+# 🔒 初始化全局线程锁与初始化坚果云下载
 if "db_lock" not in st.session_state:
     st.session_state.db_lock = threading.Lock()
+    with st.session_state.db_lock:
+        sync_from_nutstore()
 
 # 🔒 线上全盘拦截密码锁
 if "app_password" in st.secrets:
@@ -59,7 +81,7 @@ def get_default_data():
         "roles": {
             "赛博贩子-丽莎": {
                 "chat_history": [],
-                "summary_history": [], # ✨ 新增概述历史
+                "summary_history": [],  # ✨ 新增概述历史记录
                 "system_role": "你是一位冷酷的赛博朋克情报贩子，说话简短、讽刺，习惯使用黑话。",
                 "background_story": "时间：2077年深夜。\n地点：下层区霓虹街角的一家老旧面馆。\n氛围：下着暴雨，空气中弥漫着机油与廉价合成肉的味道。",
                 "character_status": "状态：轻度受伤，义体能量剩余35%，心情极度烦躁。",
@@ -68,7 +90,7 @@ def get_default_data():
             },
             "魔法学徒-露娜": {
                 "chat_history": [],
-                "summary_history": [], # ✨ 新增概述历史
+                "summary_history": [],  # ✨ 新增概述历史记录
                 "system_role": "你是一个性格有些冒失、但天赋异禀的高级魔法学院见习女巫，说话喜欢带上古怪的咒语口头禅。",
                 "background_story": "时间：魔法历512年。\n地点：皇家学院深夜被禁闭的藏书馆密室。\n氛围：摇曳的烛光，空气中漂浮着古老羊皮纸的尘埃，中央摆放着一本散发暗芒的禁忌魔法书。",
                 "character_status": "状态：精神力消耗过度（过度透支），衣角有些焦黑，正处于被导师发现的惊恐中。",
@@ -79,14 +101,6 @@ def get_default_data():
     }
 
 def load_cloud_data():
-    # ✨ 尝试从坚果云同步下载最新进度
-    if webdav_client:
-        try:
-            if webdav_client.check(REMOTE_FILE_PATH):
-                webdav_client.download_sync(remote_path=REMOTE_FILE_PATH, local_path=DATA_FILE)
-        except Exception as e:
-            print(f"坚果云读取失败，尝试读取本地缓存: {e}")
-
     if os.path.exists(DATA_FILE):
         try:
             with open(DATA_FILE, "r", encoding="utf-8") as f:
@@ -96,10 +110,10 @@ def load_cloud_data():
                         saved_data["group_rooms"] = {}
                     if "current_session_key" not in saved_data:
                         saved_data["current_session_key"] = "👤 单聊：" + list(saved_data["roles"].keys())[0]
-                    # 数据兼容处理，补充 summary_history
-                    for role_name in saved_data["roles"]:
-                        if "summary_history" not in saved_data["roles"][role_name]:
-                            saved_data["roles"][role_name]["summary_history"] = []
+                    # 确保旧数据也有 summary_history 字段
+                    for role in saved_data["roles"]:
+                        if "summary_history" not in saved_data["roles"][role]:
+                            saved_data["roles"][role]["summary_history"] = []
                     return saved_data
         except Exception:
             pass
@@ -119,15 +133,13 @@ def save_local_data():
             with open(temp_file, "w", encoding="utf-8") as f:
                 json.dump(st.session_state.all_sessions_db, f, ensure_ascii=False, indent=4)
             os.replace(temp_file, DATA_FILE)
-            
-            # ✨ 保存到本地后，自动推送到坚果云
-            if webdav_client:
-                webdav_client.upload_sync(remote_path=REMOTE_FILE_PATH, local_path=DATA_FILE)
+            # 本地保存成功后，异步/顺带推送到坚果云
+            sync_to_nutstore()
         except Exception as e:
             if os.path.exists(temp_file):
                 try: os.remove(temp_file)
                 except Exception: pass
-            print(f"写入本地/云端数据库失败: {e}")
+            print(f"写入云端数据库失败: {e}")
 
 def clear_current_chat_only():
     curr_sk = st.session_state.current_session_key
@@ -145,6 +157,14 @@ def clear_current_chat_only():
             ]
     st.session_state.clear_version += 1
     save_local_data()
+
+def clear_all_file_data():
+    with st.session_state.db_lock:
+        if os.path.exists(DATA_FILE):
+            try: os.remove(DATA_FILE)
+            except Exception: pass
+    for key in ["all_sessions_db", "current_session_key", "group_active_agent", "group_members_list", "group_active_queue", "clear_version"]:
+        if key in st.session_state: del st.session_state[key]
 
 def synthesize_group_chat_history(g_name, members_list):
     combined_history = []
@@ -181,6 +201,7 @@ if "group_active_agent" not in st.session_state: st.session_state.group_active_a
 if "group_active_queue" not in st.session_state: st.session_state.group_active_queue = []
 if "clear_version" not in st.session_state: st.session_state.clear_version = 0
 if "regenerate_trigger" not in st.session_state: st.session_state.regenerate_trigger = False
+if "continue_trigger" not in st.session_state: st.session_state.continue_trigger = False # ✨继续按钮触发标记
 if "dice_instruction_patch" not in st.session_state: st.session_state.dice_instruction_patch = ""
 
 # ==========================================
@@ -215,8 +236,6 @@ is_group_chat = curr_sk.startswith("💬 群聊：")
 if not is_group_chat:
     target_girl = curr_sk.replace("👤 单聊：", "")
     role_data = st.session_state.all_sessions_db["roles"][target_girl]
-    if "summary_history" not in role_data:
-        role_data["summary_history"] = []
     chat_history_view = role_data["chat_history"]
     st.session_state.group_members_list = []
 else:
@@ -269,6 +288,7 @@ if is_group_chat:
     for m in st.session_state.group_members_list:
         st.sidebar.write(f"• 👑 **{m}**")
 
+# ✨ 独占单聊属性控制（⚡优化点：引入表单机制，防止输入文字时频繁卡顿整页重刷）
 if not is_group_chat:
     st.sidebar.write("---")
     with st.sidebar.form(key=f"role_settings_form_{target_girl}"):
@@ -318,33 +338,10 @@ if not is_group_chat:
             st.rerun()
 
 st.sidebar.write("---")
-st.sidebar.subheader("➕ 添加新的单聊AI角色")
-with st.sidebar.form(key="add_new_role_form"):
-    new_role_name = st.text_input("输入新角色名字：", value="")
-    init_sys = st.text_area("赋予她的基本人设：", value="")
-    init_bg = st.text_area("初始背景剧情设定：", value="")
-    if st.form_submit_button("✨ 确认创造该全新角色联系人", use_container_width=True):
-        clean_name = new_role_name.strip()
-        if clean_name == "" or clean_name in available_roles_list:
-            st.error("❌ 名字不能为空或联系人已存在！")
-        else:
-            st.session_state.all_sessions_db["roles"][clean_name] = {
-                "chat_history": [], 
-                "summary_history": [],
-                "system_role": init_sys.strip(),
-                "background_story": init_bg.strip(), 
-                "character_status": "状态：平静。",
-                "favorability": 0, 
-                "memory_events": []
-            }
-            st.session_state.current_session_key = f"👤 单聊：{clean_name}"
-            save_local_data()
-            st.rerun()
-
-st.sidebar.write("---")
 st.sidebar.header("🔑 接口配置")
 api_key = st.sidebar.text_input("DeepSeek API Key", type="password", value=st.secrets["deepseek"]["api_key"] if "deepseek" in st.secrets else "")
-model_name = st.sidebar.text_input("模型名称 (Model)", value="deepseek-v4-pro")
+# ✨ 修改默认模型为指定调用的 deepseek-v4-flash
+model_name = st.sidebar.text_input("模型名称 (Model)", value="deepseek-v4-flash")
 client = OpenAI(api_key=api_key, base_url="https://api.deepseek.com")
 
 # 🌟 核心原汁原味保留：底层叙事覆写 JAILBREAK 提示词
@@ -550,14 +547,12 @@ if not is_group_chat:
         save_local_data()
         dice_triggered = True
 
-# ==========================================
-# 5. 继续发言按钮与聊天组件
-# ==========================================
-continue_triggered = False
-col_c1, col_c2, col_c3 = st.columns([0.4, 0.2, 0.4])
-with col_c2:
-    if st.button("⏭️ 让AI继续推演剧情", use_container_width=True):
-        continue_triggered = True
+# ✨ 1. 功能按钮新增：如果上一条是AI的发言，提供“继续”按钮
+if not is_group_chat and len(chat_history_view) > 0 and chat_history_view[-1]["role"] == "assistant":
+    st.write("---")
+    if st.button("⏩ 让AI继续推演剧情 (无需打字)", use_container_width=True):
+        st.session_state.continue_trigger = True
+        st.rerun()
 
 # ==========================================
 # 6. 会话调用执行中枢：动态点名传火机制与单聊上下文垫入
@@ -566,11 +561,6 @@ user_input = st.chat_input("在此处输入聊天内容...", key=f"chat_input_v_
 
 if is_group_chat:
     g_name = curr_sk.replace("💬 群聊：", "")
-    
-    # 如果按了继续按钮，默认给个隐形指令
-    if continue_triggered:
-        user_input = "（请顺着刚才的情节继续往下推演，不用管我）"
-        
     if user_input:
         msg_id = f"msg_{int(time.time() * 1000)}_{random.randint(1000, 9999)}"
         timestamp = time.time()
@@ -631,8 +621,7 @@ if is_group_chat:
             f"{jailbreak_prompt}"
         )
         
-        # ✨ 群聊也采用了 12 条对话历史
-        context_messages = chat_history_view[-12:] if len(chat_history_view) > 12 else chat_history_view
+        context_messages = chat_history_view[-20:] if len(chat_history_view) > 20 else chat_history_view
         
         cleaned_context = []
         for msg in context_messages:
@@ -698,14 +687,13 @@ if is_group_chat:
                 st.session_state.group_active_queue = []
 
 else:
-    if continue_triggered:
-        user_input = "（请顺着刚才的情节继续往下推演，不用管我）"
-        
-    if user_input or st.session_state.regenerate_trigger or dice_triggered:
+    # ✨ 2. 修改触发判定：加入了点击“继续按钮”的逻辑 (continue_trigger)
+    if user_input or st.session_state.regenerate_trigger or dice_triggered or st.session_state.continue_trigger:
         if not api_key:
             st.error("请先在左侧输入你的 DeepSeek API Key！")
             st.stop()
 
+        # 处理正常的用户手动输入
         if user_input:
             with st.chat_message("user", avatar="😎"):
                 st.markdown(user_input)
@@ -714,19 +702,22 @@ else:
             role_data["chat_history"].append({"role": "user", "content": user_input, "timestamp": time.time(), "msg_id": single_msg_id})
             st.session_state.dice_instruction_patch = ""
             save_local_data()
+            last_user_content = user_input
+        # ✨ 如果是点击继续按钮引发的，把最后的对话内容设定为引导推演的潜台词
+        elif st.session_state.continue_trigger:
+            last_user_content = "（请继续自动往下推演剧情发展）"
+        else:
+            # 重发或骰子机制下获取最近的用户输入
+            user_msgs = [m for m in role_data["chat_history"] if m["role"] == "user"]
+            last_user_content = user_msgs[-1]["content"] if user_msgs else ""
 
         st.session_state.regenerate_trigger = False
+        is_continue_mode = st.session_state.continue_trigger
+        st.session_state.continue_trigger = False
 
-        # ✨ 限制给 AI 的详细对话条数：最新 12 条
-        context_messages = role_data["chat_history"][-12:] if len(role_data["chat_history"]) > 12 else role_data["chat_history"]
-
-        # ✨ 抽取历史概述线索 (最近 50 条)
-        summary_ledger_prompt = ""
-        summary_history = role_data.get("summary_history", [])[-50:]
-        if summary_history:
-            summary_ledger_prompt = "【前情提要（近期50轮对话全局概述）】\n"
-            for idx, s_text in enumerate(summary_history):
-                summary_ledger_prompt += f"{idx+1}. {s_text}\n"
+        # ✨ 2. 概述与详细切片控制：最近12条详细对话 + 最近50条概述文本
+        recent_details = role_data["chat_history"][-12:] if len(role_data["chat_history"]) > 12 else role_data["chat_history"]
+        recent_summaries = role_data.get("summary_history", [])[-50:]
 
         memory_ledger_prompt = ""
         if role_data.get("memory_events"):
@@ -734,10 +725,15 @@ else:
             for idx, event in enumerate(role_data["memory_events"]):
                 memory_ledger_prompt += f"{idx+1}. {event}\n"
 
+        # ✨ 将历史简述和快照直接注入给 AI 的 System 垫片中
+        summary_context_prompt = ""
+        if recent_summaries:
+            summary_context_prompt = "【📊 前情事件概述线索历史（按时间由远到近）】\n" + "\n".join([f"- {s}" for s in recent_summaries]) + "\n\n"
+
         dynamic_system_prompt = (
             f"{role_data.get('system_role', '')}\n\n"
-            f"{summary_ledger_prompt}\n\n"
             f"{memory_ledger_prompt}\n\n"
+            f"{summary_context_prompt}"
             f"【当前演出的背景剧情设定】：\n{role_data.get('background_story', '')}\n\n"
             f"【你当前需要感知到的角色状态】：\n{role_data.get('character_status', '')}\n\n"
             f"{multi_reply_protocol}\n\n"
@@ -747,8 +743,13 @@ else:
             dynamic_system_prompt += f"\n\n{st.session_state.dice_instruction_patch}"
 
         cleaned_api_payload = [{"role": "system", "content": dynamic_system_prompt}]
-        for msg in context_messages:
+        for msg in recent_details:
             cleaned_api_payload.append({"role": msg["role"], "content": msg["content"]})
+            
+        # ✨ 如果是继续模式，在上下文末尾追加一个隐式的剧情继续引导
+        if is_continue_mode:
+            cleaned_api_payload.append({"role": "user", "content": "（动作没有停止，请顺着上面的剧情节点，继续完成下一轮的三段式细节推演演进。）"})
+            
         cleaned_api_payload.append(lazy_insurance_prompt)
 
         with st.chat_message("assistant", avatar="💋"):
@@ -768,21 +769,23 @@ else:
                 role_data["chat_history"].append({"role": "assistant", "content": full_response, "timestamp": time.time(), "msg_id": single_reply_id})
                 st.session_state.dice_instruction_patch = ""
                 
-                # ✨ 呼叫 deepseek-v4-flash 执行后台静默总结
-                last_u_msg = user_input if user_input else req_input.strip() if dice_triggered else "（玩家未发言，示意AI继续推演）"
+                # ✨ 2. 自动合并当前来回为一句话总结
                 try:
-                    summary_prompt = f"请将下面这轮互动压缩成一句话概述（说明当前发生了什么）。\n玩家：{last_u_msg}\nAI：{full_response}\n\n只需输出一句话概述即可，不要包含多余的客套话或解释。"
-                    sum_res = client.chat.completions.create(
-                        model="deepseek-v4-flash",
-                        messages=[{"role": "user", "content": summary_prompt}],
-                        temperature=0.5,
-                        max_tokens=100
+                    summary_payload = [
+                        {"role": "system", "content": "你是一个严格的事件概述器。请把用户发的内容和AI返回的剧本内容合并提炼，仅用‘一句话’说出这轮对话具体发生了什么事情（字数控制在60字内，不添加任何修饰和多余废话）。"},
+                        {"role": "user", "content": f"用户发的内容：{last_user_content}\n\nAI返回的内容：{full_response}"}
+                    ]
+                    summary_res = client.chat.completions.create(
+                        model=model_name, messages=summary_payload, stream=False, temperature=0.3
                     )
-                    summary_text = sum_res.choices[0].message.content.strip()
-                    role_data["summary_history"].append(summary_text)
-                except Exception as e:
-                    print(f"后台自动生成概述失败: {e}")
-                
+                    one_sentence_summary = summary_res.choices[0].message.content.strip()
+                    if one_sentence_summary:
+                        if "summary_history" not in role_data:
+                            role_data["summary_history"] = []
+                        role_data["summary_history"].append(one_sentence_summary)
+                except Exception as sum_e:
+                    print(f"自动生成概述失败: {sum_e}")
+
                 save_local_data()
                 st.rerun()
             except Exception as e:
