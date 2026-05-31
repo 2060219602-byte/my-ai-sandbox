@@ -666,10 +666,10 @@ if is_group_chat:
                 private_context_summary += "\n"
                 
         # ✨【50条概述记忆注入包】
-        group_summary_pool = summary_history_view[-50:]
+        group_summary_pool = summary_history_view[-70:]
         narrative_summary_prompt = ""
         if group_summary_pool:
-            narrative_summary_prompt = "【🧭 本场演艺历史大事件概述流线（最近50条概述，为你奠定剧情来龙去脉框架）】:\n"
+            narrative_summary_prompt = "【🧭 本场演艺历史大事件概述流线（最近70条概述，为你奠定剧情来龙去脉框架）】:\n"
             for sm_node in group_summary_pool:
                 narrative_summary_prompt += f"- {sm_node['content']}\n"
             narrative_summary_prompt += "\n"
