@@ -622,23 +622,18 @@ if is_group_chat:
                     private_context_summary += f"- {speaker}: {clean_txt}\n"
                 private_context_summary += "\n"
                 
-       # ==========================================
+        # ==========================================
         # ✨ 终极重构：群聊精准 6 条详细 + 再往前 60 条无重复概述
         # ==========================================
-        # 1. 详细聊天：严格切片群聊视角的最后 6 条消息
         context_messages = chat_history_view[-6:] if len(chat_history_view) > 6 else chat_history_view
-        
-        # 2. 概括聊天：直接利用切片排除最后6条，从更早的历史中提取不重复的摘要
         earlier_group_history = chat_history_view[:-6] if len(chat_history_view) > 6 else []
         
         all_group_summaries = []
         for m in earlier_group_history:
-            # 严格限制角色，并增加去重保险
             if m.get("role") == "assistant" and "summary" in m and m.get("summary"):
                 if m["summary"] not in all_group_summaries:
                     all_group_summaries.append(m["summary"])
                 
-        # 精准截取最后的 60 条历史剧情大纲
         group_summaries_list = all_group_summaries[-60:]
         
         group_summary_context_str = ""
@@ -675,7 +670,6 @@ if is_group_chat:
                     g_view_text = f"⚔️ [群会话通知]: 成员【{prefix_name}】在群现场公开发言说道：\n“{clean_content}”"
                     cleaned_context.append({"role": "user", "content": g_view_text})
 
-        # ✨ 融入终极大模型人称锁定微调
         identity_lock_patch = {
             "role": "user",
             "content": f"⚡[视角同步机制]:\n"
@@ -685,6 +679,16 @@ if is_group_chat:
 
         api_payload = [{"role": "system", "content": agent_dynamic_system}] + cleaned_context + [identity_lock_patch, lazy_insurance_prompt]
         
+        # ==========================================
+        # 🛠️ 【前端Debug审核区 — 群聊模式】
+        # ==========================================
+        with st.expander("🔍 开发者实时审计：点击查看发给大模型的完整群聊上下文 (Payload)", expanded=False):
+            st.caption("以下数据结构是本次请求大模型的所有消息列表（包含System、User以及去重切片后的概述）：")
+            st.json(api_payload)
+            st.metric(label="📊 历史概述大纲层抓取条数", value=len(group_summaries_list), delta="上限60条")
+            st.metric(label="📊 近期详细互动层切片条数", value=len(cleaned_context), delta="上限6条")
+        # ==========================================
+
         with st.chat_message("assistant", avatar="💋"):
             st.write(f"💬 **【{curr_agent}】 被点名，正在组织群内对峙修罗场...**")
             response_placeholder = st.empty()
@@ -698,31 +702,24 @@ if is_group_chat:
                     if chunk.choices[0].delta.content:
                         full_response += chunk.choices[0].delta.content
                         response_placeholder.markdown(full_response + "▌")
-                # ======= 【修改后的群聊落盘逻辑】 =======
                 response_placeholder.markdown(full_response)
                 
-                # 获取引起这轮变动的最后一条用户记录
-                last_user_msg = "玩家请求推演剧情"
+                last_user_msg = "玩家请求推推剧情"
                 for m in reversed(chat_history_view):
                     if m["role"] == "user":
                         last_user_msg = m["content"]
                         break
                         
-                # ✨ 调用大模型异步提炼本轮剧情节点（破甲词执行）
                 extracted_summary = extract_ai_llm_summary(client, model_name, last_user_msg, full_response)
 
                 reply_id = f"reply_{int(time.time() * 1000)}_{random.randint(1000, 9999)}"
                 reply_timestamp = time.time()
 
-                # 🛠️ 核心修复：遍历群成员，同步更新 User 消息与 Assistant 消息的摘要
                 for inner_agent in st.session_state.group_members_list:
                     agent_hist = st.session_state.all_sessions_db["roles"][inner_agent]["chat_history"]
-                    
-                    # 寻找刚刚塞进去的那条对应的用户消息（根据群聊名和用户身份判断，通常是最后一条）
                     if agent_hist and agent_hist[-1]["role"] == "user" and agent_hist[-1].get("from_group") == g_name:
                         agent_hist[-1]["summary"] = extracted_summary
                     
-                    # 塞入带 summary 的 AI 回复
                     st.session_state.all_sessions_db["roles"][inner_agent]["chat_history"].append({
                         "role": "assistant", 
                         "content": f"（【{curr_agent}】在群聊【{g_name}】现场当众说道）：\n{full_response}",
@@ -770,20 +767,15 @@ else:
         # ==========================================
         # ✨ 终极重构：单聊精准 6 条详细 + 再往前 60 条无重复概述
         # ==========================================
-        # 1. 详细聊天：严格截取单聊历史的最后 6 条记录
         context_messages = role_data["chat_history"][-6:] if len(role_data["chat_history"]) > 6 else role_data["chat_history"]
-        
-        # 2. 概括聊天：直接利用切片排除最后6条，避免边界碰撞引发的逻辑混乱
         earlier_history = role_data["chat_history"][:-6] if len(role_data["chat_history"]) > 6 else []
         
         all_historical_summaries = []
         for m in earlier_history:
-            # 修复：只拿 assistant 的摘要，防止数量翻倍和内容复读
             if m.get("role") == "assistant" and "summary" in m and m.get("summary"):
                 if m["summary"] not in all_historical_summaries:
                     all_historical_summaries.append(m["summary"])
                 
-        # 精准截取往前 60 条一句话概述
         historical_summaries = all_historical_summaries[-60:]
 
         memory_ledger_prompt = ""
@@ -815,7 +807,6 @@ else:
         for msg in context_messages:
             cleaned_api_payload.append({"role": msg["role"], "content": msg["content"]})
             
-        # ✨ 融入单聊大模型人称锁定微调
         identity_lock_patch = {
             "role": "user",
             "content": f"⚡[视角同步机制]:\n"
@@ -825,6 +816,16 @@ else:
         
         cleaned_api_payload.append(identity_lock_patch)
         cleaned_api_payload.append(lazy_insurance_prompt)
+
+        # ==========================================
+        # 🛠️ 【前端Debug审核区 — 单聊模式】
+        # ==========================================
+        with st.expander("🔍 开发者实时审计：点击查看发给大模型的完整单聊上下文 (Payload)", expanded=False):
+            st.caption("以下数据结构是本次请求大模型的所有消息列表（包含System、User以及去重切片后的概述）：")
+            st.json(cleaned_api_payload)
+            st.metric(label="📊 历史概述大纲层抓取条数", value=len(historical_summaries), delta="上限60条")
+            st.metric(label="📊 近期详细互动层切片条数", value=len(context_messages), delta="上限6条")
+        # ==========================================
 
         with st.chat_message("assistant", avatar="💋"):
             response_placeholder = st.empty()
@@ -837,21 +838,16 @@ else:
                     if chunk.choices[0].delta.content:
                         full_response += chunk.choices[0].delta.content
                         response_placeholder.markdown(full_response + "▌")
-                # ======= 【修改后的单聊落盘逻辑】 =======
                 response_placeholder.markdown(full_response)
                 
-                # 获取引起变动的上一条用户输入
                 last_user_action = role_data["chat_history"][-1]["content"] if len(role_data["chat_history"]) >= 1 else "初始引入"
                 
-                # ✨ 调用大模型提炼本轮剧情节点（破甲词执行）
                 extracted_summary = extract_ai_llm_summary(client, model_name, last_user_action, full_response)
                 
-                # 🛠️ 核心修复：回头给刚刚发的那条 User 消息也注入 summary 标记，防止其跨出6条后被过滤掉
                 if len(role_data["chat_history"]) >= 1 and role_data["chat_history"][-1]["role"] == "user":
                     role_data["chat_history"][-1]["summary"] = extracted_summary
 
                 single_reply_id = f"reply_{int(time.time() * 1000)}_{random.randint(1000, 9999)}"
-                # 🛠️ 核心修复：AI 消息正常绑定 summary
                 role_data["chat_history"].append({
                     "role": "assistant", 
                     "content": full_response, 
