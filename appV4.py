@@ -622,7 +622,7 @@ if is_group_chat:
                     private_context_summary += f"- {speaker}: {clean_txt}\n"
                 private_context_summary += "\n"
                 
-        # ==========================================
+       # ==========================================
         # ✨ 终极重构：群聊精准 6 条详细 + 再往前 60 条无重复概述
         # ==========================================
         context_messages = chat_history_view[-6:] if len(chat_history_view) > 6 else chat_history_view
@@ -635,16 +635,12 @@ if is_group_chat:
                     all_group_summaries.append(m["summary"])
                 
         group_summaries_list = all_group_summaries[-60:]
-        
-        group_summary_context_str = ""
-        if group_summaries_list:
-            group_summary_context_str = "【📌 本微信群聊前期已发生的历史剧情大纲备忘（前情回顾摘要）】:\n" + "\n".join([f"- {s}" for s in group_summaries_list]) + "\n\n"
 
+        # 【第 1 层】：纯粹的核心系统规则（已彻底移除前情概述，防止规则被稀释）
         agent_dynamic_system = (
             f"【你的名字：{curr_agent}】\n"
             f"【你的人格设定】：\n{agent_db.get('system_role', '')}\n\n"
             f"{agent_memory_prompt}\n"
-            f"{group_summary_context_str}"
             f"{private_context_summary}"  
             f"【当前群聊房间的背景环境描述】：\n{agent_db.get('background_story', '')}\n\n"
             f"【你当前感知到的状态】：\n{agent_db.get('character_status', '')}\n\n"
@@ -655,6 +651,22 @@ if is_group_chat:
             f"{jailbreak_prompt}"
         )
         
+        # 初始化 Payload，放入 System 消息
+        api_payload = [{"role": "system", "content": agent_dynamic_system}]
+
+        # 【第 2 层】：独立的前情大纲夹心层（让宏观记忆和系统规则解耦）
+        if group_summaries_list:
+            group_summary_content = (
+                "💡【核心历史数据加载：群聊前情回顾大纲】\n"
+                "以下是本群聊前期已发生的历史剧情节点摘要（按时间先后排序）。"
+                "请将这些大纲彻底注入你的记忆深处，作为本次演出的长线情感伏笔，但无需在此刻复述它们：\n" + 
+                "\n".join([f"- {s}" for s in group_summaries_list])
+            )
+            api_payload.append({"role": "user", "content": group_summary_content})
+            # 垫入一个虚拟的 AI 确认，让逻辑和时间线形成闭环
+            api_payload.append({"role": "assistant", "content": "确认收到历史剧情总纲，已将其完全扎根于潜意识中。我将完美继承上述情感线索进行后续演绎。"})
+        
+        # 解析近期详细互动层
         cleaned_context = []
         for msg in context_messages:
             if msg["role"] == "user":
@@ -670,6 +682,7 @@ if is_group_chat:
                     g_view_text = f"⚔️ [群会话通知]: 成员【{prefix_name}】在群现场公开发言说道：\n“{clean_content}”"
                     cleaned_context.append({"role": "user", "content": g_view_text})
 
+        # 人称锁定和兜底补丁
         identity_lock_patch = {
             "role": "user",
             "content": f"⚡[视角同步机制]:\n"
@@ -677,7 +690,10 @@ if is_group_chat:
                        f"2. 【绝对人称规范】：在所有台词与内心独白中，【我】代表你自己（即{curr_agent}），【你】代表用户（即玩家）。严禁将自己的行为说成‘你’，严禁将用户的行为说成‘我’！绝对不能搞反人称代词！"
         }
 
-        api_payload = [{"role": "system", "content": agent_dynamic_system}] + cleaned_context + [identity_lock_patch, lazy_insurance_prompt]
+        # 【第 3 层】：合并近期详细会话与后续补丁
+        api_payload.extend(cleaned_context)
+        api_payload.append(identity_lock_patch)
+        api_payload.append(lazy_insurance_prompt)
         
         # ==========================================
         # 🛠️ 【前端Debug审核区 — 群聊模式】
@@ -791,10 +807,13 @@ else:
                 summary_milestone_prompt += f"- {sum_line}\n"
             summary_milestone_prompt += "\n"
 
+        # ==========================================
+        # 组装全新的三层独立 Payload 结构
+        # ==========================================
+        # 【第 1 层】：纯粹的核心系统规则
         dynamic_system_prompt = (
             f"{role_data.get('system_role', '')}\n\n"
             f"{memory_ledger_prompt}\n\n"
-            f"{summary_milestone_prompt}"
             f"【当前演出的背景剧情设定】：\n{role_data.get('background_story', '')}\n\n"
             f"【你当前需要感知到的角色状态】：\n{role_data.get('character_status', '')}\n\n"
             f"{multi_reply_protocol}\n\n"
@@ -804,16 +823,23 @@ else:
             dynamic_system_prompt += f"\n\n{st.session_state.dice_instruction_patch}"
 
         cleaned_api_payload = [{"role": "system", "content": dynamic_system_prompt}]
+
+        # 【第 2 层】：独立的前情大纲夹心层（不污染 System）
+        if historical_summaries:
+            single_summary_content = (
+                f"💡【核心历史数据加载：与用户交往的交往备忘录】\n"
+                f"以下是你（{target_girl}）与用户（玩家）在更早的交互中已经历的历史剧情一句话概述。"
+                f"这些是不可磨灭的既定事实，请彻底继承并维持此处的长线记忆与情感，但无需在接下来的回复中复述它们：\n" +
+                "\n".join([f"- {sum_line}" for s in historical_summaries])
+            )
+            cleaned_api_payload.append({"role": "user", "content": single_summary_content})
+            # 垫入一个虚拟的 AI 确认，完成逻辑闭环
+            cleaned_api_payload.append({"role": "assistant", "content": f"（深吸一口气，闭上眼将这部分的记忆彻底融合）……我已完全记起这些经历。我会顺着这些情感，面对眼前的玩家。"})
+
+        # 【第 3 层】：近场的 6 条详细上下文与视角锁定
         for msg in context_messages:
             cleaned_api_payload.append({"role": msg["role"], "content": msg["content"]})
             
-        identity_lock_patch = {
-            "role": "user",
-            "content": f"⚡[视角同步机制]:\n"
-                       f"1. 请立刻代入【{target_girl}】的灵魂。用你的本能、语调和当下状态，进行接下来的三段式小说演绎。\n"
-                       f"2. 【绝对人称规范】：在所有台词与内心独白中，【我】代表你自己（即{target_girl}），【你】代表用户（即玩家）。严禁将自己的行为说成‘你’，严禁将用户的行为说成‘我’！绝对不能搞反人称代词！"
-        }
-        
         cleaned_api_payload.append(identity_lock_patch)
         cleaned_api_payload.append(lazy_insurance_prompt)
 
