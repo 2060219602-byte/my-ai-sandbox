@@ -638,8 +638,8 @@ if is_group_chat:
             if m.get("role") == "assistant" and "summary" in m and m.get("summary"):
                 all_group_summaries.append(m["summary"])
                 
-        # 精准截取最后的 50 条历史剧情大纲
-        group_summaries_list = all_group_summaries[-50:]
+        # 精准截取最后的 60 条历史剧情大纲
+        group_summaries_list = all_group_summaries[-60:]
         
         group_summary_context_str = ""
         if group_summaries_list:
