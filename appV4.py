@@ -623,22 +623,20 @@ if is_group_chat:
                 private_context_summary += "\n"
                 
        # ==========================================
-        # ✨ 重构后的群聊切片：精准 6 条详细 + 60 条独立概括
+        # ✨ 终极重构：群聊精准 6 条详细 + 再往前 60 条无重复概述
         # ==========================================
         # 1. 详细聊天：严格切片群聊视角的最后 6 条消息
         context_messages = chat_history_view[-6:] if len(chat_history_view) > 6 else chat_history_view
         
-        # 2. 概括聊天：直接排除最后6条，从更早的历史中提取不重复的摘要
+        # 2. 概括聊天：直接利用切片排除最后6条，从更早的历史中提取不重复的摘要
         earlier_group_history = chat_history_view[:-6] if len(chat_history_view) > 6 else []
         
         all_group_summaries = []
-        last_added_summary = None # 用于去重
         for m in earlier_group_history:
-            if m.get("role") == "assistant" and m.get("summary"): # 只取 assistant 的摘要避免双份重复
-                curr_sum = m["summary"]
-                if curr_sum != last_added_summary:
-                    all_group_summaries.append(curr_sum)
-                    last_added_summary = curr_sum
+            # 严格限制角色，并增加去重保险
+            if m.get("role") == "assistant" and "summary" in m and m.get("summary"):
+                if m["summary"] not in all_group_summaries:
+                    all_group_summaries.append(m["summary"])
                 
         # 精准截取最后的 60 条历史剧情大纲
         group_summaries_list = all_group_summaries[-60:]
@@ -770,22 +768,20 @@ else:
         st.session_state.regenerate_trigger = False
 
         # ==========================================
-        # ✨ 重构后的单聊切片：精准 6 条详细 + 60 条独立概括
+        # ✨ 终极重构：单聊精准 6 条详细 + 再往前 60 条无重复概述
         # ==========================================
         # 1. 详细聊天：严格截取单聊历史的最后 6 条记录
         context_messages = role_data["chat_history"][-6:] if len(role_data["chat_history"]) > 6 else role_data["chat_history"]
         
-        # 2. 概括聊天：直接排除最后6条，从更早的历史中提取不重复的最新60条摘要
+        # 2. 概括聊天：直接利用切片排除最后6条，避免边界碰撞引发的逻辑混乱
         earlier_history = role_data["chat_history"][:-6] if len(role_data["chat_history"]) > 6 else []
         
         all_historical_summaries = []
-        last_added_summary = None # 用于去重
         for m in earlier_history:
-            if m.get("role") == "assistant" and m.get("summary"): # 只从 assistant 提取
-                curr_sum = m["summary"]
-                if curr_sum != last_added_summary:
-                    all_historical_summaries.append(curr_sum)
-                    last_added_summary = curr_sum
+            # 修复：只拿 assistant 的摘要，防止数量翻倍和内容复读
+            if m.get("role") == "assistant" and "summary" in m and m.get("summary"):
+                if m["summary"] not in all_historical_summaries:
+                    all_historical_summaries.append(m["summary"])
                 
         # 精准截取往前 60 条一句话概述
         historical_summaries = all_historical_summaries[-60:]
