@@ -156,7 +156,7 @@ def extract_ai_llm_summary(client, model_name, user_text, ai_text):
             ],
             stream=False, 
             temperature=0.3,
-            max_tokens=200
+            max_tokens=300
         )
         final_summary = completion.choices[0].message.content.strip()
         return final_summary
@@ -692,7 +692,7 @@ if is_group_chat:
             
             try:
                 response = client.chat.completions.create(
-                    model=model_name, messages=api_payload, stream=True, temperature=1.0, max_tokens=1500, presence_penalty=0.2, frequency_penalty=0.1
+                    model=model_name, messages=api_payload, stream=True, temperature=1.0, max_tokens=3000, presence_penalty=0.2, frequency_penalty=0.1
                 )
                 for chunk in response:
                     if chunk.choices[0].delta.content:
@@ -822,7 +822,7 @@ else:
             full_response = ""
             try:
                 response = client.chat.completions.create(
-                    model=model_name, messages=cleaned_api_payload, stream=True, temperature=1.0, max_tokens=1500, presence_penalty=0.2, frequency_penalty=0.1
+                    model=model_name, messages=cleaned_api_payload, stream=True, temperature=1.0, max_tokens=3000, presence_penalty=0.2, frequency_penalty=0.1
                 )
                 for chunk in response:
                     if chunk.choices[0].delta.content:
