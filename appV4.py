@@ -698,6 +698,7 @@ if is_group_chat:
                     if chunk.choices[0].delta.content:
                         full_response += chunk.choices[0].delta.content
                         response_placeholder.markdown(full_response + "▌")
+                # ======= 【修改后的群聊落盘逻辑】 =======
                 response_placeholder.markdown(full_response)
                 
                 # 获取引起这轮变动的最后一条用户记录
@@ -713,7 +714,15 @@ if is_group_chat:
                 reply_id = f"reply_{int(time.time() * 1000)}_{random.randint(1000, 9999)}"
                 reply_timestamp = time.time()
 
+                # 🛠️ 核心修复：遍历群成员，同步更新 User 消息与 Assistant 消息的摘要
                 for inner_agent in st.session_state.group_members_list:
+                    agent_hist = st.session_state.all_sessions_db["roles"][inner_agent]["chat_history"]
+                    
+                    # 寻找刚刚塞进去的那条对应的用户消息（根据群聊名和用户身份判断，通常是最后一条）
+                    if agent_hist and agent_hist[-1]["role"] == "user" and agent_hist[-1].get("from_group") == g_name:
+                        agent_hist[-1]["summary"] = extracted_summary
+                    
+                    # 塞入带 summary 的 AI 回复
                     st.session_state.all_sessions_db["roles"][inner_agent]["chat_history"].append({
                         "role": "assistant", 
                         "content": f"（【{curr_agent}】在群聊【{g_name}】现场当众说道）：\n{full_response}",
@@ -721,7 +730,7 @@ if is_group_chat:
                         "from_group": g_name,
                         "msg_id": reply_id,
                         "timestamp": reply_timestamp,
-                        "summary": extracted_summary # 绑定该条对话实体
+                        "summary": extracted_summary 
                     })
 
                 st.session_state.group_active_queue.pop(0)
@@ -771,7 +780,7 @@ else:
         for m in role_data["chat_history"]:
             if boundary_msg_id and m.get("msg_id") == boundary_msg_id:
                 break  # 触及当前详细会话边界，停止
-            if m.get("role") == "assistant" and "summary" in m and m.get("summary"):
+            if "summary" in m and m.get("summary"):
                 all_historical_summaries.append(m["summary"])
                 
         # 精准截取往前 50 条一句话概述
@@ -828,6 +837,7 @@ else:
                     if chunk.choices[0].delta.content:
                         full_response += chunk.choices[0].delta.content
                         response_placeholder.markdown(full_response + "▌")
+                # ======= 【修改后的单聊落盘逻辑】 =======
                 response_placeholder.markdown(full_response)
                 
                 # 获取引起变动的上一条用户输入
@@ -836,18 +846,23 @@ else:
                 # ✨ 调用大模型提炼本轮剧情节点（破甲词执行）
                 extracted_summary = extract_ai_llm_summary(client, model_name, last_user_action, full_response)
                 
+                # 🛠️ 核心修复：回头给刚刚发的那条 User 消息也注入 summary 标记，防止其跨出6条后被过滤掉
+                if len(role_data["chat_history"]) >= 1 and role_data["chat_history"][-1]["role"] == "user":
+                    role_data["chat_history"][-1]["summary"] = extracted_summary
+
                 single_reply_id = f"reply_{int(time.time() * 1000)}_{random.randint(1000, 9999)}"
+                # 🛠️ 核心修复：AI 消息正常绑定 summary
                 role_data["chat_history"].append({
                     "role": "assistant", 
                     "content": full_response, 
                     "timestamp": time.time(), 
                     "msg_id": single_reply_id,
-                    "summary": extracted_summary # 绑定该条对话实体
+                    "summary": extracted_summary 
                 })
                 
                 st.session_state.dice_instruction_patch = ""
                 save_local_data()  # 数据落盘
-                st.rerun()  
+                st.rerun()
             except Exception as e:
                 st.error(f"调用 API 出错: {str(e)}")
 
