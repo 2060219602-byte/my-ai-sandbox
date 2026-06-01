@@ -636,7 +636,12 @@ if is_group_chat:
                 
         group_summaries_list = all_group_summaries[-60:]
 
-        # 【第 1 层】：纯粹的核心系统规则（已彻底移除前情概述，防止规则被稀释）
+        # 📂 群聊同步读取 Secrets 美学补丁
+        refined_style_patch = ""
+        if "novel_style" in st.secrets and "processed_rules" in st.secrets["novel_style"]:
+            refined_style_patch = f"\n\n{st.secrets['novel_style']['processed_rules']}"
+
+        # 【第 1 层】：纯粹的核心系统规则
         agent_dynamic_system = (
             f"【你的名字：{curr_agent}】\n"
             f"【你的人格设定】：\n{agent_db.get('system_role', '')}\n\n"
@@ -649,6 +654,7 @@ if is_group_chat:
             f"现在轮到你站出来发言了！请保持你的独特人格进行回应！\n\n"
             f"{multi_reply_protocol}\n\n"
             f"{jailbreak_prompt}"
+            f"{refined_style_patch}"  # ✨ 成功合入群聊美学大纲层
         )
         
         # 初始化 Payload，放入 System 消息
@@ -804,7 +810,12 @@ else:
             for idx, event in enumerate(role_data["memory_events"]):
                 memory_ledger_prompt += f"{idx+1}. {event}\n"
 
-        # 【第 1 层】：纯粹的核心系统规则（已彻底剥离前情概述，防止规则稀释）
+        # 📂 动态读取来自云端 Secrets 的固定高纯度美学范例表（完美防审查 + 命中持久化缓存）
+        refined_style_patch = ""
+        if "novel_style" in st.secrets and "processed_rules" in st.secrets["novel_style"]:
+            refined_style_patch = f"\n\n{st.secrets['novel_style']['processed_rules']}"
+
+        # 【第 1 层】：纯粹的核心系统规则
         dynamic_system_prompt = (
             f"{role_data.get('system_role', '')}\n\n"
             f"{memory_ledger_prompt}\n\n"
@@ -812,6 +823,7 @@ else:
             f"【你当前需要感知到的角色状态】：\n{role_data.get('character_status', '')}\n\n"
             f"{multi_reply_protocol}\n\n"
             f"{jailbreak_prompt}"
+            f"{refined_style_patch}"  # ✨ 成功合入固定美学大纲层
         )
         if st.session_state.dice_instruction_patch != "":
             dynamic_system_prompt += f"\n\n{st.session_state.dice_instruction_patch}"
