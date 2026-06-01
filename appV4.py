@@ -431,7 +431,6 @@ def render_message_controls_by_id(msg_id, is_last_msg, agent_name_fallback=""):
             if is_group_chat:
                 for agent in st.session_state.group_members_list:
                     agent_history = st.session_state.all_sessions_db["roles"][agent]["chat_history"]
-                    # 联动删除：如果是user消息，同时干掉它和它下面的一条AI回复
                     idx_to_del = [i for i, m in enumerate(agent_history) if m.get("msg_id") == msg_id]
                     if idx_to_del:
                         target_idx = idx_to_del[0]
@@ -623,11 +622,25 @@ if is_group_chat:
                     private_context_summary += f"- {speaker}: {clean_txt}\n"
                 private_context_summary += "\n"
                 
-        # ✨ 需求重构：详细聊天只切片最后 6 条消息，更早消息提取其绑定的一句话概述（最深50条）
+        # ==========================================
+        # ✨ 重构后的群聊切片：确保精准 6 条详细 + 50 条概括
+        # ==========================================
+        # 1. 详细聊天：严格切片群聊视角的最后 6 条消息（含用户输入和各AI发言）
         context_messages = chat_history_view[-6:] if len(chat_history_view) > 6 else chat_history_view
-        earlier_messages = chat_history_view[:-6] if len(chat_history_view) > 6 else []
         
-        group_summaries_list = [m["summary"] for m in earlier_messages if m.get("role") == "assistant" and "summary" in m][-50:]
+        # 2. 概括聊天：不直接用过往消息切片，而是从“全部历史”中筛选出带 summary 的 assistant 消息，再往前精准拿 50 条
+        boundary_msg_id = context_messages[0].get("msg_id") if context_messages else None
+        
+        all_group_summaries = []
+        for m in chat_history_view:
+            if boundary_msg_id and m.get("msg_id") == boundary_msg_id:
+                break  # 触及当前详细会话边界，停止收集更早的概括
+            if m.get("role") == "assistant" and "summary" in m and m.get("summary"):
+                all_group_summaries.append(m["summary"])
+                
+        # 精准截取最后的 50 条历史剧情大纲
+        group_summaries_list = all_group_summaries[-50:]
+        
         group_summary_context_str = ""
         if group_summaries_list:
             group_summary_context_str = "【📌 本微信群聊前期已发生的历史剧情大纲备忘（前情回顾摘要）】:\n" + "\n".join([f"- {s}" for s in group_summaries_list]) + "\n\n"
@@ -662,12 +675,13 @@ if is_group_chat:
                     g_view_text = f"⚔️ [群会话通知]: 成员【{prefix_name}】在群现场公开发言说道：\n“{clean_content}”"
                     cleaned_context.append({"role": "user", "content": g_view_text})
 
+        # ✨ 融入终极大模型人称锁定微调
         identity_lock_patch = {
-    "role": "user",
-    "content": f"⚡[视角同步机制]:\n"
-               f"1. 请立刻代入【{curr_agent}】的灵魂。用你的本能、语调和当下状态，进行接下来的三段式小说演绎。\n"
-               f"2. 【绝对人称规范】：在所有台词与内心独白中，【我】代表你自己（即{curr_agent}），【你】代表用户（即玩家）。严禁将自己的行为说成‘你’，严禁将用户的行为说成‘我’！绝对不能搞反人称代词！"
-}
+            "role": "user",
+            "content": f"⚡[视角同步机制]:\n"
+                       f"1. 请立刻代入【{curr_agent}】的灵魂。用你的本能、语调和当下状态，进行接下来的三段式小说演绎。\n"
+                       f"2. 【绝对人称规范】：在所有台词与内心独白中，【我】代表你自己（即{curr_agent}），【你】代表用户（即玩家）。严禁将自己的行为说成‘你’，严禁将用户的行为说成‘我’！绝对不能搞反人称代词！"
+        }
 
         api_payload = [{"role": "system", "content": agent_dynamic_system}] + cleaned_context + [identity_lock_patch, lazy_insurance_prompt]
         
@@ -707,7 +721,7 @@ if is_group_chat:
                         "from_group": g_name,
                         "msg_id": reply_id,
                         "timestamp": reply_timestamp,
-                        "summary": extracted_summary # 将概述直接紧紧绑定到该条对话实体中，实现删除联动
+                        "summary": extracted_summary # 绑定该条对话实体
                     })
 
                 st.session_state.group_active_queue.pop(0)
@@ -744,9 +758,24 @@ else:
 
         st.session_state.regenerate_trigger = False
 
-        # ✨ 需求重构：详细记录只截取最后6条（大概3轮），概述信息截取6条之前的50条
+        # ==========================================
+        # ✨ 重构后的单聊切片：确保精准 6 条详细 + 50 条概括
+        # ==========================================
+        # 1. 详细聊天：严格截取单聊历史的最后 6 条记录
         context_messages = role_data["chat_history"][-6:] if len(role_data["chat_history"]) > 6 else role_data["chat_history"]
-        earlier_messages = role_data["chat_history"][:-6] if len(role_data["chat_history"]) > 6 else []
+        
+        # 2. 概括聊天：提取 6 条详细记录之前的、真正带有 summary 的最新 50 条记录
+        boundary_msg_id = context_messages[0].get("msg_id") if context_messages else None
+        
+        all_historical_summaries = []
+        for m in role_data["chat_history"]:
+            if boundary_msg_id and m.get("msg_id") == boundary_msg_id:
+                break  # 触及当前详细会话边界，停止
+            if m.get("role") == "assistant" and "summary" in m and m.get("summary"):
+                all_historical_summaries.append(m["summary"])
+                
+        # 精准截取往前 50 条一句话概述
+        historical_summaries = all_historical_summaries[-50:]
 
         memory_ledger_prompt = ""
         if role_data.get("memory_events"):
@@ -754,8 +783,6 @@ else:
             for idx, event in enumerate(role_data["memory_events"]):
                 memory_ledger_prompt += f"{idx+1}. {event}\n"
 
-        # 从过往消息中提取绑定的 summary 属性
-        historical_summaries = [m["summary"] for m in earlier_messages if m.get("role") == "assistant" and "summary" in m][-50:]
         summary_milestone_prompt = ""
         if historical_summaries:
             summary_milestone_prompt = "【📌 彼此交往的历史事件一句话概述备忘录（重要前情简纲）】\n"
@@ -778,6 +805,16 @@ else:
         cleaned_api_payload = [{"role": "system", "content": dynamic_system_prompt}]
         for msg in context_messages:
             cleaned_api_payload.append({"role": msg["role"], "content": msg["content"]})
+            
+        # ✨ 融入单聊大模型人称锁定微调
+        identity_lock_patch = {
+            "role": "user",
+            "content": f"⚡[视角同步机制]:\n"
+                       f"1. 请立刻代入【{target_girl}】的灵魂。用你的本能、语调和当下状态，进行接下来的三段式小说演绎。\n"
+                       f"2. 【绝对人称规范】：在所有台词与内心独白中，【我】代表你自己（即{target_girl}），【你】代表用户（即玩家）。严禁将自己的行为说成‘你’，严禁将用户的行为说成‘我’！绝对不能搞反人称代词！"
+        }
+        
+        cleaned_api_payload.append(identity_lock_patch)
         cleaned_api_payload.append(lazy_insurance_prompt)
 
         with st.chat_message("assistant", avatar="💋"):
@@ -805,7 +842,7 @@ else:
                     "content": full_response, 
                     "timestamp": time.time(), 
                     "msg_id": single_reply_id,
-                    "summary": extracted_summary # 将概述直接紧紧绑定到该条对话实体中，实现删除联动
+                    "summary": extracted_summary # 绑定该条对话实体
                 })
                 
                 st.session_state.dice_instruction_patch = ""
