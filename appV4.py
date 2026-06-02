@@ -636,8 +636,8 @@ if is_group_chat:
        # ==========================================
         # ✨ 终极重构：群聊精准 6 条详细 + 再往前 60 条无重复概述
         # ==========================================
-        context_messages = chat_history_view[-1:] if len(chat_history_view) > 1 else chat_history_view
-        earlier_group_history = chat_history_view[:-1] if len(chat_history_view) > 1 else []
+        context_messages = chat_history_view[-2:] if len(chat_history_view) > 2 else chat_history_view
+        earlier_group_history = chat_history_view[:-2] if len(chat_history_view) > 2 else []
         
         all_group_summaries = []
         for m in earlier_group_history:
@@ -816,10 +816,10 @@ else:
         # ✨ 终极重构：单聊精准 6 条详细 + 再往前 60 条无重复概述
         # ==========================================
         # 1. 详细聊天：严格截取单聊历史的最后 6 条记录
-        context_messages = role_data["chat_history"][-1:] if len(role_data["chat_history"]) > 1 else role_data["chat_history"]
+        context_messages = role_data["chat_history"][-2:] if len(role_data["chat_history"]) > 2 else role_data["chat_history"]
         
         # 2. 概括聊天：直接利用切片排除最后6条，避免边界碰撞
-        earlier_history = role_data["chat_history"][:-1] if len(role_data["chat_history"]) > 1 else []
+        earlier_history = role_data["chat_history"][:-2] if len(role_data["chat_history"]) > 2 else []
         
         all_historical_summaries = []
         for m in earlier_history:
