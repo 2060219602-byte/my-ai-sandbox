@@ -727,8 +727,9 @@ if is_group_chat:
             full_response = ""
             
             try:
+                # ✨ 引入 timeout=15.0 防止地铁网络高延时丢包导致的无限转圈假死
                 response = client.chat.completions.create(
-                    model=model_name, messages=api_payload, stream=True, temperature=1.0, max_tokens=3000, presence_penalty=0.2, frequency_penalty=0.1
+                    model=model_name, messages=api_payload, stream=True, temperature=1.0, max_tokens=3000, presence_penalty=0.2, frequency_penalty=0.1, timeout=15.0
                 )
                 for chunk in response:
                     if chunk.choices[0].delta.content:
@@ -771,9 +772,12 @@ if is_group_chat:
                 save_local_data()
                 st.rerun()
             except Exception as e:
-                st.error(f"调用群聊 API 出错: {str(e)}")
+                # ✨ 网络遭遇恶化崩溃时的清洗重置兜底，友好弹窗不假死
+                st.error(f"📡 信号在赛博群聊空间发生折射崩溃（网络超时或断开）：\n{str(e)}")
                 st.session_state.group_active_agent = ""
                 st.session_state.group_active_queue = []
+                if st.button("🔄 重新初始化网络并强制重绘"):
+                    st.rerun()
 
 else:
     if user_input or st.session_state.regenerate_trigger or dice_triggered or is_continue_mode:
@@ -896,8 +900,9 @@ else:
             response_placeholder = st.empty()
             full_response = ""
             try:
+                # ✨ 引入 timeout=15.0 斩断单聊卡死、信号丢失
                 response = client.chat.completions.create(
-                    model=model_name, messages=cleaned_api_payload, stream=True, temperature=1.0, max_tokens=3000, presence_penalty=0.2, frequency_penalty=0.1
+                    model=model_name, messages=cleaned_api_payload, stream=True, temperature=1.0, max_tokens=3000, presence_penalty=0.2, frequency_penalty=0.1, timeout=15.0
                 )
                 for chunk in response:
                     if chunk.choices[0].delta.content:
@@ -925,7 +930,10 @@ else:
                 save_local_data()  # 数据落盘
                 st.rerun()
             except Exception as e:
-                st.error(f"调用 API 出错: {str(e)}")
+                # ✨ 单聊网络断开、超时友好报错处理，允许玩家点按钮重绘页面解卡
+                st.error(f"📡 信号在私聊空间发生折射崩溃（网络超时或断开）：\n{str(e)}")
+                if st.button("🔄 重新初始化网络并强制重绘"):
+                    st.rerun()
 
 # ==========================================
 # 7. 脚本自引导启动入口
