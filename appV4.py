@@ -772,11 +772,12 @@ if is_group_chat:
                 save_local_data()
                 st.rerun()
             except Exception as e:
-                # ✨ 网络遭遇恶化崩溃时的清洗重置兜底，友好弹窗不假死
-                st.error(f"📡 信号在赛博群聊空间发生折射崩溃（网络超时或断开）：\n{str(e)}")
+                # 清洗群活跃状态，防止下一次卡死
                 st.session_state.group_active_agent = ""
                 st.session_state.group_active_queue = []
-                if st.button("🔄 重新初始化网络并强制重绘"):
+                
+                st.error(f"📡 信号在赛博群聊空间发生折射崩溃（网络超时或断开）：\n{str(e)}")
+                if st.button("🔄 重新初始化网络并强制重绘", key="net_err_retry_group"):
                     st.rerun()
 
 else:
