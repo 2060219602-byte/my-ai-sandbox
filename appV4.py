@@ -641,9 +641,22 @@ if is_group_chat:
         if "novel_style" in st.secrets and "processed_rules" in st.secrets["novel_style"]:
             refined_style_patch = f"\n\n{st.secrets['novel_style']['processed_rules']}"
 
-        # 【第 1 层】：纯粹的核心系统规则
-        agent_dynamic_system = (
-            f"【你的名字：{curr_agent}】\n"
+        # ==========================================
+        # ✨ 终极缓存优化：将绝对不变的超级范文库和固定协议推到宇宙最前端
+        # ==========================================
+        agent_dynamic_system = ""
+        
+        # 【第1顺位：绝对静态】1.5万字超级范文库死死锁住火车头
+        if refined_style_patch:
+            agent_dynamic_system += f"{refined_style_patch}\n\n"
+            
+        # 【第2顺位：绝对静态】通用的越狱词与戏剧冲突协议
+        agent_dynamic_system += f"{jailbreak_prompt}\n\n"
+        agent_dynamic_system += f"{multi_reply_protocol}\n\n"
+        
+        # 【第3顺位：完全动态】把随角色、随房间变动的临时设定压到 System 提示词末尾
+        agent_dynamic_system += (
+            f"【你当前需要代入的名字：{curr_agent}】\n"
             f"【你的人格设定】：\n{agent_db.get('system_role', '')}\n\n"
             f"{agent_memory_prompt}\n"
             f"{private_context_summary}"  
@@ -651,10 +664,7 @@ if is_group_chat:
             f"【你当前感知到的状态】：\n{agent_db.get('character_status', '')}\n\n"
             f"【🔥 微信多人群聊点名特赦令】：\n"
             f"你现在正处于名为【{g_name}】的多人微信群现场！\n"
-            f"现在轮到你站出来发言了！请保持你的独特人格进行回应！\n\n"
-            f"{multi_reply_protocol}\n\n"
-            f"{jailbreak_prompt}"
-            f"{refined_style_patch}"  # ✨ 成功合入群聊美学大纲层
+            f"现在轮到你站出来发言了！请保持你的独特人格进行回应！"
         )
         
         # 初始化 Payload，放入 System 消息
@@ -815,18 +825,31 @@ else:
         if "novel_style" in st.secrets and "processed_rules" in st.secrets["novel_style"]:
             refined_style_patch = f"\n\n{st.secrets['novel_style']['processed_rules']}"
 
-        # 【第 1 层】：纯粹的核心系统规则
-        dynamic_system_prompt = (
-            f"{role_data.get('system_role', '')}\n\n"
-            f"{memory_ledger_prompt}\n\n"
-            f"【当前演出的背景剧情设定】：\n{role_data.get('background_story', '')}\n\n"
-            f"【你当前需要感知到的角色状态】：\n{role_data.get('character_status', '')}\n\n"
-            f"{multi_reply_protocol}\n\n"
-            f"{jailbreak_prompt}"
-            f"{refined_style_patch}"  # ✨ 成功合入固定美学大纲层
-        )
+        # ==========================================
+        # ✨ 终极缓存优化：单聊同步进行静态头部洗牌
+        # ==========================================
+        dynamic_system_prompt = ""
+        
+        # 【第1顺位：绝对静态】大头范文库优先
+        if refined_style_patch:
+            dynamic_system_prompt += f"{refined_style_patch}\n\n"
+            
+        # 【第2顺位：绝对静态】核心底层逻辑协议
+        dynamic_system_prompt += f"{jailbreak_prompt}\n\n"
+        dynamic_system_prompt += f"{multi_reply_protocol}\n\n"
+        
+        # 【第3顺位：相对动态】命运骰子补丁（触发时才拼接，放在动静结合处）
         if st.session_state.dice_instruction_patch != "":
-            dynamic_system_prompt += f"\n\n{st.session_state.dice_instruction_patch}"
+            dynamic_system_prompt += f"{st.session_state.dice_instruction_patch}\n\n"
+            
+        # 【第4顺位：完全动态】频繁变动的角色属性与核心记忆备忘录压阵
+        dynamic_system_prompt += (
+            f"【当前扮演的AI角色名字】：{target_girl}\n"
+            f"【该角色的基本人设设定 (System Role)】：\n{role_data.get('system_role', '')}\n\n"
+            f"{memory_ledger_prompt}\n"
+            f"【当前演出的背景剧情设定】：\n{role_data.get('background_story', '')}\n\n"
+            f"【你当前需要感知到的角色状态】：\n{role_data.get('character_status', '')}"
+        )
 
         # 初始化单聊 Payload，垫入 System 消息
         cleaned_api_payload = [{"role": "system", "content": dynamic_system_prompt}]
