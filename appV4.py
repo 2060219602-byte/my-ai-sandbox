@@ -154,7 +154,7 @@ def generate_ai_diary_summary(client, model_name, r_name, sys_role, last_5_round
 【你的人设基础】：{sys_role}
 
 【必须严格执行的硬核约束】：
-1. 极简高密度（字数控制）：字数严格控制在 200 - 300 字之间！使用短句子、高纯度白描、碎片化的词汇，严禁长篇大论的宏观废话！
+1. 内容高密度：字数严格控制在 500 字左右！使用短句子、高纯度白描，严禁长篇大论的宏观废话！
 2. ✨全线追溯与快剪串联：拒绝片面截取单一片段！你必须在脑海中像电影快进闪回一样，按顺序高密度串联起这5轮发生的完整对峙轨迹。用极度主观的触觉、体温与心跳白描，将两人的每一次肉体拉扯、每一句致命台词、每一个道具或环境的变化全盘复盘，编织成一条密不透风的沦陷事实链。
 3. 💥死锁当前时间切片（拒绝‘几天后’）：回忆的结束点必须【死死锁在刚才最后一轮交互发生的瞬间】！
 4. 💥强制统一结尾格式：回忆的最后一段，必须用文字表现你回忆结束、回到现实的即时神态。必须严格以如下逻辑作为回忆的收尾：
@@ -171,7 +171,7 @@ def generate_ai_diary_summary(client, model_name, r_name, sys_role, last_5_round
             ],
             stream=False, 
             temperature=0.75,
-            max_tokens=700
+            max_tokens=800
         )
         diary_content = completion.choices[0].message.content.strip()
         
