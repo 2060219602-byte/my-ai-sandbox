@@ -793,10 +793,13 @@ if is_group_chat:
                 reply_id = f"reply_{int(time.time() * 1000)}_{random.randint(1000, 9999)}"
                 reply_timestamp = time.time()
 
+                is_summary_valid = "提炼失败" not in extracted_summary and "接口故障" not in extracted_summary
+                final_memory_summary = extracted_summary if is_summary_valid else ""
+                
                 for inner_agent in st.session_state.group_members_list:
                     agent_hist = st.session_state.all_sessions_db["roles"][inner_agent]["chat_history"]
                     if agent_hist and agent_hist[-1]["role"] == "user" and agent_hist[-1].get("from_group") == g_name:
-                        agent_hist[-1]["summary"] = extracted_summary
+                        agent_hist[-1]["summary"] = final_memory_summary # 👈 只塞干净的总结或留空
                     
                     st.session_state.all_sessions_db["roles"][inner_agent]["chat_history"].append({
                         "role": "assistant", 
@@ -805,8 +808,8 @@ if is_group_chat:
                         "from_group": g_name,
                         "msg_id": reply_id,
                         "timestamp": reply_timestamp,
-                        "summary": extracted_summary 
-                    })
+                        "summary": final_memory_summary # 👈 只塞干净的总结或留空
+                })
 
                 st.session_state.group_active_queue.pop(0)
                 if st.session_state.group_active_queue:
