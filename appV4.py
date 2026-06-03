@@ -855,8 +855,7 @@ if is_group_chat:
                 for inner_agent in st.session_state.group_members_list:
                     st.session_state.all_sessions_db["roles"][inner_agent]["chat_history"].append({
                         "role": "assistant", 
-                        #  改为存储大模型最原始输出的文本
-                        "content": f"（【{curr_agent}】在群聊【{g_name}】现场当众说道）：\n{full_response}", 
+                        "content": f"（【{curr_agent}】在群聊【{g_name}】现场当众说道）：\n{full_response}",  # 👈 保持这样，不要分段
                         "agent_name": curr_agent,
                         "from_group": g_name,
                         "msg_id": reply_id,
@@ -879,12 +878,10 @@ if is_group_chat:
                     new_diary = generate_ai_diary_summary(
                         client, "deepseek-v4-flash", curr_agent, agent_db.get("system_role", ""), raw_stream_text
                     )
-                    # 回忆也丢给后置分段器规范一下排版
-                    formatted_diary = novel_text_formatter(new_diary)
-                    
+
                     if "diaries" not in agent_db:
                         agent_db["diaries"] = []
-                    agent_db["diaries"].append(new_diary)
+                    agent_db["diaries"].append(new_diary)  # 👈 直接存入未经清洗的原始日记
                     st.success(f"📔 【{curr_agent}】瞬间清醒并睁大双眼，全新回忆心流已被锁入保险箱！")
 
                 st.session_state.group_active_queue.pop(0)
@@ -1037,14 +1034,12 @@ else:
                         full_response += chunk.choices[0].delta.content
                         response_placeholder.markdown(full_response + "▌")
                 
-                # ✨ ✨ ✨ 核心重构：单聊完毕后，后置排版分段引擎介入，深度清洗排版
-                formatted_response = novel_text_formatter(full_response)
-                response_placeholder.markdown(formatted_response)
+                response_placeholder.markdown(full_response)
                 
                 single_reply_id = f"reply_{int(time.time() * 1000)}_{random.randint(1000, 9999)}"
                 role_data["chat_history"].append({
                     "role": "assistant", 
-                    "content": full_response,  # 入库保存也必须是用后置规整完的美学文本
+                    "content": full_response,  # 👈 直接存入原始文本，不再折腾分段
                     "timestamp": time.time(), 
                     "msg_id": single_reply_id
                 })
