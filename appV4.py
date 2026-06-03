@@ -788,16 +788,21 @@ else:
         cleaned_api_payload = [{"role": "system", "content": dynamic_system_prompt}]
 
         # 1. 垫入远景全概述历史（逐轮事实编年史大纲）
-        historical_summaries = role_data.get("summarized_history", [])
+       historical_summaries = role_data.get("summarized_history", [])[-120:]
         if historical_summaries:
+            # ✨ 优化：让每一条概述之间用 双换行+箭头 隔开，筑起绝对清晰的逻辑防火墙
+            formatted_lines = []
+            for idx, line in enumerate(historical_summaries):
+                formatted_lines.append(f"📌 [第 {idx+1} 轮核心事实]: {line}")
+                
             chronicle_content = (
                 "💡【核心历史依赖数据加载：过往会话逐轮事实编年史】\n"
-                "以下是你（AI角色）与玩家自游戏开局以来，按时间先后顺序发生的每一轮纠缠事实链。"
-                "这些事实已被深植在你的长期记忆中，你必须彻底继承这些事实，但无需在后续回复中复述它们：\n" +
-                "\n".join([f"[第{idx+1}轮事实] {line}" for idx, line in enumerate(historical_summaries)])
+                "以下是你（AI角色）与玩家自游戏开局以来，按时间先后顺序发生的每一轮纠缠事实链。\n"
+                "这些事实已被深植在你的长期记忆中，无需在后续回复中复述它们：\n\n" +
+                "\n\n-------------------- \n\n".join(formatted_lines)  # ✨ 用双换行加虚线彻底隔离，绝对不挤在一块
             )
             cleaned_api_payload.append({"role": "user", "content": chronicle_content})
-            cleaned_api_payload.append({"role": "assistant", "content": f"（长吸一口气，全盘继承过往所有既定事实，眼神暗沉下来）……过往的所有细节早已深植于我的本能。我已经回到了当下的这一轮。我会直接面对他。"})
+            cleaned_api_payload.append({"role": "assistant", "content": f"（长吸一口气，全盘继承过往所有既定事实）……过往的所有细节早已深植于我的本能。我已经回到了当下的这一轮。我会直接面对他。"})
 
         # 2. 垫入近景原生对话（精准卡死只给最近2条详细上下文：AI上一轮回复 + 用户这一轮输入）
         # 排除掉当前最新的这条User消息，往前找AI的最后一条回复
