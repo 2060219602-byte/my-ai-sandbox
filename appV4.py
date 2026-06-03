@@ -380,7 +380,7 @@ if not is_group_chat:
             # 倒序排列中，第一个展开页就是最新的一篇
             is_latest_label = " 🌟 最新" if d_idx == 0 else ""
             with st.sidebar.expander(f"👁️ 闪回节点 {len(role_data['diaries']) - d_idx}{is_latest_label}（点击回看）"):
-                st.caption(d_text)
+                st.caption(novel_text_formatter(d_text))
     else:
         st.sidebar.caption("目前还没有触发失神闪回，满5轮后将自动激发瞬间记忆...")
 
@@ -874,7 +874,7 @@ if is_group_chat:
                     
                     if "diaries" not in agent_db:
                         agent_db["diaries"] = []
-                    agent_db["diaries"].append(formatted_diary)
+                    agent_db["diaries"].append(new_diary)
                     st.success(f"📔 【{curr_agent}】瞬间清醒并睁大双眼，全新回忆心流已被锁入保险箱！")
 
                 st.session_state.group_active_queue.pop(0)
