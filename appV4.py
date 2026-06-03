@@ -362,11 +362,24 @@ if not is_group_chat:
             st.rerun()
 
     # ✨ 侧边栏升级：展示她脑海中的前30篇即时闪回回忆
+    # ✨ 侧边栏升级：展示她脑海中的前30篇即时闪回回忆（加入最新回忆单向斩断功能）
     st.sidebar.write("---")
     st.sidebar.subheader("📔 她的失神闪回回忆（最新30篇）")
     if role_data.get("diaries"):
+        # 💥 斩断补丁：如果是最新的一篇回忆，允许用户在前台将其永久抹除，以退回历史轮次
+        if st.sidebar.button("🗑️ 撤销并删除最新的一篇失神回忆", type="secondary", use_container_width=True, help="删除后，最后5轮的剧情将重新变为活跃对峙状态，下次交互会重新触发心流总结"):
+            role_data["diaries"].pop(-1) # 抹除最新的一篇
+            save_local_data()
+            st.toast("🔥 最新的一篇闪回回忆已被彻底永久抹除！历史节点已成功回退。")
+            st.rerun()
+            
+        st.sidebar.write("") # 留个小空隙
+        
+        # 顺次渲染剩下的回忆折叠页
         for d_idx, d_text in enumerate(reversed(role_data["diaries"][-30:])):
-            with st.sidebar.expander(f"👁️ 闪回节点 {d_idx+1}（点击回看）"):
+            # 倒序排列中，第一个展开页就是最新的一篇
+            is_latest_label = " 🌟 最新" if d_idx == 0 else ""
+            with st.sidebar.expander(f"👁️ 闪回节点 {len(role_data['diaries']) - d_idx}{is_latest_label}（点击回看）"):
                 st.caption(d_text)
     else:
         st.sidebar.caption("目前还没有触发失神闪回，满5轮后将自动激发瞬间记忆...")
