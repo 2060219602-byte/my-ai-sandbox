@@ -925,7 +925,6 @@ else:
             response_placeholder = st.empty()
             full_response = ""
             try:
-                # ✨ 引入 timeout=15.0 斩断单聊卡死、信号丢失
                 response = client.chat.completions.create(
                     model=model_name, messages=cleaned_api_payload, stream=True, temperature=1.0, max_tokens=3000, presence_penalty=0.2, frequency_penalty=0.1, timeout=15.0
                 )
@@ -937,7 +936,7 @@ else:
                 
                 single_reply_id = f"reply_{int(time.time() * 1000)}_{random.randint(1000, 9999)}"
                 
-                # 1. 先把当前 Pro 模型吐出来的最新回复存入数据库，确保前端手感
+                # 1. 先把当前最新回复存入数据库，保证聊天手感不卡顿
                 role_data["chat_history"].append({
                     "role": "assistant", 
                     "content": full_response, 
@@ -948,43 +947,51 @@ else:
                 st.session_state.dice_instruction_patch = ""
                 save_local_data()  # 即时热保存
                 
-                # 2. ⚡【5轮打包死命令自愈机制】⚡
+                # 2. ⚡【5轮打包死命令自愈机制 - 3次限额防卡死版】⚡
                 current_unsummarized = [m for m in role_data["chat_history"] if not m.get("chapter_plot")]
                 
-                # 一轮对话含1对(1条user+1条assistant)，满 5 轮（10条原始消息）强制触发
                 if len(current_unsummarized) >= 10:
-                    status_toast = st.toast("⚡ 检测到即时互动满5轮，正在调用主模型提炼宏观章节戏纲...")
+                    status_toast = st.toast("⚡ 检测到即时互动满5轮，正在提炼宏观章节戏纲...")
                     
-                    # 组合这5轮所有的来回文本作为大模型的总提炼源
+                    # 组合连续5轮对白
                     five_turns_payload_text = ""
                     for turn_msg in current_unsummarized[:10]:
                         speaker_label = "用户(玩家)" if turn_msg["role"] == "user" else f"我({target_girl})"
                         five_turns_payload_text += f"[{speaker_label}]: {turn_msg['content']}\n\n"
                     
-                    # 🔄 强力自愈重试循环：死命令！失败了或含有报错就一直重试死磕，直到成功拿到戏纲为止
+                    # 🔄 限额重试机制：最多死磕 3 次，防止网页无限卡死
                     retry_count = 0
-                    while True:
+                    max_retries = 3
+                    summary_success = False
+                    
+                    while retry_count < max_retries:
                         if retry_count > 0:
-                            status_toast.toast(f"🔄 戏纲提炼受阻，正在发起第 {retry_count} 次强力自愈重试...")
-                            time.sleep(1.0)  # 停顿1秒防止并发撞墙
+                            status_toast.toast(f"🔄 戏纲提炼被拒绝或失败，正在发起第 {retry_count} 次自愈重试...")
+                            time.sleep(1.2)  # 稍微停顿，给接口缓冲时间
                         
                         chapter_plot_result = extract_ai_llm_summary(
                             client=client,
-                            model_name=model_name, # 完美使用更聪明、精准度更高的Pro主模型
+                            model_name=model_name,
                             five_turns_text=five_turns_payload_text,
                             system_role=role_data.get('system_role', ''),
                             background_story=role_data.get('background_story', '')
                         )
                         
-                        # 🔒 核心检查点：只要不是 TRIGGER_FAILED，且不包含报错关键字，说明提炼彻底成功！
+                        # 🔒 核心检查点：只要拿到干净总结，立刻标记成功并跳出
                         if chapter_plot_result != "TRIGGER_FAILED" and "提炼失败" not in chapter_plot_result and "接口故障" not in chapter_plot_result:
-                            # 将提炼成功的章节大纲赋予这 10 条消息，彻底实现逻辑闭环
                             for turn_msg in current_unsummarized[:10]:
                                 turn_msg["chapter_plot"] = chapter_plot_result
                             st.success(f"🎉 连续5轮互动已成功（历经 {retry_count} 次重试）压缩并归档入【章节戏纲库】！")
-                            break  # 🔓 只有真正拿到完美大纲，才允许跳出死循环！
+                            summary_success = True
+                            break  
                         
                         retry_count += 1
+                    
+                    # 🚨 前端警报：如果重试了3次依旧被模型拒绝，放行聊天，并在前端给用户显眼提示
+                    if not summary_success:
+                        st.error("⚠️ 【系统警告】当前连续5轮的剧情由于大模型产生罢工/安全拦截，导致【戏纲总结失败】。")
+                        st.info("💡 记忆安全拦截：为了防止你的长线数据库中毒，本次报错信息已被彻底拦截，没有写入记忆。这一批对话会在下一轮聊天结束后再次自动触发提炼重试。")
+                        time.sleep(2.5) # 留出时间让玩家看清错误提示
                 
                 save_local_data()  # 最终落盘并持久化
                 st.rerun()
