@@ -586,7 +586,7 @@ if history_len > DISPLAY_LIMIT:
             with st.chat_message(message["role"], avatar=avatar_icon):
                 p_name = message.get("agent_name", "")
                 prefix = f"💬 **【{p_name}】**：\n\n" if p_name else ""
-                st.markdown(prefix + message["content"])
+                st.markdown(prefix + novel_text_formatter(message["content"]))
             render_message_controls_by_id(message["msg_id"], is_last_msg=False)
             
     for i, message in enumerate(recent_history):
@@ -599,7 +599,7 @@ if history_len > DISPLAY_LIMIT:
         with st.chat_message(message["role"], avatar=avatar_icon):
             p_name = message.get("agent_name", "")
             prefix = f"💬 **【{p_name}】**：\n\n" if p_name else ""
-            st.markdown(prefix + message["content"])
+            st.markdown(prefix + novel_text_formatter(message["content"]))
         render_message_controls_by_id(message["msg_id"], is_last_msg=is_last, agent_name_fallback=message.get("agent_name", ""))
 else:
     for i, message in enumerate(chat_history_view):
@@ -611,7 +611,7 @@ else:
         with st.chat_message(message["role"], avatar=avatar_icon):
             p_name = message.get("agent_name", "")
             prefix = f"💬 **【{p_name}】**：\n\n" if p_name else ""
-            st.markdown(prefix + message["content"])
+            st.markdown(prefix + novel_text_formatter(message["content"]))
         render_message_controls_by_id(message["msg_id"], is_last_msg=is_last, agent_name_fallback=message.get("agent_name", ""))
 
 # ==========================================
@@ -845,7 +845,8 @@ if is_group_chat:
                 for inner_agent in st.session_state.group_members_list:
                     st.session_state.all_sessions_db["roles"][inner_agent]["chat_history"].append({
                         "role": "assistant", 
-                        "content": f"（【{curr_agent}】在群聊【{g_name}】现场当众说道）：\n{formatted_response}",
+                        #  改为存储大模型最原始输出的文本
+                        "content": f"（【{curr_agent}】在群聊【{g_name}】现场当众说道）：\n{full_response}", 
                         "agent_name": curr_agent,
                         "from_group": g_name,
                         "msg_id": reply_id,
@@ -1016,7 +1017,7 @@ else:
                 single_reply_id = f"reply_{int(time.time() * 1000)}_{random.randint(1000, 9999)}"
                 role_data["chat_history"].append({
                     "role": "assistant", 
-                    "content": formatted_response,  # 入库保存也必须是用后置规整完的美学文本
+                    "content": full_response,  # 入库保存也必须是用后置规整完的美学文本
                     "timestamp": time.time(), 
                     "msg_id": single_reply_id
                 })
