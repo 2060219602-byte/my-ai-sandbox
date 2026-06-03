@@ -380,7 +380,7 @@ if not is_group_chat:
             # 倒序排列中，第一个展开页就是最新的一篇
             is_latest_label = " 🌟 最新" if d_idx == 0 else ""
             with st.sidebar.expander(f"👁️ 闪回节点 {len(role_data['diaries']) - d_idx}{is_latest_label}（点击回看）"):
-                st.caption(novel_text_formatter(d_text))
+                st.caption(d_text)
     else:
         st.sidebar.caption("目前还没有触发失神闪回，满5轮后将自动激发瞬间记忆...")
 
@@ -586,7 +586,7 @@ if history_len > DISPLAY_LIMIT:
             with st.chat_message(message["role"], avatar=avatar_icon):
                 p_name = message.get("agent_name", "")
                 prefix = f"💬 **【{p_name}】**：\n\n" if p_name else ""
-                st.markdown(prefix + novel_text_formatter(message["content"]))
+                st.markdown(prefix + message["content"])
             render_message_controls_by_id(message["msg_id"], is_last_msg=False)
             
     for i, message in enumerate(recent_history):
@@ -599,7 +599,7 @@ if history_len > DISPLAY_LIMIT:
         with st.chat_message(message["role"], avatar=avatar_icon):
             p_name = message.get("agent_name", "")
             prefix = f"💬 **【{p_name}】**：\n\n" if p_name else ""
-            st.markdown(prefix + novel_text_formatter(message["content"]))
+            st.markdown(prefix + message["content"])
         render_message_controls_by_id(message["msg_id"], is_last_msg=is_last, agent_name_fallback=message.get("agent_name", ""))
 else:
     for i, message in enumerate(chat_history_view):
@@ -611,7 +611,7 @@ else:
         with st.chat_message(message["role"], avatar=avatar_icon):
             p_name = message.get("agent_name", "")
             prefix = f"💬 **【{p_name}】**：\n\n" if p_name else ""
-            st.markdown(prefix + novel_text_formatter(message["content"]))
+            st.markdown(prefix + message["content"])
         render_message_controls_by_id(message["msg_id"], is_last_msg=is_last, agent_name_fallback=message.get("agent_name", ""))
 
 # ==========================================
@@ -835,9 +835,8 @@ if is_group_chat:
                         full_response += chunk.choices[0].delta.content
                         response_placeholder.markdown(full_response + "▌")
                 
-                # ✨ ✨ ✨ 核心重构：将流式传输完的剧本正文进行代码级后置分段格式化
-                formatted_response = novel_text_formatter(full_response)
-                response_placeholder.markdown(formatted_response)
+                # 流式传输结束后，直接展示最原始完整的 full_response
+                response_placeholder.markdown(full_response)
 
                 reply_id = f"reply_{int(time.time() * 1000)}_{random.randint(1000, 9999)}"
                 reply_timestamp = time.time()
