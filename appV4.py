@@ -171,7 +171,7 @@ def generate_ai_diary_summary(client, model_name, r_name, sys_role, last_5_round
             ],
             stream=False, 
             temperature=0.75,
-            max_tokens=800
+            max_tokens=1000
         )
         diary_content = completion.choices[0].message.content.strip()
         
