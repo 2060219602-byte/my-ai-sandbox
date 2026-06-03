@@ -344,11 +344,15 @@ if is_group_chat:
         st.sidebar.write(f"• 👑 **{m}**")
 
 # 独占单聊属性控制（引入表单机制，防止输入文字时频繁卡顿整页重刷）
+# 独占单聊属性控制
 if not is_group_chat:
     st.sidebar.write("---")
     with st.sidebar.form(key=f"role_settings_form_{target_girl}"):
         st.subheader("⚙️ 剧本设定与好感度管理")
-        st.caption("提示：修改完下方设定后，请点击最下方的保存按钮统一应用，聊天更顺畅。")
+        st.caption("提示：修改完下方设定后，请点击最下方的保存按钮统一应用。")
+        
+        # ✨ 新增：前端玩家姓名输入框，默认叫"玩家"
+        user_name_val = st.text_input("👤 你的姓名（玩家称呼）：", value=role_data.get("user_name", "玩家"))
         
         fav_val = st.slider(f"对我的好感度", -100, 100, value=role_data.get("favorability", 0))
         bg_val = st.text_area("当前背景剧情", value=role_data.get("background_story", ""), height=100)
@@ -356,12 +360,15 @@ if not is_group_chat:
         sys_val = st.text_area("基本人设设定 (System Role)", value=role_data.get("system_role", ""), height=120)
         
         if st.form_submit_button("💾 统一保存并应用当前设定", use_container_width=True):
+            # ✨ 新增：将名字存入当前单聊角色的隐藏数据库中
+            role_data["user_name"] = user_name_val.strip() if user_name_val.strip() else "玩家"
+            
             role_data["favorability"] = fav_val
             role_data["background_story"] = bg_val
             role_data["character_status"] = status_val
             role_data["system_role"] = sys_val
             save_local_data()
-            st.toast("⚙️ 剧本环境参数覆写并保存成功！")
+            st.toast("⚙️ 剧本环境参数及玩家姓名覆写成功！")
             st.rerun()
 
     # ✨ 侧边栏升级：展示她脑海中的前30篇即时闪回回忆
@@ -979,14 +986,31 @@ else:
             cleaned_api_payload.append({"role": "assistant", "content": f"（娇躯巨震，从极度情欲的失神回忆中猛然惊醒，眼神彻底沦陷）……这些一闪而过的画面是我完全无法抹消的软肋。我已经睁开眼回到了现实。这就去面对他。"})
 
         # 装填动态锚点截取出来的近期详细上下文
+        # ======== ⚙️ 前端真名精准映射拦截（单聊核心） ========
+        current_player_name = role_data.get("user_name", "玩家")
+        
+        # 装填动态锚点截取出来的近期详细上下文（已加入真名蒸发净化）
         for msg in context_messages:
-            cleaned_api_payload.append({"role": msg["role"], "content": msg["content"]})
+            masked_content = msg["content"]
+            
+            # 无论历史记录、骰子日志里出现了什么，只要匹配到前端你输入的这个名字，发给AI前一律秘密洗脑成“你”
+            if current_player_name != "你":
+                masked_content = masked_content.replace(current_player_name, "你")
+            
+            # 顺便清洗掉大模型自带的一些衍生词，确保双重保险
+            masked_content = masked_content.replace("玩家", "你").replace("用户", "你")
+            
+            cleaned_api_payload.append({"role": msg["role"], "content": masked_content})
             
         identity_lock_patch = {
             "role": "user",
-            "content": f"⚡[视角同步机制]:\n"
-                       f"1. 请立刻代入【{target_girl}】的灵魂。用你的本能、语调和当下状态，进行接下来的三段式小说演绎。\n"
-                       f"2. 【绝对人称规范】：在所有台词与内心独白中，【我】代表你自己（即{target_girl}），【你】代表用户（即玩家）。严禁将自己的行为说成‘你’，严禁将用户的行为说成‘我’！绝对不能搞反人称代词！"
+            "content": f"⚡[视角与人称全盘覆写机制 — 违规立即断电警告]:\n"
+                       f"1. 【核心实体映射】：当前坐在你面前、下达指令的玩家名字叫【{role_data.get('user_name', '玩家')}】，但在小说旁白叙事中，你**必须100%无条件将其翻译为第二人称【你】**！\n"
+                       f"2. 【绝对禁忌词库】：严禁在引号外的任何旁白、动作描写、心理活动中输出【{role_data.get('user_name', '玩家')}】、‘玩家’、‘主角’、‘他’或‘她’等任何第三人称指代词！\n"
+                       f"3. 【唯一正确的标准小说格式】：\n"
+                       f"   - 错误写法（绝对禁止）：苏晴双手死死攥着{role_data.get('user_name', '玩家')}那略显稚嫩的手……\n"
+                       f"   - 正确写法（必须执行）：苏晴双手死死攥着【你】那略显稚嫩的手……\n"
+                       f"4. 再次重申：除对话引号内，描写角色自己一律用名字【{target_girl}】；描写或触碰屏幕前的玩家一律用【你】！立刻严格以此规范输出接下来的三段式剧本。"
         }
         
         cleaned_api_payload.append(identity_lock_patch)
