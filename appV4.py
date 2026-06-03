@@ -34,7 +34,7 @@ if "app_password" in st.secrets:
         st.stop()
 
 # ==========================================
-# ✨ 核心重构：完美兼容台词引号的番茄级高频分段处理器
+# ✨ 核心重构：完美兼容括号(OS)与台词引号的番茄级高频分段处理器
 # ==========================================
 def novel_text_formatter(raw_text: str) -> str:
     if not raw_text:
@@ -53,9 +53,9 @@ def novel_text_formatter(raw_text: str) -> str:
             processed_blocks.append(f"\n\n{block}\n\n")
             continue
             
-        # 3. ✨ 升级版硬核切段引擎：完美合并处理带有引号的台词完结符
-        # 匹配优先级：包含句号叹号的引号组合（。”|！”|？”|”。|”！） -> 普通的单标点（。|！|？|\?）
-        split_patterns = r'(”。|。”|！”|！”|？”|？”|”！|。|！|\?|？)'
+        # 3. ✨ 终极硬核切段引擎：将右括号 )、对话引号、普通标点全部纳入强制换行锚点
+        # 匹配优先级：组合右括号(OS) -> 包含句号叹号的引号组合 -> 普通的单标点与独立右括号
+        split_patterns = r'(\)。|\)”|\"|”。|。”|！”|！”|？”|？”|”！|。|！|\?|？|\))'
         sub_parts = re.split(split_patterns, block)
         
         reconstructed_chunk = []
@@ -64,7 +64,7 @@ def novel_text_formatter(raw_text: str) -> str:
         for part in sub_parts:
             if not part:
                 continue
-            # 如果命中了上述任何一种完结组合标点，直接拼好并强制独立成段
+            # 如果命中了上述任何一种完结符或右括号，直接拼好并强制独立成段
             if re.match(split_patterns, part):
                 current_sentence += part
                 if current_sentence.strip():
