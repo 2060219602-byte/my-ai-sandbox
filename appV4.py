@@ -740,6 +740,9 @@ if is_group_chat:
 
 # 单聊执行中枢
 else:
+    # ==========================================
+    # 👤 单聊会话执行逻辑中枢（200轮远景全换行隔离 + 2条近景 + 灵魂文风接回完全体）
+    # ==========================================
     if user_input or st.session_state.regenerate_trigger or is_continue_mode:
         if not api_key:
             st.error("请先在左侧输入你的 DeepSeek API Key！")
@@ -767,16 +770,24 @@ else:
 
         st.session_state.regenerate_trigger = False
 
-        # ==========================================
-        # ✨✨✨ 【方案A核心落地】：近景原生2条 + 远景对等编年史大纲组装
-        # ==========================================
+        # ======== ✨✨ 灵魂接回：精准提取并注入你的小说文风范例Secrets ========
+        refined_style_patch = ""
+        if "novel_style" in st.secrets and "processed_rules" in st.secrets["novel_style"]:
+            refined_style_patch = f"{st.secrets['novel_style']['processed_rules']}\n\n"
+
+        dynamic_system_prompt = ""
+        if refined_style_patch:
+            dynamic_system_prompt += refined_style_patch
+            
+        dynamic_system_prompt += f"{jailbreak_prompt}\n\n"
+        dynamic_system_prompt += f"{multi_reply_protocol}\n\n"
+        
         memory_ledger_prompt = ""
         if role_data.get("memory_events"):
             memory_ledger_prompt = "【📌 绝对核心备忘录线索】\n"
             for idx, event in enumerate(role_data["memory_events"]):
                 memory_ledger_prompt += f"{idx+1}. {event}\n"
-
-        dynamic_system_prompt = f"{jailbreak_prompt}\n\n{multi_reply_protocol}\n\n"
+        
         dynamic_system_prompt += (
             f"【当前扮演的AI角色名字】：{target_girl}\n"
             f"【该角色的基本人设设定 (System Role)】：\n{role_data.get('system_role', '')}\n\n"
@@ -787,8 +798,8 @@ else:
 
         cleaned_api_payload = [{"role": "system", "content": dynamic_system_prompt}]
 
-        # ✨ 终极完全体：精准缩进对齐版（直接拨到最近 200 轮）
-        historical_summaries = role_data.get("summarized_history", [])[-120:]
+        # ✨✨✨ 【方案A核心物理屏障】：切出最近 200 轮对等大纲并用双换行+分割线无情推开
+        historical_summaries = role_data.get("summarized_history", [])[-200:]
         
         if historical_summaries:
             formatted_lines = []
@@ -802,18 +813,15 @@ else:
                 "\n\n-------------------- \n\n".join(formatted_lines)
             )
             cleaned_api_payload.append({"role": "user", "content": chronicle_content})
-            cleaned_api_payload.append({"role": "assistant", "content": "（长吸一口气，全盘继承过往所有既定事实，眼神暗沉下来）……过往的所有细节早已深植于我的本能。我已经回到了当下的这一轮。我会直接面对他。"})
+            cleaned_api_payload.append({"role": "assistant", "content": f"（长吸一口气，全盘继承过往所有既定事实，眼神暗沉下来）……过往的所有细节早已深植于我的本能。我已经回到了当下的这一轮。我会直接面对他。"})
 
         # 2. 垫入近景原生对话（精准卡死只给最近2条详细上下文：AI上一轮回复 + 用户这一轮输入）
-        # 排除掉当前最新的这条User消息，往前找AI的最后一条回复
         all_past_history = role_data["chat_history"][:-1] if user_input or is_continue_mode else role_data["chat_history"]
         last_ai_reply = [m for m in all_past_history if m["role"] == "assistant"]
         
         if last_ai_reply:
-            # 注入AI上一轮的原生回复细节
             cleaned_api_payload.append({"role": "assistant", "content": last_ai_reply[-1]["content"]})
         
-        # 注入用户当前这一轮的最详细原生触碰指令
         cleaned_api_payload.append({"role": "user", "content": active_user_text})
 
         # 3. 追加人称锁与终审卡尺
@@ -828,7 +836,7 @@ else:
         cleaned_api_payload.append(lazy_insurance_prompt)
 
         # ==========================================
-        # 🛠️ 【前端Debug审核区 — 方案A完美视觉化】
+        # 🛠️ 【前端Debug审核区 — 方案A完全体视觉化】
         # ==========================================
         with st.expander("🔍 开发者方案A实时审计：点击查看发给大模型的完整 Payload", expanded=False):
             st.caption("你瞅瞅，历史上的小作文全消失了，变成了高密度的编年史概述，最底下只留了2条最鲜活的原生对白：")
@@ -873,7 +881,7 @@ else:
                 save_local_data()
                 st.rerun()
             except Exception as e:
-                st.error(f"📡 赛博空间发生逻辑折断：\n\n{str(e)}")
+                st.error(f"📡 赛博空间发生 logic 折断：\n\n{str(e)}")
 
 # ==========================================
 # 7. 脚本自引导启动入口
