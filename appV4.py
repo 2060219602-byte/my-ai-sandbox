@@ -876,7 +876,7 @@ if is_group_chat:
                     
                     # 后置提炼处理
                     new_diary = generate_ai_diary_summary(
-                        client, "deepseek-v4-flash", curr_agent, agent_db.get("system_role", ""), raw_stream_text
+                        client, "deepseek-v4-pro", curr_agent, agent_db.get("system_role", ""), raw_stream_text
                     )
 
                     if "diaries" not in agent_db:
@@ -1056,7 +1056,7 @@ else:
                         raw_stream_text += f"【{spk}】: {m['content']}\n\n"
                     
                     new_diary = generate_ai_diary_summary(
-                        client, "deepseek-v4-flash", target_girl, role_data.get("system_role", ""), raw_stream_text
+                        client, "deepseek-v4-pro", target_girl, role_data.get("system_role", ""), raw_stream_text
                     )
                     # 回忆大纲也清洗排版
                     formatted_diary = novel_text_formatter(new_diary)
