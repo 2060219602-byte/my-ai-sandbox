@@ -783,7 +783,7 @@ if is_group_chat:
                         
                 extracted_summary = extract_ai_llm_summary(
                     client=client, 
-                    model_name="deepseek-v4-flash", 
+                    model_name=model_name, 
                     user_text=last_user_msg, 
                     ai_text=full_response,
                     system_role=agent_db.get('system_role', ''),
@@ -960,7 +960,7 @@ else:
                 
                 extracted_summary = extract_ai_llm_summary(
                     client=client, 
-                    model_name="deepseek-v4-flash", 
+                    model_name=model_name, 
                     user_text=last_user_action, 
                     ai_text=full_response,
                     system_role=role_data.get('system_role', ''),
