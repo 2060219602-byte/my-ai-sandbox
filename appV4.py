@@ -34,68 +34,56 @@ if "app_password" in st.secrets:
         st.stop()
 
 # ==========================================
-# ✨ 核心重构：硬核前端剧情文本小说级后置分段处理器
+# ✨ 核心重构：番茄小说级高频碎句后置分段处理器
 # ==========================================
 def novel_text_formatter(raw_text: str) -> str:
     if not raw_text:
         return raw_text
     
-    # 1. 净化基础段落黏连：统一将单换行升级为标准的Markdown双换行
-    raw_text = re.sub(r'(?<!\n)\n(?!\n)', '\n\n', raw_text)
+    # 1. 净化所有的原始多余换行与死空格，化整为零
+    raw_text = re.sub(r'\s*\n\s*', '', raw_text)
     
-    # 2. 三段式大分区保护：按 1️⃣、2️⃣、3️⃣ 切分，防止大标号被误伤
+    # 2. 核心锚点硬切：在纯净标号 1️⃣、2️⃣、3️⃣ 处强行切分
     blocks = re.split(r'(1️⃣|2️⃣|3️⃣)', raw_text)
     processed_blocks = []
     
     for block in blocks:
-        # 如果是纯标号符号，原样保留
         if block in ['1️⃣', '2️⃣', '3️⃣']:
-            processed_blocks.append(block)
+            # 标号后强制换行顶格，奠定番茄流骨架
+            processed_blocks.append(f"\n\n{block}\n\n")
             continue
+            
+        # 3. 番茄爽文级高频切段引擎：见句必换行
+        # 匹配所有小说的完结标点：。” 或 ！" 或 ？” 或 普通的 。！?
+        split_patterns = r'(”。|！”|？”|。|！|\?|？)'
+        sub_parts = re.split(split_patterns, block)
         
-        # 针对标号内部的绵长小说文本，进行字数微操切分
-        paragraphs = block.split('\n\n')
-        refined_paragraphs = []
+        reconstructed_chunk = []
+        current_sentence = ""
         
-        for para in paragraphs:
-            para = para.strip()
-            if not para:
+        for part in sub_parts:
+            if not part:
                 continue
-                
-            # 自定义美学阈值：当某一个段落超过 110 个字时，启动后置自动切段
-            if len(para) > 110:
-                # 寻找适合小说换行的美学锚点（如：对话完结处、心理独白完结处、普通句号）
-                # 优先级：。” -> ) -> 。
-                split_patterns = r'(”。|（OS:.*?）|\)。|。)'
-                sub_parts = re.split(split_patterns, para)
-                
-                current_chunk = ""
-                reconstructed_para = []
-                
-                for i in range(len(sub_parts)):
-                    if i % 2 == 0:
-                        current_chunk += sub_parts[i]
-                    else:
-                        # 拼回分隔符
-                        current_chunk += sub_parts[i]
-                        # 当累计字数达到呼吸阈值，且后面还有文本，就切一刀
-                        if len(current_chunk) > 70 and i < len(sub_parts) - 1:
-                            reconstructed_para.append(current_chunk.strip())
-                            current_chunk = ""
-                
-                if current_chunk:
-                    reconstructed_para.append(current_chunk.strip())
-                
-                refined_paragraphs.append("\n\n".join(reconstructed_para))
+            # 如果是标点符号，拼到当前句子的末尾，并立刻强制作为独立一段吐出
+            if re.match(split_patterns, part):
+                current_sentence += part
+                if current_sentence.strip():
+                    reconstructed_chunk.append(current_sentence.strip())
+                current_sentence = ""
             else:
-                refined_paragraphs.append(para)
+                current_sentence += part
                 
-        processed_blocks.append("\n\n".join(refined_paragraphs))
+        # 兜底收尾余下的零碎文本
+        if current_sentence.strip():
+            reconstructed_chunk.append(current_sentence.strip())
+            
+        # 段落与段落之间全部用双换行隔离，保证前台极度清爽
+        processed_blocks.append("\n\n".join(reconstructed_chunk))
         
-    # 重新组装并微调标号与正文之间的换行间距
-    final_output = "".join(processed_blocks)
-    final_output = final_output.replace("1️⃣\n\n", "1️⃣ \n").replace("2️⃣\n\n", "2️⃣ \n").replace("3️⃣\n\n", "3️⃣ \n")
-    return final_output.strip()
+    # 4. 终极格式微调：清洗头部尾部的空行错位
+    final_output = "".join(processed_blocks).strip()
+    final_output = re.sub(r'\n{3,}', '\n\n', final_output)
+    return final_output
 
 # ==========================================
 # 0. 核心辅助函数：多群聊+多单聊数据库读取与保存
