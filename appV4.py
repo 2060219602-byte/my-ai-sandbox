@@ -798,7 +798,7 @@ if is_group_chat:
                         raw_stream_text += f"【{spk}】: {m['content']}\n\n"
                     
                     new_diary = generate_ai_diary_summary(
-                        client, model_name, curr_agent, agent_db.get("system_role", ""), raw_stream_text
+                        client, "deepseek-v4-flash", curr_agent, agent_db.get("system_role", ""), raw_stream_text
                     )
                     
                     if "diaries" not in agent_db:
