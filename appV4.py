@@ -174,7 +174,8 @@ def extract_ai_llm_summary(client, model_name, user_text, ai_text, system_role="
             ],
             stream=False, 
             temperature=0.3,
-            max_tokens=500
+            max_tokens=500,
+            timeout=15.0
         )
         final_summary = completion.choices[0].message.content.strip()
         return final_summary
