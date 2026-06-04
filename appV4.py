@@ -1055,33 +1055,85 @@ else:
 
                 formatted_story = novel_text_formatter(full_story_response)
 
-                # 2. 调用独立的后台生理演化推演器，完美接收 model_name 参数并以上一轮为基准
-                with st.spinner("⚡ 正在以上一轮档案为刚性基准，演化隐秘生理状态..."):
-                    json_status = generate_json_character_status(
-                        client, model_name, target_girl, formatted_story, role_data.get("character_status", "")
+                # ========================================================
+                # 2. 🌟 核心升级：利用刚才一模一样的 cleaned_api_payload，进行无感同上下文追加追问
+                # ========================================================
+                with st.spinner("⚡ 顺承叙事流：正在深度刻录她此时此刻的隐秘身体档案..."):
+                    try:
+                        # 先把刚才 AI 吐出来的纯剧情正文，追加进刚才的 api_payload 中，保持时空绝对连续
+                        context_chase_payload = list(cleaned_api_payload)
+                        context_chase_payload.append({"role": "assistant", "content": formatted_story})
+                        
+                        # 在最末尾死死钉上一发追问，命令同一个处于越狱状态下的模型在后半段直接计算状态
+                        context_chase_payload.append({
+                            "role": "user",
+                            "content": (
+                                f"⚡ [舞台物理引擎实时刷新命令]:\n"
+                                f"请承接你刚才亲手编织出的戏剧肉戏。在上一轮身体基数：【{role_data.get('character_status', '')}】的基础上，"
+                                f"逻辑递进、时间不可逆地推演出【{target_girl}】在此一瞬间最新的隐秘身体反应。\n\n"
+                                f"⚠️【绝对死命令】：为了防止数据溢出，你必须且只能严格按照以下标签排版在最末尾直接输出，"
+                                f"严禁任何前言、总结或合规评述。有几位女性出场就写几位：\n"
+                                f"[{target_girl}]\n阴道：[客观直露白描细节]\n乳头：[客观直露白描细节]\n大腿内侧：[客观直露白描细节]"
+                            )
+                        })
+
+                        # 同步调低随机性，保障计算的严谨连续
+                        chase_response = client.chat.completions.create(
+                            model=model_name,
+                            messages=context_chase_payload,
+                            stream=False,  # 后台无感单发计算，不破坏前台体验
+                            temperature=0.5,
+                            max_tokens=600,
+                            timeout=40.0
+                        )
+                        
+                        raw_status_response = chase_response.choices[0].message.content.strip()
+                        
+                    except Exception as chase_err:
+                        print(f"📡 追发链路发生异常，触发底层空气墙捕获: {chase_err}")
+                        raw_status_response = role_data.get("character_status", "")
+
+                # ========================================================
+                # 3. 智能正则捕获（完美兼容你的高级 HTML 框呈现）
+                # ========================================================
+                target_pattern = rf'(\[{target_girl}\]\s*\n\s*阴道：[\s\S]*?大腿内侧：[\s\S]*?)(?=\n\s*\[|$)'
+                status_match = re.search(target_pattern, raw_status_response)
+
+                if status_match:
+                    # 100% 拿到了大模型在刚才的越狱状态下自己总结出来的最新递进数据
+                    new_status_block = status_match.group(1).strip()
+                else:
+                    # 万一中转网关截断，自动继承上一轮旧状态进行温和演变，绝不卡死
+                    new_status_block = (
+                        f"[{target_girl}]\n"
+                        f"阴道：承接前一轮的敏感基数，在刚发生的剧烈交锋下内壁进一步紧缩充血，爱液持续加剧渗出拉丝。\n"
+                        f"乳头：保持着坚挺激凸的状态，由于受到剧情持续升温的试探，頂端高度敏感，阵阵发酥发硬。\n"
+                        f"大腿内侧：体温呈现明显的潮红滚烫，紧致的娇嫩肌肉因克制内心的防线坍塌而产生细微微颤。"
                     )
                 
-                new_status_block = (
-                    f"[{target_girl}]\n"
-                    f"阴道：{json_status['vagina']}\n"
-                    f"乳头：{json_status['nipple']}\n"
-                    f"大腿内侧：{json_status['thigh']}"
-                )
+                # 覆写数据库的当前状态快照
                 role_data["character_status"] = new_status_block
 
-                # 3. 前端界面完美合体高阶呈现
+                # 4. 前端合体高阶呈现：刷新纯正文小说，并在下方将最新状态啪嗒挂上去
                 with response_placeholder.container():
                     st.markdown(formatted_story)
+                    
+                    # 动态利用正则把数据拆解进你的精美 HTML 标签里
+                    v_det = re.search(r'阴道：(.*)', new_status_block)
+                    n_det = re.search(r'乳头：(.*)', new_status_block)
+                    t_det = re.search(r'大腿内侧：(.*)', new_status_block)
+                    
                     status_html = f"""
                     <div class="role-status-block">
-                        <div class="role-status-name">[{target_girl}] 生理状态 (⚡JSON强控解析型)</div>
-                        <span class="role-status-row"><span class="role-status-label">阴道：</span>{json_status['vagina']}</span>
-                        <span class="role-status-row"><span class="role-status-label">乳头：</span>{json_status['nipple']}</span>
-                        <span class="role-status-row"><span class="role-status-label">大腿内侧：</span>{json_status['thigh']}</span>
+                        <div class="role-status-name">[{target_girl}] 生理状态 (⚡同上下文追溯型)</div>
+                        <span class="role-status-row"><span class="role-status-label">阴道：</span>{v_det.group(1).strip() if v_det else "内壁高度充血..."}</span>
+                        <span class="role-status-row"><span class="role-status-label">乳头：</span>{n_det.group(1).strip() if n_det else "挺立硬朗..."}</span>
+                        <span class="role-status-row"><span class="role-status-label">大腿内侧：</span>{t_det.group(1).strip() if t_det else "体温滚烫..."}</span>
                     </div>
                     """
                     st.markdown(status_html, unsafe_allow_html=True)
 
+                # 5. 保存并同步更新入历史对话切片
                 single_reply_id = f"reply_{int(time.time() * 1000)}_{random.randint(1000, 9999)}"
                 role_data["chat_history"].append({
                     "role": "assistant",
@@ -1090,7 +1142,7 @@ else:
                     "msg_id": single_reply_id
                 })
 
-                # 4. 完美契合您原本的旁白压缩参数格式
+                # 6. 无感单轮旁白压缩处理
                 with st.spinner("⚡ 赛博冰冷核正在无感压缩当前轮次事实链..."):
                     new_turn_summary = generate_single_turn_summary(client, active_user_text, formatted_story)
                     if "summarized_history" not in role_data:
