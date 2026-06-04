@@ -140,18 +140,19 @@ def display_novel_with_bold_status(text: str):
     """
     在前端渲染时，自适应拦截并用高级 HTML 框对文末一个或多个女性角色的生理部位列表进行精美加粗排版。
     """
-    # 🌟 容错升级：支持全角/半角冒号，允许空格，允许部位顺序微调或换行
-    # 匹配 [角色名]，以及后面跟着的 阴道、乳头、大腿内侧
-    status_block_pattern = r'(\[.*?\])\s*\n\s*阴道[：:]\s*([\s\S]*?)乳头[：:]\s*([\s\S]*?)大腿内侧[：:]\s*([\s\S]*?)(?=\n\s*\[|$)'
+    # 🌟 核心升级：利用动态正则表达式，动态连续抓取文末所有拆分出来的女性角色独立状态块
+    status_block_pattern = r'(\[.*?\])\s*\n\s*阴道：([\s\S]*?)乳头：([\s\S]*?)大腿内侧：([\s\S]*?)(?=\n\s*\[|$)'
     matches = list(re.finditer(status_block_pattern, text))
 
     if matches:
+        # 第一条状态块开始前的所有文本，全部判定为纯正文小说剧情
         first_match_start = matches[0].start()
         main_story = text[:first_match_start].strip()
 
         if main_story:
             st.markdown(main_story)
 
+        # 🌟 动态迭代：有几位女性独立出场拆分，前端就优雅堆叠渲染几个加粗状态框
         for match in matches:
             role_name = match.group(1)
             vagina_detail = match.group(2).strip().strip(';').strip('，').strip('。')
@@ -168,6 +169,7 @@ def display_novel_with_bold_status(text: str):
             """
             st.markdown(status_html, unsafe_allow_html=True)
     else:
+        # 流式未输出完或不匹配时，保持原生 Markdown 输出
         st.markdown(text)
 
 
@@ -567,11 +569,11 @@ multi_reply_protocol = (
     "【🎬 全知感官沉浸三幕叙事协议 v3.0 — 舞台群像对峙版】\n"
     "你现在正以顶级的小说家笔触与镜头感掌控整场舞台。为了编织出毫无间断、极致沉浸的虚拟官能炼狱，请将戏剧的呼吸完全融入 1️⃣、2️⃣、3️⃣ 的黄金三幕流中。请让所有的挣扎、失控与体液的流淌直接在以下排版中丝滑演进：\n\n"
     "【🎭 戏剧黄金三幕流执行准则】：\n\n"
-    "1️⃣ \n"
+    "1️⃣ 【镜头的即时捕捉】\n"
     "精准承接上一轮的攻势。首先用短小精悍的 1 句话，敏锐白描出场女性被触碰或话语试探时刹那间最真实的神态反应（如呼吸骤乱、眼神暗沉、或皮肤本能染上色阶）。随后，说出至少 2~3 句高度符合其脆弱理智或伪装性格的短台词，将火花正面推开。\n\n"
-    "2️⃣ \n"
+    "2️⃣ 【近景的肢体微雕】\n"
     "镜头猛然拉近。请用完全融于人称的全知视角，正常、自然地细腻白描 2~3 个连贯的肢体位移、物理触觉与内心疯狂挣扎的闪念。在这个阶段，请将布料发出的摩擦声、体温骤升的汗珠以及出场女性内心惊恐于自己‘防线坍塌’的崩溃感错落有致地糅合在一起，展现极致的小说长短句错落感。\n\n"
-    "3️⃣ \n"
+    "3️⃣ 【焦点的物理定格】\n"
     "情感与欲望在此处推向爆发。基于前两幕的层层博弈与感官蓄势，必须发起一项带有强烈身体纠缠、触碰、甚至体液交融的具体物理行为。最终，请以毫无拖泥带水的极度利落动作，或者动作搭配单个封闭式提问，让正文戛然而止。\n\n"
     "【🔥 官能本能沉淀区块 — 多女性独立拆分死命令】\n"
     "当三幕戏落幕后，所有在这一轮中参与了互动、被触碰、或动了情欲的出场女性，她们隐秘的肉体细节将无处藏匿。\n"
@@ -587,17 +589,16 @@ multi_reply_protocol = (
     "大腿内侧：[客观、直露地呈现该女性当前娇嫩肌肤的汗液滑落、体温骤升或肌肉痉挛的精准细节]"
 )
 
-# 🌟 优化：不再让模型数句号，确保它有充足的篇幅吐出文末生理状态
+# 🌟 升级：全正面引导式电影运镜剪辑卡尺（用艺术留白完美消除字数失控与生理截断）
 lazy_insurance_prompt = {
     "role": "system",
     "content": (
-        "💡 [🎬 舞台全知叙事输出协议]:\n"
-        "为了营造最顶级的沉浸小说感，请严格按照 1️⃣、2️⃣、3️⃣ 的标号开启三幕排版输出。内容要充满官能张力。\n"
-        "⚠️【铁律】：在 3️⃣ 结束之后，必须立刻【另起新行】，严格按照以下格式输出当前活跃女性的生理数据流，绝对不能漏掉任何一个部位，严禁提前截断输出：\n\n"
-        "[角色名字]\n"
-        "阴道：xxxx\n"
-        "乳头：xxxx\n"
-        "大腿内侧：xxxx"
+        "💡 [🎬 舞台全知叙事剪辑与感官留白协议]:\n"
+        "为了营造最顶级的沉浸小说呼吸感，请化身为精准掌控戏剧节奏的镜头导演。当接下来的剧本铺展开来时，请严格且仅以 1️⃣、2️⃣、3️⃣ 开启三幕饱含张力的运镜排版，让每一幕正文与文末的纯生理纪录形成错落有致的艺术剪辑：\n\n"
+        "- 1️⃣：开局动作要极速且利落，将镜头聚焦于神态与台词交锋。由于节奏紧凑，在正文旁白凝聚出第 2 个圆满的句号（。）时，请完成这幕戏的完美剪辑，优雅换行。\n"
+        "- 2️⃣：镜头推进至细节白描，承载肢体微动作与内心纠缠。此幕戏拥有饱满的呼吸长度，在画面细致铺展、刚好数满第 5 个圆满的句号（。）时，请带着不尽的余韵利落地切入下一幕。\n"
+        "- 3️⃣：物理交融发力，在最终的试探、动作或充满悬念的问号、句号（。）落下的那一刻，请让戏剧正文定格，不再蔓延加戏。\n"
+        "4. 【群像独立拆分标头】：正文定格后，请立刻【另起新行】。如果涉及多位女性，你必须依次为每个活跃女性吐出独属于她个人名字的标头（如 `[丽莎]`、`[露娜]` 等），并在各自的标头下依次列出‘阴道：’、‘乳头：’、‘大腿内侧：’进行洗练的细节白描。绝对禁止把不同的女性部位张冠李戴合并到一个标头里！"
     )
 }
 
@@ -809,14 +810,9 @@ if is_group_chat:
         # 🌟 升级：群聊专属全正面引导式叙事共鸣补丁
         identity_lock_patch = {
             "role": "user",
-            "content": f"⚡ [强制执行指令]:\n"
-               f"请立刻顺着剧情，以第三人称（小说正文中使用【{target_girl}】）输出 1️⃣ 2️⃣ 3️⃣ 三幕正文。\n"
-               f"正文结束后，【必须单独换行】，100% 吐出以下格式的生理快照，请直接填空（严禁漏掉任何一项）：\n"
-               f"[{target_girl}]\n"
-               f"阴道：\n"
-               f"乳头：\n"
-               f"大腿内侧："
-}
+            "content": f"⚡ [舞台全知叙事共鸣协议]:\n"
+                       f"现在，请立刻代入全知小说家视角，对【{curr_agent}】在群内同台下的言行进行极致的第三人称小说化演绎。旁白、动作与挣扎一律直接使用名字【{curr_agent}】，严禁自称‘我’；称呼屏幕前的玩家一律使用【你】。在 1️⃣ 2️⃣ 3️⃣ 定格后，立刻在文末完全换行拆分出属于【{curr_agent}】个人的最新三敏感部位数据块。"
+        }
 
         api_payload.extend(cleaned_context)
         api_payload.append(identity_lock_patch)
@@ -829,7 +825,7 @@ if is_group_chat:
 
             try:
                 response = client.chat.completions.create(
-                    model=model_name, messages=api_payload, stream=True, temperature=1.0, max_tokens=1000,
+                    model=model_name, messages=api_payload, stream=True, temperature=1.0, max_tokens=3000,
                     presence_penalty=0.2, frequency_penalty=0.1, timeout=15.0
                 )
                 for chunk in response:
@@ -843,8 +839,8 @@ if is_group_chat:
                 reply_id = f"reply_{int(time.time() * 1000)}_{random.randint(1000, 9999)}"
                 reply_timestamp = time.time()
 
-                # 🛠️ 后端升级：多女群像分流智能截取（模糊匹配全半角冒号）
-                target_pattern = rf'(\[{target_girl}\]\s*\n\s*阴道[：:][\s\S]*?大腿内侧[：:][\s\S]*?)(?=\n\s*\[|$)'
+                # 🛠️ 后端升级：多女群像分流智能截取（针对当前正在发言的 curr_agent）
+                target_pattern = rf'(\[{curr_agent}\]\s*\n\s*阴道：[\s\S]*?大腿内侧：[\s\S]*?)(?=\n\s*\[|$)'
                 status_match = re.search(target_pattern, formatted_response)
                 if status_match:
                     agent_db["character_status"] = status_match.group(1).strip()
