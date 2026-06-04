@@ -250,23 +250,14 @@ JSON 输出格式规范：
             model=model_name,
             messages=[{"role": "user", "content": status_extractor_prompt}],
             stream=False,
-            temperature=0.4, # 🚨 核心修改：从 0.2 提升至 0.4，解开模型的创造力枷锁，促使其进行文字动态演变，同时维持 JSON 的稳定性
+            temperature=0.4, 
             max_tokens=600,
             timeout=30.0
         )
         res_content = completion.choices[0].message.content.strip()
-        res_content = re.sub(r'```json\s*|
-```', '', res_content).strip()
+        # ✨ 正确闭合引号的清洗逻辑，彻底修复报错
+        res_content = re.sub(r'```json\s*|```', '', res_content).strip()
         return json.loads(res_content)
-    except Exception:
-        # 兜底降级处理
-        v_match = re.search(r'阴道：(.*)', old_status)
-        n_match = re.search(r'乳头：(.*)', old_status)
-        t_match = re.search(r'大腿内侧：(.*)', old_status)
-        return {
-            "vagina": v_match.group(1).strip() if v_match else "内壁高度充血，爱液持续不断地沁出润湿。",
-            "nipple": n_match.group(1).strip() if n_match else "挺立硬朗，在空气中敏感地微微发颤。",
-            "thigh": t_match.group(1).strip() if t_match else "体温滚烫，娇嫩的肌肉有些许克制性的颤抖。"
         }
 
 
