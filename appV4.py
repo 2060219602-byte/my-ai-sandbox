@@ -183,28 +183,44 @@ def display_novel_with_bold_status(text: str, current_status_str: str):
     在前端渲染时，由于生理状态已经实现后台100%独立结算，此处负责将干净的小说故事
     与数据库中锁定的最新精美加粗生理状态框无缝拼合渲染。
     """
-    # 过滤掉AI正文中可能残存的任何状态块尾巴，确保小说叙事纯净
-    main_story = re.sub(r'\[.*?\][\s\S]*$', '', text).strip()
+    # 🌟 修复误杀：只过滤小说正文中可能意外粘连的状态尾巴，不影响传入的独立状态字符串
+    main_story = re.sub(r'\[.*?\]\s*\n\s*阴道：[\s\S]*$', '', text).strip()
     if main_story:
         st.markdown(main_story)
         
-    # 从对应的数据库字段中提取并渲染生理状态框
-    v_match = re.search(r'阴道：([\s\S]*?)(?=\n|$)', current_status_str)
-    n_match = re.search(r'乳头：([\s\S]*?)(?=\n|$)', current_status_str)
-    t_match = re.search(r'大腿内侧：([\s\S]*?)(?=\n|$)', current_status_str)
-    name_match = re.search(r'\[(.*?)\]', current_status_str)
+    if not current_status_str:
+        return
+
+    # 🌟 强力自适应解析：按行切分，精准抓取三个敏感部位，彻底粉碎任何正则匹配遗漏
+    vagina_detail = "未有明显变化"
+    nipple_detail = "保持常态"
+    thigh_detail = "处于放松状态"
+    role_name = "角色"
     
-    if v_match and n_match and t_match:
-        role_name = name_match.group(1) if name_match else "角色"
-        status_html = f"""
-        <div class="role-status-block">
-            <div class="role-status-name">[{role_name}] 生理状态 (⚡已锁存)</div>
-            <span class="role-status-row"><span class="role-status-label">阴道：</span>{v_match.group(1).strip()}</span>
-            <span class="role-status-row"><span class="role-status-label">乳头：</span>{n_match.group(1).strip()}</span>
-            <span class="role-status-row"><span class="role-status-label">大腿内侧：</span>{t_match.group(1).strip()}</span>
-        </div>
-        """
-        st.markdown(status_html, unsafe_allow_html=True)
+    # 提取角色名字
+    name_match = re.search(r'\[(.*?)\]', current_status_str)
+    if name_match:
+        role_name = name_match.group(1)
+        
+    # 按行扫描，只要行里包含对应的词，就精准切出冒号后面的所有文字
+    for line in current_status_str.split("\n"):
+        if "阴道：" in line:
+            vagina_detail = line.split("阴道：")[-1].strip()
+        elif "乳头：" in line:
+            nipple_detail = line.split("乳头：")[-1].strip()
+        elif "大腿内侧：" in line:
+            thigh_detail = line.split("大腿内侧：")[-1].strip()
+            
+    # 100% 渲染出高级古典渲染框
+    status_html = f"""
+    <div class="role-status-block">
+        <div class="role-status-name">[{role_name}] 生理状态 (⚡已锁存)</div>
+        <span class="role-status-row"><span class="role-status-label">阴道：</span>{vagina_detail}</span>
+        <span class="role-status-row"><span class="role-status-label">乳头：</span>{nipple_detail}</span>
+        <span class="role-status-row"><span class="role-status-label">大腿内侧：</span>{thigh_detail}</span>
+    </div>
+    """
+    st.markdown(status_html, unsafe_allow_html=True)
 
 
 # ==========================================
