@@ -829,7 +829,7 @@ if is_group_chat:
 
             try:
                 response = client.chat.completions.create(
-                    model=model_name, messages=api_payload, stream=True, temperature=1.0, max_tokens=3000,
+                    model=model_name, messages=api_payload, stream=True, temperature=1.0, max_tokens=1000,
                     presence_penalty=0.2, frequency_penalty=0.1, timeout=15.0
                 )
                 for chunk in response:
