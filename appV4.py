@@ -871,7 +871,7 @@ if is_group_chat:
                 # ====================================================
                 res_status = {"data": agent_db.get("character_status", "")}
 
-                def群聊状态任务():
+                def 群聊状态任务():
                     res_status["data"] = generate_character_status_update(
                         client=client, model_name=model_name, current_status=agent_db.get("character_status", ""),
                         plot_text=formatted_response, agent_name=curr_agent
