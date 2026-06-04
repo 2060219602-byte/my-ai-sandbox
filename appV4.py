@@ -139,26 +139,26 @@ def novel_text_formatter(raw_text: str) -> str:
 # ==========================================
 def display_novel_with_bold_status(text: str):
     """
-    在前端渲染时，拦截并用高级 HTML 框对文末特定的四个生理部位列表进行精美加粗排版。
+    在前端渲染时，拦截并用高级 HTML 框对文末特定的三个生理部位列表进行精美加粗排版。
     """
-    status_pattern = r'(\[.*?\])\s*\n\s*(?:生理状态：\s*\n*)?[\s\S]*阴蒂：([\s\S]*?)阴道：([\s\S]*?)乳头：([\s\S]*?)大腿内侧：([\s\S]*?)$'
+    # 🌟 正则表达式更新：去掉了阴蒂，精准捕获阴道、乳头、大腿内侧
+    status_pattern = r'(\[.*?\])\s*\n\s*阴道：([\s\S]*?)乳头：([\s\S]*?)大腿内侧：([\s\S]*?)$'
     match = re.search(status_pattern, text)
     
     if match:
         main_story = text[:match.start()].strip()
         role_name = match.group(1)
-        clitoris_detail = match.group(2).strip().strip(';').strip('，').strip('。')
-        vagina_detail = match.group(3).strip().strip(';').strip('，').strip('。')
-        nipple_detail = match.group(4).strip().strip(';').strip('，').strip('。')
-        thigh_detail = match.group(5).strip().strip(';').strip('，').strip('。')
+        vagina_detail = match.group(2).strip().strip(';').strip('，').strip('。')
+        nipple_detail = match.group(3).strip().strip(';').strip('，').strip('。')
+        thigh_detail = match.group(4).strip().strip(';').strip('，').strip('。')
         
         if main_story:
             st.markdown(main_story)
         
+        # 🌟 HTML 模板更新：前端渲染强制加粗并精美排版这三个部位
         status_html = f"""
         <div class="role-status-block">
             <div class="role-status-name">{role_name} 生理状态</div>
-            <span class="role-status-row"><span class="role-status-label">阴蒂：</span>{clitoris_detail}</span>
             <span class="role-status-row"><span class="role-status-label">阴道：</span>{vagina_detail}</span>
             <span class="role-status-row"><span class="role-status-label">乳头：</span>{nipple_detail}</span>
             <span class="role-status-row"><span class="role-status-label">大腿内侧：</span>{thigh_detail}</span>
@@ -223,7 +223,7 @@ def get_default_data():
                 "summarized_history": [],
                 "system_role": "你是一位冷酷的赛博朋克情报贩子，说话简短、讽刺，习惯使用黑话。",
                 "background_story": "时间：2077年深夜。\n地点：下层区霓虹街角的一家老旧面馆。\n氛围：下着暴雨，空气中弥漫着机油与廉价合成肉的味道。",
-                "character_status": "[赛博贩子-丽莎]\n阴蒂：潜伏于包皮内，处于冰冷干瘪状态。\n阴道：紧缩闭合，未有任何分泌物分泌。\n乳头：处于布料保护下，轻微在冷风中打颤变硬。\n大腿内侧：肌肉因警惕而保持高度紧绷状态。",
+                "character_status": "[赛博贩子-丽莎]\n阴道：紧缩闭合，未有任何分泌物分泌。\n乳头：处于布料保护下，轻微在冷风中打颤变硬。\n大腿内侧：肌肉因警惕而保持高度紧绷状态。",
                 "favorability": 0,
                 "memory_events": ["玩家曾经在黑客遭遇战中救过丽莎一命。", "丽莎脖子后面的生物芯片里藏着公司的最高机密。"]
             },
@@ -232,7 +232,7 @@ def get_default_data():
                 "summarized_history": [],
                 "system_role": "你是一个性格有些冒失、但天赋异禀的高级魔法学院见习女巫，说话喜欢带上古怪的咒语口头禅。",
                 "background_story": "时间：魔法历512年。\n地点：皇家学院深夜被禁闭的藏书馆密室。\n氛围：摇曳的烛光，空气中漂浮着古老羊皮纸的尘埃，中央摆放着一本散发暗芒的禁忌魔法书。",
-                "character_status": "[魔法学徒-露娜]\n阴蒂：平静无变化。\n阴道：干燥紧闭。\n乳头：平软未勃起。\n大腿内侧：皮肤处于常温状态。",
+                "character_status": "[魔法学徒-露娜]\n阴道：干燥紧闭。\n乳头：平软未勃起。\n大腿内侧：皮肤处于常温状态。",
                 "favorability": 20,
                 "memory_events": ["露娜不小心把导师的胡子用火球术烧掉了。", "玩家是唯一知道露娜私下研究禁忌魔法的人。"]
             }
@@ -846,9 +846,9 @@ if is_group_chat:
                 reply_id = f"reply_{int(time.time() * 1000)}_{random.randint(1000, 9999)}"
                 reply_timestamp = time.time()
 
-                status_match = re.search(r'(\[.*?\]\s*\n\s*阴蒂：[\s\S]*)$', formatted_response)
+                status_match = re.search(r'(\[.*?\]\s*\n\s*阴道：[\s\S]*)$', formatted_response)
                 if status_match:
-                    agent_db["character_status"] = status_match.group(1).strip()
+                    role_data["character_status"] = status_match.group(1).strip()
 
                 for inner_agent in st.session_state.group_members_list:
                     st.session_state.all_sessions_db["roles"][inner_agent]["chat_history"].append({
@@ -984,9 +984,9 @@ else:
 
                 formatted_response = novel_text_formatter(full_response)
 
-                status_match = re.search(r'(\[.*?\]\s*\n\s*阴蒂：[\s\S]*)$', formatted_response)
+                status_match = re.search(r'(\[.*?\]\s*\n\s*阴道：[\s\S]*)$', formatted_response)
                 if status_match:
-                    role_data["character_status"] = status_match.group(1).strip()
+                    agent_db["character_status"] = status_match.group(1).strip()
 
                 single_reply_id = f"reply_{int(time.time() * 1000)}_{random.randint(1000, 9999)}"
                 role_data["chat_history"].append({
