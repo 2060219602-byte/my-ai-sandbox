@@ -846,12 +846,30 @@ else:
             for idx, event in enumerate(role_data["memory_events"]):
                 memory_ledger_prompt += f"{idx+1}. {event}\n"
         
+        # 👑 动态身心注入引擎：正向引导动力学版
+        current_live_status = role_data.get('character_status', '')
+        summarized_list = role_data.get("summarized_history", [])
+        
+        if summarized_list:
+            last_summary_text = summarized_list[-1]
+            status_lines = last_summary_text.split("\n")
+            live_shengli = status_lines[1] if len(status_lines) > 1 else ""
+            live_xinli = status_lines[2] if len(status_lines) > 2 else ""
+            
+            if live_shengli or live_xinli:
+                # 💡 用纯正向的“戏剧位移与本能叠加”逻辑，引导大模型顺理成章地向下突破
+                current_live_status = (
+                    f"【⏳ 这一轮剧情发生前的少妇身心累积底色】：\n{live_shengli}\n{live_xinli}\n"
+                    f"🎬【剧情连贯性进化指引】：上述指标记录了该少妇在这一回合交锋开始前的肉体敏感度与心防刻度。请将其视为本次推演的初始火种。随着玩家当前最新一轮言行与肢体试探的侵入，你（AI角色）的身体本能与复杂心境将顺理成章地顺着这个既定的斜坡，自发产生更深、更细腻、更具突破性的感官堆叠与剧情位移，让两人的博弈关系在当下的张力中自然绽放至全新的深度。"
+                )
+
         dynamic_system_prompt += (
             f"【当前扮演的AI角色名字】：{target_girl}\n"
+            f" ==========================================\n"
             f"【该角色的基本人设设定 (System Role)】：\n{role_data.get('system_role', '')}\n\n"
             f"{memory_ledger_prompt}\n"
             f"【当前演出的背景剧情设定】：\n{role_data.get('background_story', '')}\n\n"
-            f"【你当前需要感知到的角色状态】：\n{role_data.get('character_status', '')}"
+            f"【你当前需要继承并在此基础上向前推进的实时少妇身心基础】：\n{current_live_status}"
         )
 
         cleaned_api_payload = [{"role": "system", "content": dynamic_system_prompt}]
