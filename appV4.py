@@ -37,41 +37,22 @@ if "app_password" in st.secrets:
 # ✨ 核心原汁原味：完美锁定“标点+括号”复合句尾的分段处理器
 # ==========================================
 def novel_text_formatter(raw_text: str) -> str:
+    """
+    ✨ 原汁原味自然排版引擎：彻底废除强行切段，完全还原大模型自身吐出来的段落错落感，
+    只做最基础的错位空行净化，把小说的呼吸感和长短句交错完全还给AI。
+    """
     if not raw_text:
         return raw_text
-    raw_text = re.sub(r'\s*\n\s*', '', raw_text)
-    blocks = re.split(r'(1️⃣|2️⃣|3️⃣)', raw_text)
-    processed_blocks = []
+        
+    # 1. 把文本按AI自己吐出来的换行符切开，净化每行前后的死空格
+    lines = [line.strip() for line in raw_text.split("\n")]
     
-    for block in blocks:
-        if block in ['1️⃣', '2️⃣', '3️⃣']:
-            processed_blocks.append(f"\n\n{block}\n\n")
-            continue
-            
-        split_patterns = r'([。！?？]）|[。！?？]\)|\）。|）"|）”|）。|\)。|\)"|\)”|”。|。”|！”|！”|？”|？”|”！|。|！|\?|？|）|\)|\*\*\）\*\*|\*\*\)\*\*)'
-        sub_parts = re.split(split_patterns, block)
-        
-        reconstructed_chunk = []
-        current_sentence = ""
-        
-        for part in sub_parts:
-            if not part:
-                continue
-            if re.match(split_patterns, part):
-                current_sentence += part
-                if current_sentence.strip():
-                    reconstructed_chunk.append(current_sentence.strip())
-                current_sentence = ""
-            else:
-                current_sentence += part
-                
-        if current_sentence.strip():
-            reconstructed_chunk.append(current_sentence.strip())
-            
-        processed_blocks.append("\n\n".join(reconstructed_chunk))
-        
-    final_output = "".join(processed_blocks).strip()
-    final_output = re.sub(r'\n{3,}', '\n\n', final_output)
+    # 2. 重新用标准的换行拼起来，如果AI自己留了空行，这里也会完美还原
+    reconstructed = "\n".join(lines)
+    
+    # 3. 兜底清洗：防止前端因为连续多敲了3个以上的换行导致排版过稀
+    final_output = re.sub(r'\n{3,}', '\n\n', reconstructed).strip()
+    
     return final_output
 
 # ==========================================
