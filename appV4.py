@@ -326,6 +326,10 @@ def clear_current_chat_only():
         if r_name in st.session_state.all_sessions_db["roles"]:
             st.session_state.all_sessions_db["roles"][r_name]["chat_history"] = []
             st.session_state.all_sessions_db["roles"][r_name]["summarized_history"] = []
+            
+            # 🌟 关键修复：单聊清空时，将该角色的生理档案强制物理归零
+            st.session_state.all_sessions_db["roles"][r_name]["character_status"] = f"[{r_name}]\n阴道：干燥紧闭。\n乳头：平软未勃起。\n大腿内侧：皮肤处于常温状态。"
+            
     elif curr_sk.startswith("💬 群聊："):
         g_name = curr_sk.replace("💬 群聊：", "")
         for agent in st.session_state.group_members_list:
@@ -334,6 +338,10 @@ def clear_current_chat_only():
                 msg for msg in agent_history if msg.get("from_group") != g_name and g_name not in msg.get("content", "")
             ]
             st.session_state.all_sessions_db["roles"][agent]["summarized_history"] = []
+            
+            # 🌟 关键修复：群聊清空时，将所有本群参与角色的生理档案一并初始化
+            st.session_state.all_sessions_db["roles"][agent]["character_status"] = f"[{agent}]\n阴道：干燥紧闭。\n乳头：平软未勃起。\n大腿内侧：皮肤处于常温状态。"
+            
     st.session_state.clear_version += 1
     save_local_data()
 
