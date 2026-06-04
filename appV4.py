@@ -931,7 +931,7 @@ else:
 
         cleaned_api_payload = [{"role": "system", "content": dynamic_system_prompt}]
 
-        historical_summaries = role_data.get("summarized_history", [])[-100:]
+        historical_summaries = role_data.get("summarized_history", [])[-200:]
 
         if historical_summaries:
             formatted_lines = []
