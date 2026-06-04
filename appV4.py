@@ -486,45 +486,8 @@ lazy_insurance_prompt = {
     )
 }
 
-# 🚨 危险清理区
-st.sidebar.write("---")
-st.sidebar.header("🚨 危险清理区")
-if is_group_chat:
-    if st.sidebar.button("🗑️ 彻底解散并永久删除当前群聊房间", type="primary", use_container_width=True):
-        g_target = curr_sk.replace("💬 群聊：", "")
-        st.session_state.all_sessions_db["group_rooms"].pop(g_target, None)
-        for agent in available_roles_list:
-            st.session_state.all_sessions_db["roles"][agent]["chat_history"] = [
-                msg for msg in st.session_state.all_sessions_db["roles"][agent]["chat_history"] if msg.get("from_group") != g_target and g_target not in msg.get("content", "")
-            ]
-        st.session_state.current_session_key = "👤 单聊：" + available_roles_list[0]
-        st.session_state.group_active_agent = ""
-        st.session_state.group_active_queue = []
-        save_local_data()
-        st.toast(f"🔥 群聊【{g_target}】已被解散且相关记忆已抹除！")
-        st.rerun()
-else:
-    if st.sidebar.button("🧹 只清空当前角色聊天历史", type="secondary", use_container_width=True):
-        clear_current_chat_only()
-        st.rerun()
-
-    if st.sidebar.button("💥 毁灭删除（永久抹除当前单人角色）", type="primary", use_container_width=True):
-        role_to_delete = curr_sk.replace("👤 单聊：", "")
-        if role_to_delete in st.session_state.all_sessions_db["roles"]:
-            st.session_state.all_sessions_db["roles"].pop(role_to_delete, None)
-            remaining_roles = list(st.session_state.all_sessions_db["roles"].keys())
-            if remaining_roles:
-                st.session_state.current_session_key = f"👤 单聊：{remaining_roles[0]}"
-            else:
-                st.session_state.all_sessions_db = get_default_data()
-                st.session_state.current_session_key = st.session_state.all_sessions_db["current_session_key"]
-                    
-            save_local_data()
-            st.toast(f"🔥 AI 角色【{role_to_delete}】已被彻底永久删除！")
-            st.rerun()
-
 # ==========================================
-# 3. 主界面渲染与历史切片折叠机制
+# 3. 消息删除/重发联动控制引擎
 # ==========================================
 def render_message_controls_by_id(msg_id, is_last_msg, agent_name_fallback=""):
     c1, c2, _ = st.columns([0.1, 0.1, 0.8])
@@ -601,7 +564,7 @@ if history_len > DISPLAY_LIMIT:
                 prefix = f"💬 **【{p_name}】**：\n\n" if p_name else ""
                 st.markdown(prefix + message["content"])
                 
-                # 💎 【视觉挂件注入 · 折叠区】：如果是AI少妇的回复，在正文下方横向铺开纪实舱
+                # 💎 【视觉挂件注入 · 折叠区】：如果是AI女性角色的回复，在正文下方横向铺开纪实舱
                 if message["role"] == "assistant" and not is_group_chat:
                     summarized_list = role_data.get("summarized_history", [])
                     summary_idx = i // 2
@@ -695,6 +658,19 @@ else:
                     """, unsafe_allow_html=True)
                     
         render_message_controls_by_id(message["msg_id"], is_last_msg=is_last, agent_name_fallback=message.get("agent_name", ""))
+
+# ==========================================
+# 4. 自动推演激活区
+# ==========================================
+st.write("---")
+col_action1, _ = st.columns([0.2, 0.8])
+with col_action1:
+    if st.button("🎬 继续（AI自动推演剧情）", use_container_width=True):
+        st.session_state.continue_trigger = True
+        st.rerun()
+
+# ✨ 核心安全拦截挂锁：聊天输入框提至分流中枢顶端，严防内存符号未定义穿透！
+user_input = st.chat_input("在此处输入聊天内容...", key=f"chat_input_v_{st.session_state.clear_version}")
 
 # ==========================================
 # 5. 会话调用执行中枢
@@ -949,13 +925,10 @@ else:
                 })
                 
                 # ==========================================
-                # 🚀 方案A：旁白纪实官无感压缩
-                # ==========================================
-                # ==========================================
                 # 🚀 方案A：旁白纪实官无感压缩（完美传入历史，注入因果滚动）
                 # ==========================================
                 with st.spinner("⚡ 剧场纪实官正在提炼当前幕落事实..."):
-                    # ✨ 核心对齐：传入第四个参数 role_data.get("summarized_history", [])，让大模型吃着前因算后果
+                    # ✨ 核心传参修正：传入当前大纲史 role_data.get("summarized_history", [])，实现完美环环相扣
                     new_turn_summary = generate_single_turn_summary(
                         client, active_user_text, formatted_response, role_data.get("summarized_history", [])
                     )
