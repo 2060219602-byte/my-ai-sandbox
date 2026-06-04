@@ -846,13 +846,11 @@ if is_group_chat:
         api_payload.append(lazy_insurance_prompt)
 
         with st.chat_message("assistant", avatar="💋"):
-            st.write(f"💬 **【{curr_agent}】 被点名，正在组织群内对峙修罗场...**")
             response_placeholder = st.empty()
             full_response = ""
-
             try:
                 response = client.chat.completions.create(
-                    model=model_name, messages=api_payload, stream=True, temperature=1.0, max_tokens=3000,
+                    model=model_name, messages=cleaned_api_payload, stream=True, temperature=1.0, max_tokens=3000,
                     presence_penalty=0.2, frequency_penalty=0.1, timeout=15.0
                 )
                 for chunk in response:
@@ -860,7 +858,8 @@ if is_group_chat:
                         full_response += chunk.choices[0].delta.content
                         formatted_response = novel_text_formatter(full_response)
                         with response_placeholder.container():
-                            display_novel_with_bold_status(formatted_response, agent_db.get("character_status", ""))
+                            # 🌟 注意：这里流式阶段传入空字符串 ""，防止旧状态露脸
+                            display_novel_with_bold_status(formatted_response, "")
 
                 formatted_response = novel_text_formatter(full_response)
                 reply_id = f"reply_{int(time.time() * 1000)}_{random.randint(1000, 9999)}"
@@ -881,23 +880,29 @@ if is_group_chat:
                 t_status.start()
 
                 # 亮起独立同步转圈，强行阻塞直到数据百分之百落锁
-                with st.spinner(f"🔮 正在演算 【{curr_agent}】 的敏感部位物理演变..."):
+                with st.spinner(f"🔮 正在演变 【{curr_agent}】 的敏感部位物理演变..."):
                     t_status.join()
                     agent_db["character_status"] = res_status["data"]
 
+                # ====================================================
+                # ✨ 就是加在这里：新状态算完、落锁后，在页面重载前，最后强制渲染一次
+                # ====================================================
+                with response_placeholder.container():
+                    display_novel_with_bold_status(formatted_response, agent_db["character_status"])
+
+                # ====================================================
+                # 随后将发言及最终演变后的状态同步进群历史
+                # ====================================================
                 for inner_agent in st.session_state.group_members_list:
                     st.session_state.all_sessions_db["roles"][inner_agent]["chat_history"].append({
                         "role": "assistant",
-                        "content": f"（【{curr_agent}】在群聊【{g_name}】现场当众说道）：\n{formatted_response}",
+                        "content": formatted_response,
                         "agent_name": curr_agent,
                         "from_group": g_name,
                         "msg_id": reply_id,
                         "timestamp": reply_timestamp
                     })
-
-                st.session_state.group_active_queue.pop(0)
-                st.session_state.group_active_agent = st.session_state.group_active_queue[
-                    0] if st.session_state.group_active_queue else ""
+                    
                 save_local_data()
                 st.rerun()
             except Exception as e:
@@ -1017,7 +1022,7 @@ else:
                         full_response += chunk.choices[0].delta.content
                         formatted_response = novel_text_formatter(full_response)
                         with response_placeholder.container():
-                            display_novel_with_bold_status(formatted_response, role_data.get("character_status", ""))
+                            display_novel_with_bold_status(formatted_response, "")
 
                 formatted_response = novel_text_formatter(full_response)
 
