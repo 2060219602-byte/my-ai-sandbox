@@ -1085,6 +1085,12 @@ else:
                         role_data["summarized_history"] = []
                     role_data["summarized_history"].append(res_summary["data"])
 
+                # ====================================================
+                # ✨ 就是这里！漏掉了这三行：双转圈结束后，落锁前强行把新状态渲染出来
+                # ====================================================
+                with response_placeholder.container():
+                    display_novel_with_bold_status(formatted_response, role_data["character_status"])
+
                 # 所有核心依赖数据计算完毕后，安全锁入对话记录，推进时间轮盘
                 single_reply_id = f"reply_{int(time.time() * 1000)}_{random.randint(1000, 9999)}"
                 role_data["chat_history"].append({
