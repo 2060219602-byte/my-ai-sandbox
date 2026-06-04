@@ -839,7 +839,7 @@ if is_group_chat:
                         
                         chase_response = client.chat.completions.create(
                             model=model_name, messages=group_chase_payload, stream=False,
-                            temperature=0.5, max_tokens=600, timeout=40.0
+                            temperature=0.5, max_tokens=800, timeout=40.0
                         )
                         raw_status_response = chase_response.choices[0].message.content.strip()
                     except Exception as e:
