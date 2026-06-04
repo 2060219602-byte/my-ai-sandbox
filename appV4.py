@@ -263,12 +263,21 @@ JSON 输出格式规范：
         res_content = re.sub(r'```json\s*|```', '', res_content).strip()
         return json.loads(res_content)
     except Exception as e:
-        # 🔗 即使真的发生不可抗力断连，我们也让状态顺着肉戏递进演化，而不是呆板复读
-        print(f"📡 状态机进入语义平滑推进区: {e}")
+        # 🌟 调试必杀技：在 Streamlit 终端或界面暗中打印出真正的拒绝原因
+        import traceback
+        print(f"❌ 状态演化彻底折断原因一览: {e}")
+        try:
+            print(f"⚠️ AI 实际吐出的拒绝/破坏性文本为: {res_content}")
+        except:
+            pass
+            
+        v_match = re.search(r'阴道：(.*)', old_status)
+        n_match = re.search(r'乳头：(.*)', old_status)
+        t_match = re.search(r'大腿内侧：(.*)', old_status)
         return {
-            "vagina": "承接前一轮的敏感基数，在刚发生的剧烈交锋下内壁进一步紧缩充血，爱液随着本能的紧绷而持续加剧渗出拉丝。",
-            "nipple": "保持着挺立状态，由于受到剧情持续升温的刺激，顶端敏感度彻底爆表，在布料摩擦下阵阵发酥发硬。",
-            "thigh": "体温在连贯的物理触碰下持续潮红滚烫，娇嫩的肌肉因克制内心的防线坍塌而不可抑制地产生细微痉挛与颤抖。"
+            "vagina": v_match.group(1).strip() if v_match else "内壁高度充血，爱液持续不断地沁出润湿。",
+            "nipple": n_match.group(1).strip() if n_match else "挺立硬朗，在空气中敏感地微微发颤。",
+            "thigh": t_match.group(1).strip() if t_match else "体温滚烫，娇嫩的肌肉有些许克制性的颤抖。"
         }
 
 # ==========================================
