@@ -210,10 +210,13 @@ def generate_single_turn_summary(client, user_text, assistant_text):
 # ==========================================
 # 🔮 后台无感生理状态理性递进计算器
 # ==========================================
+# ==========================================
+# 🔮 后台无感生理状态理性递进计算器
+# ==========================================
 def generate_json_character_status(client, model_name, target_girl, current_story, old_status):
     """
     根据最新的小说剧情和旧的状态，绝对以上一轮敏感部位状态为刚性基准进行演变，100% 稳定输出标准 JSON。
-    【🔥 2026 状态凝滞修复版：彻底激活情欲起伏敏锐度，严禁连续两轮死板复读】
+    【🔥 2026 结构修复完全版：彻底解决缩进与括号冲突报错】
     """
     status_extractor_prompt = f"""
 【⚙️ SYSTEM PROTOCOL — 生理状态刚性递进推演内核 v4.2】
@@ -225,17 +228,17 @@ def generate_json_character_status(client, model_name, target_girl, current_stor
 1. 连续性法则：最新的状态必须是从上一轮状态演变而来的。
 2. ⚡【外界刺激敏感度协议】：你必须极其敏锐地捕捉【新一轮剧情白描】中发生的一切肢体触碰、体位位移、呼吸频率或情感失控。哪怕本轮的动作很细微，你也绝对禁止连续两轮一字不差地复读上一轮的文案！
 3. ⚡【动态演变微雕】：根据本轮受到的刺激：
-   - 如果剧情正在推向高潮或持续纠缠，对应部位的充血度、爱液流量、激凸硬度或体温**必须进一步加剧、溢出、痉挛或滚烫**。
+   - 如果剧情正在推向高潮或持续纠缠，对应部位的充血度、爱液流量、激凸硬度或体温必须进一步加剧、溢出、痉挛或滚烫。
    - 如果剧情陷入短暂僵持、艺术留白，其生理数据也应展现出“因先前的蹂躏而持续阵阵发酥、余颤不止、敏感度被完全调动”的被动敏感情态，绝对不能毫无变化。
 4. 全感官白描硬核文字：请使用客观直露、显微镜式的感官文字填入对应的 JSON 字段，严禁使用隐晦比喻。
 
 【输入基准数据】：
 👤 当前目标女性：{target_girl}
 
-🔙【上一轮的初始状态（刚性基准，你必须在它的基础上做符合本轮剧情的递进修改）】：
+🔙【上一轮的初始状态】：
 {old_status}
 
-🎬【刚刚发生的新一轮剧情白描（本轮引入的外界物理/情绪刺激）】：
+🎬【刚刚发生的新一轮剧情白描】：
 {current_story}
 
 JSON 输出格式规范：
@@ -250,16 +253,22 @@ JSON 输出格式规范：
             model=model_name,
             messages=[{"role": "user", "content": status_extractor_prompt}],
             stream=False,
-            temperature=0.4, 
+            temperature=0.4,
             max_tokens=600,
             timeout=30.0
         )
         res_content = completion.choices[0].message.content.strip()
-        # ✨ 正确闭合引号的清洗逻辑，彻底修复报错
         res_content = re.sub(r'```json\s*|```', '', res_content).strip()
         return json.loads(res_content)
+    except Exception:
+        v_match = re.search(r'阴道：(.*)', old_status)
+        n_match = re.search(r'乳头：(.*)', old_status)
+        t_match = re.search(r'大腿内侧：(.*)', old_status)
+        return {
+            "vagina": v_match.group(1).strip() if v_match else "内壁高度充血，爱液持续不断地沁出润湿。",
+            "nipple": n_match.group(1).strip() if n_match else "挺立硬朗，在空气中敏感地微微发颤。",
+            "thigh": t_match.group(1).strip() if t_match else "体温滚烫，娇嫩的肌肉有些许克制性的颤抖。"
         }
-
 
 # ==========================================
 # 0. 核心辅助函数：多群聊+多单聊数据库读取与保存
