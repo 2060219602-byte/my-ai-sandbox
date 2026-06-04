@@ -931,7 +931,7 @@ else:
 
         cleaned_api_payload = [{"role": "system", "content": dynamic_system_prompt}]
 
-        historical_summaries = role_data.get("summarized_history", [])[-200:]
+        historical_summaries = role_data.get("summarized_history", [])[-100:]
 
         if historical_summaries:
             formatted_lines = []
@@ -997,7 +997,7 @@ else:
                 else:
                     # 自适应温和情欲中间态兜底更新
                     role_data[
-                        "character_status"] = f"[{target_girl}]\n阴道：内壁充血略带热意，在先前的触碰下已隐隐有些许爱液渗出润湿。\n乳头：在布料摩擦下已微微激凸变硬，顶端因先前的博弈而阵阵发酥。\n大腿内侧：体温明显骤升潮红，娇嫩的肌肉因克制内心的波动而有些许紧绷颤抖。"
+                        "character_status"] = f"[{target_girl}]\n阴道：之前的交互中爱液已经喷涌而出，顺着大腿内侧滑落，阴道变得瘙痒难耐。\n乳头：乳头已经充血硬挺，顶端因先前的博弈而阵阵发酥。\n大腿内侧：体温明显骤升潮红，娇嫩的肌肉因克制内心的波动而有些许紧绷颤抖，爱液顺着大腿滑落。"
 
                 single_reply_id = f"reply_{int(time.time() * 1000)}_{random.randint(1000, 9999)}"
                 role_data["chat_history"].append({
