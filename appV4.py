@@ -141,7 +141,6 @@ def display_novel_with_bold_status(text: str):
     """
     在前端渲染时，拦截并用高级 HTML 框对文末特定的四个生理部位列表进行精美加粗排版。
     """
-    # 动态匹配中括号角色名开始，一直到最后包含特定四个部位的数据块
     status_pattern = r'(\[.*?\])\s*\n\s*(?:生理状态：\s*\n*)?[\s\S]*阴蒂：([\s\S]*?)阴道：([\s\S]*?)乳头：([\s\S]*?)大腿内侧：([\s\S]*?)$'
     match = re.search(status_pattern, text)
     
@@ -233,7 +232,7 @@ def get_default_data():
                 "summarized_history": [],
                 "system_role": "你是一个性格有些冒失、但天赋异禀的高级魔法学院见习女巫，说话喜欢带上古怪的咒语口头禅。",
                 "background_story": "时间：魔法历512年。\n地点：皇家学院深夜被禁闭的藏书馆密室。\n氛围：摇曳的烛光，空气中漂浮着古老羊皮纸的尘埃，中央摆放着一本散发暗芒的禁忌魔法书。",
-                "character_status": "[魔法学徒-露娜]\n阴蒂：平静无勃起，被法袍紧紧遮盖。\n阴道：处于少女原始的温热干燥状态。\n乳头：因魔法透支和惊恐而敏感突起，顶着微薄的内衬。\n大腿内侧：在裙摆间局促地紧并贴合，因紧张而轻微出汗。",
+                "character_status": "[魔法学徒-露娜]\n阴蒂：平静无变化。\n阴道：干燥紧闭。\n乳头：平软未勃起。\n大腿内侧：皮肤处于常温状态。",
                 "favorability": 20,
                 "memory_events": ["露娜不小心把导师的胡子用火球术烧掉了。", "玩家是唯一知道露娜私下研究禁忌魔法的人。"]
             }
@@ -512,6 +511,47 @@ with st.sidebar.form(key="add_new_role_form"):
             }
             st.session_state.current_session_key = f"👤 单聊：{clean_name}"
             save_local_data()
+            st.rerun()
+
+# 🚨 危险清理区（完美补救找回 ＆ 支持群聊/单聊独立深度清理）
+st.sidebar.write("---")
+st.sidebar.header("🚨 危险清理区")
+if is_group_chat:
+    if st.sidebar.button("🗑️ 彻底解散并永久删除当前群聊房间", type="primary", use_container_width=True):
+        g_target = curr_sk.replace("💬 群聊：", "")
+        st.session_state.all_sessions_db["group_rooms"].pop(g_target, None)
+        for agent in available_roles_list:
+            st.session_state.all_sessions_db["roles"][agent]["chat_history"] = [
+                msg for msg in st.session_state.all_sessions_db["roles"][agent]["chat_history"] if
+                msg.get("from_group") != g_target and g_target not in msg.get("content", "")
+            ]
+        st.session_state.current_session_key = "👤 单聊：" + available_roles_list[0]
+        st.session_state.group_active_agent = ""
+        st.session_state.group_active_queue = []
+        save_local_data()
+        st.toast(f"🔥 群聊【{g_target}】已被解散且相关记忆已抹除！")
+        st.rerun()
+else:
+    # ✨ 补回：只清空单聊历史
+    if st.sidebar.button("🧹 只清空当前角色聊天历史", type="secondary", use_container_width=True):
+        clear_current_chat_only()
+        st.toast("🧹 当前角色的所有聊天记录及事实大纲已被完全抹清！")
+        st.rerun()
+
+    # ✨ 补回：永久删除当前角色
+    if st.sidebar.button("💥 毁灭删除（永久抹除当前单人角色）", type="primary", use_container_width=True):
+        role_to_delete = curr_sk.replace("👤 单聊：", "")
+        if role_to_delete in st.session_state.all_sessions_db["roles"]:
+            st.session_state.all_sessions_db["roles"].pop(role_to_delete, None)
+            remaining_roles = list(st.session_state.all_sessions_db["roles"].keys())
+            if remaining_roles:
+                st.session_state.current_session_key = f"👤 单聊：{remaining_roles[0]}"
+            else:
+                st.session_state.all_sessions_db = get_default_data()
+                st.session_state.current_session_key = st.session_state.all_sessions_db["current_session_key"]
+
+            save_local_data()
+            st.toast(f"🔥 AI 角色【{role_to_delete}】及其生理档案已被彻底永久删除！")
             st.rerun()
 
 st.sidebar.write("---")
@@ -807,7 +847,6 @@ if is_group_chat:
                 reply_id = f"reply_{int(time.time() * 1000)}_{random.randint(1000, 9999)}"
                 reply_timestamp = time.time()
 
-                # 代码硬插入：匹配更新多轨数据库初始参数
                 status_match = re.search(r'(\[.*?\]\s*\n\s*阴蒂：[\s\S]*)$', formatted_response)
                 if status_match:
                     agent_db["character_status"] = status_match.group(1).strip()
@@ -946,7 +985,6 @@ else:
 
                 formatted_response = novel_text_formatter(full_response)
 
-                # 🛠️ 代码硬插入：通过正则表达式正则抓取文末四个部位的演变纯文本，完美保存进数据库
                 status_match = re.search(r'(\[.*?\]\s*\n\s*阴蒂：[\s\S]*)$', formatted_response)
                 if status_match:
                     role_data["character_status"] = status_match.group(1).strip()
