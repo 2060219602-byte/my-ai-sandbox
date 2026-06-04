@@ -109,15 +109,15 @@ def generate_single_turn_summary(client, user_text, assistant_text, current_role
 
 {last_state}
 
-【核心任务】：请将用户发出的最新动作，以及AI少妇做出的剧本响应，结合上方【上一轮的累积状态】，合并浓缩提炼为包含动作、生理、心理的【三行最新动态大纲】。
+【核心任务】：请将用户发出的最新动作，以及AI女性角色做出的剧本响应，结合上方【上一轮的累积状态】，合并浓缩提炼为包含动作、生理、心理的【三行最新动态大纲】。
 【🛑 极其严苛的“不跳变连续性”死命令】：
-为了保证女主角（如秦曼/林诗曼/苏晴）的情感与肉体防御崩溃具有绝对的因果连续性，你必须在上方【上一轮的累积状态】的基础上，根据最新一轮的对话细节，进行合理、细腻、不可逆的深度递进。绝对禁止发生生理或情感的断层跳变（例如：若上一轮某个敏感部位已经湿润/潮红，这一轮被继续触碰时必须精准累积敏感度；心理感想必须根据最新这一轮的攻防，产生更深层的防御塌陷、动摇、心跳加速、醋意或背德认命倾向）。
+为了保证女主角的情感与肉体防御崩溃具有绝对的因果连续性，你必须在上方【上一轮的累积状态】的基础上，根据最新一轮的对话细节，进行合理、细腻、不可逆的深度递进。绝对禁止发生生理或情感的断层跳变（例如：若上一轮某个敏感部位已经湿润/潮红，这一轮被继续触碰时必须精准累积敏感度；心理感想必须根据最新这一轮的攻防，产生更深层的防御塌陷、动摇、心跳加速、醋意或背德认命倾向）。
 
 【🛑 毫无歧义的戏剧格式】：
 你必须且只能严格按照以下三行格式输出，字数放宽但严禁任何废话、评述、解释或系统警告：
-🎬【剧情大纲】：【你】[简述玩家在这一轮做出的核心行动]。【虚拟角色】[简述出场少妇在这一轮做出的台词和动作反馈]。
-🌡️【生理状态】：[极其详尽细致地白描该少妇当前受到此轮持续刺激后，身体、呼吸、乃至衣服包裹下某些敏感部位最新的温度、潮红、紧绷、酥麻、颤抖或渗水湿润状态]。
-🧠【心理感想】：[以该少妇的主观视角，冷酷解剖她经历这一轮最新攻防后，内心对‘你（宿管）’最新的真实感想、背德耻辱感、醋意波动、或是防线逐步失守的心路长线变化轨迹]。
+🎬【剧情大纲】：【你】[简述玩家在这一轮做出的核心行动]。【虚拟角色】[简述出场女性角色在这一轮做出的台词和动作反馈]。
+🌡️【生理状态】：[极其详尽细致地白描该女性角色当前受到此轮持续刺激后，身体、呼吸、乃至衣服包裹下某些敏感部位最新的温度、潮红、紧绷、酥麻、颤抖或渗水湿润状态]。
+🧠【心理感想】：[以该女性角色的主观视角，冷酷解剖她经历这一轮最新攻防后，内心对‘你’最新的真实感想、背德耻辱感、醋意波动、或是防线逐步失守的心路长线变化轨迹]。
 """
     
     clean_assistant = assistant_text.replace("1️⃣", "").replace("2️⃣", "").replace("3️⃣", "").strip()
@@ -597,6 +597,29 @@ if history_len > DISPLAY_LIMIT:
                 p_name = message.get("agent_name", "")
                 prefix = f"💬 **【{p_name}】**：\n\n" if p_name else ""
                 st.markdown(prefix + message["content"])
+                
+                # 💎 【视觉挂件注入 · 折叠区】：如果是AI少妇的回复，在正文下方横向铺开纪实舱
+                if message["role"] == "assistant" and not is_group_chat:
+                    summarized_list = role_data.get("summarized_history", [])
+                    summary_idx = i // 2
+                    if summary_idx < len(summarized_list):
+                        current_summary = summarized_list[summary_idx]
+                        lines = current_summary.split("\n")
+                        dagang = lines[0] if len(lines) > 0 else ""
+                        shengli = lines[1] if len(lines) > 1 else ""
+                        xinli = lines[2] if len(lines) > 2 else ""
+                        
+                        st.markdown(f"""
+                        <div style='background: rgba(245, 242, 235, 0.7); border-left: 3px solid #d4af37; 
+                                    padding: 14px 18px; margin: 15px 0 5px 0; border-radius: 4px;
+                                    font-size: 16px !important; font-family: "KaiTi", "楷体", serif !important; line-height: 1.6 !important;'>
+                            <div style='color: #8c7853; font-weight: bold; margin-bottom: 6px; font-size: 14px !important; font-family: sans-serif !important; letter-spacing: 1px;'>🔍 NARRATOR SYSTEM // 全知纪实舱</div>
+                            <div style='margin-bottom: 5px; color: #555555 !important;'>{dagang}</div>
+                            <div style='margin-bottom: 5px; color: #b84a39 !important; font-weight: bold;'>{shengli}</div>
+                            <div style='color: #2e6b5e !important; font-weight: bold;'>{xinli}</div>
+                        </div>
+                        """, unsafe_allow_html=True)
+                        
             render_message_controls_by_id(message["msg_id"], is_last_msg=False)
             
     for i, message in enumerate(recent_history):
@@ -610,6 +633,64 @@ if history_len > DISPLAY_LIMIT:
             p_name = message.get("agent_name", "")
             prefix = f"💬 **【{p_name}】**：\n\n" if p_name else ""
             st.markdown(prefix + message["content"])
+            
+            # 💎 【视觉挂件注入 · 鲜活区】：在最新的几轮对话下方实时拉出内分泌与好感仪表盘
+            if message["role"] == "assistant" and not is_group_chat:
+                summarized_list = role_data.get("summarized_history", [])
+                summary_idx = actual_idx // 2
+                if summary_idx < len(summarized_list):
+                    current_summary = summarized_list[summary_idx]
+                    lines = current_summary.split("\n")
+                    dagang = lines[0] if len(lines) > 0 else ""
+                    shengli = lines[1] if len(lines) > 1 else ""
+                    xinli = lines[2] if len(lines) > 2 else ""
+                    
+                    st.markdown(f"""
+                    <div style='background: rgba(245, 242, 235, 0.7); border-left: 3px solid #d4af37; 
+                                padding: 14px 18px; margin: 15px 0 5px 0; border-radius: 4px;
+                                font-size: 16px !important; font-family: "KaiTi", "楷体", serif !important; line-height: 1.6 !important;'>
+                        <div style='color: #8c7853; font-weight: bold; margin-bottom: 6px; font-size: 14px !important; font-family: sans-serif !important; letter-spacing: 1px;'>🔍 NARRATOR SYSTEM // 全知纪实舱</div>
+                        <div style='margin-bottom: 5px; color: #555555 !important;'>{dagang}</div>
+                        <div style='margin-bottom: 5px; color: #b84a39 !important; font-weight: bold;'>{shengli}</div>
+                        <div style='color: #2e6b5e !important; font-weight: bold;'>{xinli}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+        render_message_controls_by_id(message["msg_id"], is_last_msg=is_last, agent_name_fallback=message.get("agent_name", ""))
+else:
+    for i, message in enumerate(chat_history_view):
+        if "msg_id" not in message:
+            message["msg_id"] = f"backfill_{i}_{hash(message['content'])}"
+            
+        is_last = (i == history_len - 1) and (message["role"] == "assistant")
+        avatar_icon = "💋" if message["role"] == "assistant" else "😎"
+        with st.chat_message(message["role"], avatar=avatar_icon):
+            p_name = message.get("agent_name", "")
+            prefix = f"💬 **【{p_name}】**：\n\n" if p_name else ""
+            st.markdown(prefix + message["content"])
+            
+            # 💎 【视觉挂件注入 · 极简区】：在未折叠状态下的全闭环渲染
+            if message["role"] == "assistant" and not is_group_chat:
+                summarized_list = role_data.get("summarized_history", [])
+                summary_idx = i // 2
+                if summary_idx < len(summarized_list):
+                    current_summary = summarized_list[summary_idx]
+                    lines = current_summary.split("\n")
+                    dagang = lines[0] if len(lines) > 0 else ""
+                    shengli = lines[1] if len(lines) > 1 else ""
+                    xinli = lines[2] if len(lines) > 2 else ""
+                    
+                    st.markdown(f"""
+                    <div style='background: rgba(245, 242, 235, 0.7); border-left: 3px solid #d4af37; 
+                                padding: 14px 18px; margin: 15px 0 5px 0; border-radius: 4px;
+                                font-size: 16px !important; font-family: "KaiTi", "楷体", serif !important; line-height: 1.6 !important;'>
+                        <div style='color: #8c7853; font-weight: bold; margin-bottom: 6px; font-size: 14px !important; font-family: sans-serif !important; letter-spacing: 1px;'>🔍 NARRATOR SYSTEM // 全知纪实舱</div>
+                        <div style='margin-bottom: 5px; color: #555555 !important;'>{dagang}</div>
+                        <div style='margin-bottom: 5px; color: #b84a39 !important; font-weight: bold;'>{shengli}</div>
+                        <div style='color: #2e6b5e !important; font-weight: bold;'>{xinli}</div>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
         render_message_controls_by_id(message["msg_id"], is_last_msg=is_last, agent_name_fallback=message.get("agent_name", ""))
 else:
     for i, message in enumerate(chat_history_view):
@@ -891,8 +972,14 @@ else:
                 # ==========================================
                 # 🚀 方案A：旁白纪实官无感压缩
                 # ==========================================
+                # ==========================================
+                # 🚀 方案A：旁白纪实官无感压缩（完美传入历史，注入因果滚动）
+                # ==========================================
                 with st.spinner("⚡ 剧场纪实官正在提炼当前幕落事实..."):
-                    new_turn_summary = generate_single_turn_summary(client, active_user_text, formatted_response)
+                    # ✨ 核心对齐：传入第四个参数 role_data.get("summarized_history", [])，让大模型吃着前因算后果
+                    new_turn_summary = generate_single_turn_summary(
+                        client, active_user_text, formatted_response, role_data.get("summarized_history", [])
+                    )
                     if "summarized_history" not in role_data:
                         role_data["summarized_history"] = []
                     role_data["summarized_history"].append(new_turn_summary)
