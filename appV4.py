@@ -430,36 +430,17 @@ if not is_group_chat:
         st.subheader("⚙️ 剧本设定与好感度管理")
         st.caption("提示：修改完下方设定后，请点击保存按钮统一应用。")
 
-        fav_val = st.slider(f"对我的好感度", -100, 100, value=role_data.get("favorability", 0))
         bg_val = st.text_area("当前背景剧情", value=role_data.get("background_story", ""), height=100)
         status_val = st.text_area("角色的当前状态", value=role_data.get("character_status", ""), height=120)
         sys_val = st.text_area("基本人设设定 (System Role)", value=role_data.get("system_role", ""), height=120)
 
         if st.form_submit_button("💾 统一保存并应用当前设定", use_container_width=True):
-            role_data["favorability"] = fav_val
             role_data["background_story"] = bg_val
             role_data["character_status"] = status_val
             role_data["system_role"] = sys_val
             save_local_data()
             st.toast("⚙️ 剧本环境参数覆写成功！")
             st.rerun()
-
-    st.sidebar.write("---")
-    st.sidebar.subheader("📜 逐轮对等事实编年史大纲")
-    if role_data.get("summarized_history"):
-        if st.sidebar.button("🗑️ 抹除并回退最新的一轮概述", type="secondary", use_container_width=True):
-            role_data["summarized_history"].pop(-1)
-            save_local_data()
-            st.toast("🔥 最新一轮的概述已被抹除！历史痕迹已成功回退。")
-            st.rerun()
-
-        st.sidebar.write("")
-        for d_idx, d_text in enumerate(reversed(role_data["summarized_history"])):
-            is_latest_label = " 🌟 最新" if d_idx == 0 else ""
-            with st.sidebar.expander(f"👁️ 历史第 {len(role_data['summarized_history']) - d_idx} 轮概述{is_latest_label}"):
-                st.caption(d_text)
-    else:
-        st.sidebar.caption("暂无对等概述，开始对话后后台将自动无感压缩...")
 
     st.sidebar.write("---")
     st.sidebar.subheader("📌 核心事件备忘录（永久记忆）")
@@ -818,7 +799,9 @@ if is_group_chat:
 
         identity_lock_patch = {
             "role": "user",
-            "content": f"⚡[视角与人称全盘覆写机制]:\n1. 请立刻代入全知小说家视角，对【{curr_agent}】的言行进行第三人称小说化演绎。\n2. 旁白、动作与心理一律直接使用名字【{curr_agent}】，严禁自称‘我’；称呼屏幕前的玩家一律使用【你】。\n3. 立刻输出接下来的三段式剧本及末尾状态数据块。"
+            "content": f"⚡ [舞台全知叙事共鸣协议]:\n"
+                       f"现在，请彻底融入舞台，以全知的小说家视角继续向后推进。当你在文字里摩挲或触碰屏幕前的‘你’时，请用最细腻、最直白的第二人称长句去突破对方的理智。所有的动作和旁白请直接称呼名字【{target_girl}】，让第三人称的冰冷名字与近在咫尺的‘你’在强烈的官能交融中形成极致的张力对峙。\n\n"
+                       f"当 1️⃣ 2️⃣ 3️⃣ 的高潮戏码在最终的提问或动作里利落地画上句点时，【{target_girl}】因为彻底沉溺于这场互动的余韵，身体的本能早已无法伪装——请立刻在剧本最末尾另起新行，将【{target_girl}】在当下这一轮里最真实的生理变化，如实、具象地刻录进最后的三个敏感部位数据块中。请立刻开始输出接下来的精彩剧本："
         }
 
         api_payload.extend(cleaned_context)
