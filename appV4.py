@@ -365,37 +365,18 @@ if not is_group_chat:
         st.subheader("⚙️ 剧本设定与好感度管理")
         st.caption("提示：修改完下方设定后，请点击保存按钮统一应用。")
         
-        fav_val = st.slider(f"对我的好感度", -100, 100, value=role_data.get("favorability", 0))
+        # ✨ 清爽完全体：彻底切除冰冷的数字好感度滑块，全面聚焦文字演化
         bg_val = st.text_area("当前背景剧情", value=role_data.get("background_story", ""), height=100)
         status_val = st.text_area("角色的当前状态", value=role_data.get("character_status", ""), height=100)
         sys_val = st.text_area("基本人设设定 (System Role)", value=role_data.get("system_role", ""), height=120)
         
         if st.form_submit_button("💾 统一保存并应用当前设定", use_container_width=True):
-            role_data["favorability"] = fav_val
             role_data["background_story"] = bg_val
             role_data["character_status"] = status_val
             role_data["system_role"] = sys_val
             save_local_data()
             st.toast("⚙️ 剧本环境参数覆写成功！")
             st.rerun()
-
-    # ✨ 侧边栏升级：优雅展示由方案A动态压缩生成的【旁白编年史大纲】
-    st.sidebar.write("---")
-    st.sidebar.subheader("📜 逐轮对等事实编年史大纲")
-    if role_data.get("summarized_history"):
-        if st.sidebar.button("🗑️ 抹除并回退最新的一轮概述", type="secondary", use_container_width=True):
-            role_data["summarized_history"].pop(-1)
-            save_local_data()
-            st.toast("🔥 最新一轮的概述已被抹除！历史痕迹已成功回退。")
-            st.rerun()
-            
-        st.sidebar.write("")
-        for d_idx, d_text in enumerate(reversed(role_data["summarized_history"])):
-            is_latest_label = " 🌟 最新" if d_idx == 0 else ""
-            with st.sidebar.expander(f"👁️ 历史第 {len(role_data['summarized_history']) - d_idx} 轮概述{is_latest_label}"):
-                st.caption(d_text)
-    else:
-        st.sidebar.caption("暂无对等概述，开始对话后后台将自动无感压缩...")
 
     # 📌 核心事件备忘录
     st.sidebar.write("---")
