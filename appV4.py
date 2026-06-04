@@ -848,7 +848,7 @@ if is_group_chat:
 
                 status_match = re.search(r'(\[.*?\]\s*\n\s*阴道：[\s\S]*)$', formatted_response)
                 if status_match:
-                    role_data["character_status"] = status_match.group(1).strip()
+                    agent_db["character_status"] = status_match.group(1).strip()
 
                 for inner_agent in st.session_state.group_members_list:
                     st.session_state.all_sessions_db["roles"][inner_agent]["chat_history"].append({
@@ -986,7 +986,7 @@ else:
 
                 status_match = re.search(r'(\[.*?\]\s*\n\s*阴道：[\s\S]*)$', formatted_response)
                 if status_match:
-                    agent_db["character_status"] = status_match.group(1).strip()
+                    role_data["character_status"] = status_match.group(1).strip()
 
                 single_reply_id = f"reply_{int(time.time() * 1000)}_{random.randint(1000, 9999)}"
                 role_data["chat_history"].append({
