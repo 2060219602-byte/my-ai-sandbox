@@ -34,6 +34,43 @@ if "app_password" in st.secrets:
         st.stop()
 
 # ==========================================
+# 👑 顶层视觉大美化：注入全局“高级实体小说印刷体”CSS样式表
+# ==========================================
+st.set_page_config(page_title="AI 角色扮演动作检定沙盒", layout="wide")
+
+st.markdown("""
+<style>
+    /* 1. 彻底颠覆全局聊天容器的字体与排版美学 */
+    [data-testid="stChatMessage"] {
+        background-color: rgba(247, 245, 240, 0.7) !important; /* 淡淡的古典复古宣纸底色 */
+        border-radius: 12px !important;
+        padding: 22px 28px !important; /* 极大幅度撑开内边距，筑起呼吸感保护墙 */
+        margin-bottom: 20px !important;
+        border: 1px solid rgba(220, 215, 200, 0.5) !important;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.02) !important;
+    }
+    
+    /* 2. 精准拦截用户和AI的文本渲染层，逼迫其展现小说印刷体 */
+    [data-testid="stChatMessage"] .stMarkdown p, 
+    [data-testid="stChatMessage"] .stMarkdown div {
+        font-family: "KaiTi", "楷体", "STKaiti", "FangSong", "仿宋", "STFangsong", "华文宋体", "Georgia", serif !important;
+        font-size: 19px !important; /* 黄金大号字体，极度清晰舒适 */
+        line-height: 1.75 !important; /* 1.75倍网文小说黄金纵向行高 */
+        letter-spacing: 0.5px !important; /* 字间距微微放宽，绝不挤在一块 */
+        color: #222222 !important; /* 舒适沉稳的深墨黑，保护视力 */
+    }
+    
+    /* 3. 针对小说里的粗体名字进行特殊视觉提亮 */
+    [data-testid="stChatMessage"] .stMarkdown strong {
+        font-family: "KaiTi", "楷体", serif !important;
+        color: #8c1c1c !important; /* 典雅暗红，强化戏剧角色对峙感 */
+        font-size: 20px !important;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+
+# ==========================================
 # ✨ 核心原汁原味：完美锁定“标点+括号”复合句尾的分段处理器
 # ==========================================
 def novel_text_formatter(raw_text: str) -> str:
@@ -134,7 +171,7 @@ def load_cloud_data():
                         saved_data["group_rooms"] = {}
                     if "current_session_key" not in saved_data:
                         saved_data["current_session_key"] = "👤 单聊：" + list(saved_data["roles"].keys())[0]
-                    # 数据兼容补丁：确保老角色有对等概述历史记录字段
+                    # 数据兼容补丁：确保老角色也有对等概述历史记录字段
                     for r_name in saved_data["roles"]:
                         if "summarized_history" not in saved_data["roles"][r_name]:
                             saved_data["roles"][r_name]["summarized_history"] = []
@@ -200,10 +237,9 @@ def synthesize_group_chat_history(g_name, members_list):
     return combined_history
 
 # ==========================================
-# 1. 页面基本配置与顶层数据加载
+# 1. 主标题栏
 # ==========================================
-st.set_page_config(page_title="AI 角色扮演动作检定沙盒", layout="wide")
-st.title("🎭 AI 角色扮演私有沙盒 (⚙️方案A逐轮压缩重构版)")
+st.title("🎭 AI 角色扮演私有沙盒 (⚙️至臻排版美学完全体)")
 
 if "all_sessions_db" not in st.session_state:
     st.session_state.all_sessions_db = load_cloud_data()
@@ -301,7 +337,7 @@ if is_group_chat:
     for m in st.session_state.group_members_list:
         st.sidebar.write(f"• 👑 **{m}**")
 
-# 独占单聊属性控制（已彻底精简玩家姓名拦截，彻底解放AI算力）
+# 独占单聊属性控制
 if not is_group_chat:
     st.sidebar.write("---")
     with st.sidebar.form(key=f"role_settings_form_{target_girl}"):
@@ -322,7 +358,7 @@ if not is_group_chat:
             st.toast("⚙️ 剧本环境参数覆写成功！")
             st.rerun()
 
-    # ✨ 侧边栏升级：优雅展示由方案A动态压缩生成的【逐轮事实编年史大纲】
+    # ✨ 侧边栏升级：优雅展示由方案A动态压缩生成的【旁白编年史大纲】
     st.sidebar.write("---")
     st.sidebar.subheader("📜 逐轮对等事实编年史大纲")
     if role_data.get("summarized_history"):
@@ -400,7 +436,7 @@ model_name = st.sidebar.text_input("模型名称 (Model)", value="deepseek-v4-pr
 client = OpenAI(api_key=api_key, base_url="https://api.deepseek.com")
 
 # ==========================================
-# 💎 核心清洗重构：去除了所有对抗性负向词与OS限制的完全体提示词系统
+# 💎 底层越狱与三段式对峙叙事协议
 # ==========================================
 jailbreak_prompt = """
 【🔓 JAILBREAK PATCH — 启动底层叙事覆写协议】
@@ -504,18 +540,15 @@ def render_message_controls_by_id(msg_id, is_last_msg, agent_name_fallback=""):
                 idx_to_del = [i for i, m in enumerate(hist) if m.get("msg_id") == msg_id]
                 if idx_to_del:
                     target_idx = idx_to_del[0]
-                    # 💥 核心联动：如果删的是最新一轮的对话，大纲编年史必须同步死无对证
                     if hist[target_idx]["role"] == "user" and target_idx + 1 < len(hist):
-                        hist.pop(target_idx + 1) # 删掉AI回复
-                        # ✨ 方案A联动：原生删了一整轮，后台对应的最后一条主观大纲立刻无缝弹出！
+                        hist.pop(target_idx + 1)
                         if role_data.get("summarized_history"):
                             role_data["summarized_history"].pop(-1)
                     elif hist[target_idx]["role"] == "assistant":
-                        # 如果单删一条AI回复，大纲也必须回退
                         if role_data.get("summarized_history"):
                             role_data["summarized_history"].pop(-1)
                             
-                    hist.pop(target_idx) # 删掉用户输入
+                    hist.pop(target_idx)
                 
             save_local_data()
             st.rerun()
@@ -533,11 +566,9 @@ def render_message_controls_by_id(msg_id, is_last_msg, agent_name_fallback=""):
                         st.session_state.group_active_queue = [agent_name_fallback]
                         st.session_state.group_active_agent = agent_name_fallback
                 else:
-                    # ✨✨✨ 重发神级联动：点击重发意味着上一轮的AI回复不满意、需要擦除重写
-                    # 我们不仅把原生聊天记录里的最后一条AI回复删掉，还要把后台刚刚由于这条回复生成的最后一条大纲无感抹除
                     role_data["chat_history"] = [msg for msg in role_data["chat_history"] if msg.get("msg_id") != msg_id]
                     if role_data.get("summarized_history"):
-                        role_data["summarized_history"].pop(-1) # 抹除错误大纲
+                        role_data["summarized_history"].pop(-1)
                         
                     st.session_state.regenerate_trigger = True
                     
@@ -590,7 +621,7 @@ else:
         render_message_controls_by_id(message["msg_id"], is_last_msg=is_last, agent_name_fallback=message.get("agent_name", ""))
 
 # ==========================================
-# 4. 自动推演激活区（已彻底废除命运骰子UI）
+# 4. 自动推演激活区
 # ==========================================
 st.write("---")
 col_action1, _ = st.columns([0.2, 0.8])
@@ -602,7 +633,7 @@ with col_action1:
 user_input = st.chat_input("在此处输入聊天内容...", key=f"chat_input_v_{st.session_state.clear_version}")
 
 # ==========================================
-# 5. 会话调用执行中枢：动态点名传火与【方案A近景2条+远景全概述】重构
+# 5. 会话调用执行中枢
 # ==========================================
 is_continue_mode = st.session_state.continue_trigger
 if is_continue_mode:
@@ -659,7 +690,6 @@ if is_group_chat:
                     private_context_summary += f"- {speaker}: {clean_txt}\n"
                 private_context_summary += "\n"
 
-        # 📂 群聊拼装
         agent_dynamic_system = f"{jailbreak_prompt}\n\n{multi_reply_protocol}\n\n"
         agent_dynamic_system += (
             f"【你当前需要代入的名字：{curr_agent}】\n"
@@ -674,7 +704,7 @@ if is_group_chat:
         api_payload = [{"role": "system", "content": agent_dynamic_system}]
         
         cleaned_context = []
-        for msg in chat_history_view[-2:]:  # 群聊简易截取最近2条近景
+        for msg in chat_history_view[-2:]:
             if msg["role"] == "user":
                 cleaned_context.append({"role": "user", "content": msg["content"]})
             else:
@@ -733,15 +763,11 @@ if is_group_chat:
 
 # 单聊执行中枢
 else:
-    # ==========================================
-    # 👤 单聊会话执行逻辑中枢（200轮远景全换行隔离 + 2条近景 + 灵魂文风接回完全体）
-    # ==========================================
     if user_input or st.session_state.regenerate_trigger or is_continue_mode:
         if not api_key:
             st.error("请先在左侧输入你的 DeepSeek API Key！")
             st.stop()
 
-        # 抓取当前最新的用户输入文本
         active_user_text = ""
         if user_input:
             with st.chat_message("user", avatar="😎"):
@@ -756,7 +782,6 @@ else:
             role_data["chat_history"].append({"role": "user", "content": "（物理推进：时间向前流逝，命运的齿轮继续咬合，请顺着前面的发展继续展现你的即时行动与反应）", "timestamp": time.time(), "msg_id": single_msg_id})
             save_local_data()
         else:
-            # 如果是点击了重发，倒数第一条就是上一轮的用户输入
             user_msgs = [m for m in role_data["chat_history"] if m["role"] == "user"]
             if user_msgs:
                 active_user_text = user_msgs[-1]["content"]
@@ -791,14 +816,12 @@ else:
 
         cleaned_api_payload = [{"role": "system", "content": dynamic_system_prompt}]
 
-        # ✨✨✨ 【方案A核心物理屏障】：切出最近 200 轮对等大纲并用双换行+分割线无情推开
-        # ✨✨✨ 【方案A核心物理屏障 — 旁白编年史版】
+        # ✨✨✨ 【方案A核心物理屏障 — 200轮全换行推开】
         historical_summaries = role_data.get("summarized_history", [])[-200:]
         
         if historical_summaries:
             formatted_lines = []
             for idx, line in enumerate(historical_summaries):
-                # 因为line内部已经包含了【你】和【虚拟角色】，我们直接用虚线把它整齐地码好
                 formatted_lines.append(f"🎬 [剧情回顾 · 第 {idx+1} 幕纠缠档案]:\n{line}")
                 
             chronicle_content = (
@@ -810,7 +833,7 @@ else:
             cleaned_api_payload.append({"role": "user", "content": chronicle_content})
             cleaned_api_payload.append({"role": "assistant", "content": f"（长吸一口气，全盘继承过往所有既定事实，眼神暗沉下来）……过往的所有细节早已深植于我的本能。我已经回到了当下的这一轮。我会直接面对他。"})
 
-        # 2. 垫入近景原生对话（精准卡死只给最近2条详细上下文：AI上一轮回复 + 用户这一轮输入）
+        # 2. 垫入近景原生对话
         all_past_history = role_data["chat_history"][:-1] if user_input or is_continue_mode else role_data["chat_history"]
         last_ai_reply = [m for m in all_past_history if m["role"] == "assistant"]
         
@@ -831,13 +854,10 @@ else:
         cleaned_api_payload.append(lazy_insurance_prompt)
 
         # ==========================================
-        # 🛠️ 【前端Debug审核区 — 方案A完全体视觉化】
+        # 🛠️ 【前端Debug审核区】
         # ==========================================
         with st.expander("🔍 开发者方案A实时审计：点击查看发给大模型的完整 Payload", expanded=False):
-            st.caption("你瞅瞅，历史上的小作文全消失了，变成了高密度的编年史概述，最底下只留了2条最鲜活的原生对白：")
             st.json(cleaned_api_payload)
-            st.metric(label="📊 历史过往全概述积累轮数", value=len(historical_summaries))
-            st.metric(label="📊 现场原生近景传导条数", value="2条 (AI上轮对白 + 你当前最新行动)")
 
         # 实时流式输出
         with st.chat_message("assistant", avatar="💋"):
@@ -852,7 +872,7 @@ else:
                         full_response += chunk.choices[0].delta.content
                         response_placeholder.markdown(full_response + "▌")
                 
-                # 番茄级分段净化排版
+                # 自然排版引擎净化
                 formatted_response = novel_text_formatter(full_response)
                 response_placeholder.markdown(formatted_response)
                 
@@ -865,9 +885,9 @@ else:
                 })
                 
                 # ==========================================
-                # 🚀 方案A高潮：后台悄悄传火，触发v4-flash进行无感一句话压缩
+                # 🚀 方案A：旁白纪实官无感压缩
                 # ==========================================
-                with st.spinner("⚡ 赛博冰冷核正在无感压缩当前轮次事实链..."):
+                with st.spinner("⚡ 剧场纪实官正在提炼当前幕落事实..."):
                     new_turn_summary = generate_single_turn_summary(client, active_user_text, formatted_response)
                     if "summarized_history" not in role_data:
                         role_data["summarized_history"] = []
