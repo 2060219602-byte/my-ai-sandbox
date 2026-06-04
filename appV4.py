@@ -825,9 +825,13 @@ if is_group_chat:
                 reply_id = f"reply_{int(time.time() * 1000)}_{random.randint(1000, 9999)}"
                 reply_timestamp = time.time()
 
+                # 🛠️ 代码硬插入：抓取演变纯文本，若 AI 偶尔遗漏，则自动以“情欲上升中间态”强行推进，打破逻辑死结
                 status_match = re.search(r'(\[.*?\]\s*\n\s*阴道：[\s\S]*)$', formatted_response)
                 if status_match:
-                    agent_db["character_status"] = status_match.group(1).strip()
+                    role_data["character_status"] = status_match.group(1).strip()
+                else:
+                    # 🌟 泛用型温和欲望垫片：既展现了明显的受激反应，又没有将尺度锁死，完美承上启下
+                    role_data["character_status"] = f"[{target_girl}]\n阴道：爱液喷涌，顺着阴道口流到大腿内侧。\n乳头：在布料摩擦下已微微激凸变硬，顶端因先前的博弈而阵阵发酥。\n大腿内侧：体温明显骤升潮红，娇嫩的肌肉因克制内心的波动而有些许紧绷颤抖。"
 
                 for inner_agent in st.session_state.group_members_list:
                     st.session_state.all_sessions_db["roles"][inner_agent]["chat_history"].append({
