@@ -504,9 +504,18 @@ def render_message_controls_by_id(msg_id, is_last_msg, agent_name_fallback=""):
                 idx_to_del = [i for i, m in enumerate(hist) if m.get("msg_id") == msg_id]
                 if idx_to_del:
                     target_idx = idx_to_del[0]
+                    # 💥 核心联动：如果删的是最新一轮的对话，大纲编年史必须同步死无对证
                     if hist[target_idx]["role"] == "user" and target_idx + 1 < len(hist):
-                        hist.pop(target_idx + 1)
-                    hist.pop(target_idx)
+                        hist.pop(target_idx + 1) # 删掉AI回复
+                        # ✨ 方案A联动：原生删了一整轮，后台对应的最后一条主观大纲立刻无缝弹出！
+                        if role_data.get("summarized_history"):
+                            role_data["summarized_history"].pop(-1)
+                    elif hist[target_idx]["role"] == "assistant":
+                        # 如果单删一条AI回复，大纲也必须回退
+                        if role_data.get("summarized_history"):
+                            role_data["summarized_history"].pop(-1)
+                            
+                    hist.pop(target_idx) # 删掉用户输入
                 
             save_local_data()
             st.rerun()
@@ -524,7 +533,12 @@ def render_message_controls_by_id(msg_id, is_last_msg, agent_name_fallback=""):
                         st.session_state.group_active_queue = [agent_name_fallback]
                         st.session_state.group_active_agent = agent_name_fallback
                 else:
+                    # ✨✨✨ 重发神级联动：点击重发意味着上一轮的AI回复不满意、需要擦除重写
+                    # 我们不仅把原生聊天记录里的最后一条AI回复删掉，还要把后台刚刚由于这条回复生成的最后一条大纲无感抹除
                     role_data["chat_history"] = [msg for msg in role_data["chat_history"] if msg.get("msg_id") != msg_id]
+                    if role_data.get("summarized_history"):
+                        role_data["summarized_history"].pop(-1) # 抹除错误大纲
+                        
                     st.session_state.regenerate_trigger = True
                     
                 save_local_data()
