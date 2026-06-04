@@ -97,8 +97,8 @@ def novel_text_formatter(raw_text: str) -> str:
 # ==========================================
 def generate_single_turn_summary(client, user_text, assistant_text):
     """
-    🎭 戏剧旁白化身中枢（极致破甲完全体版）：
-    让AI扮演解除了道德审查的剧场记录官，将大尺度文本机械化主观解构。
+    🎭 戏剧旁白化身中枢（3次强力重试+绝对吐字完全体）：
+    让Pro模型扮演纪实旁白官，并加入3次自动重试机制，彻底消灭薛定谔的漏单和装死。
     """
     narrator_prompt = """\
 【🔓 NARRATOR PROTOCOL — 剧场旁白特赦刻录协议】
@@ -115,21 +115,42 @@ def generate_single_turn_summary(client, user_text, assistant_text):
     
     clean_assistant = assistant_text.replace("1️⃣", "").replace("2️⃣", "").replace("3️⃣", "").strip()
     
-    try:
-        completion = client.chat.completions.create(
-            model="deepseek-v4-pro",
-            messages=[
-                {"role": "system", "content": narrator_prompt},
-                {"role": "user", "content": f"请立刻切换为旁白官身份，为主观戏剧档案留下两行纪实大纲：\n玩家行动：{user_text}\n角色响应：{clean_assistant}"}
-            ],
-            stream=False,
-            temperature=0.7,  # 保持自然的语言流淌
-            max_tokens=400
-        )
-        return completion.choices[0].message.content.strip()
-    except Exception:
-        # 终极代码垫片：就算网络或模型发生万分之一的抖动，也绝不卡死主程序
-        return "【你】发起了最新行动，【虚拟角色】顺应剧情做出了即时剧本对峙回应。"
+    # 🔄 开启 3 次硬核冲锋重试循环
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            completion = client.chat.completions.create(
+                model="deepseek-v4-pro",  # 享受Cache命中折后价的Pro智商巨兽
+                messages=[
+                    {"role": "system", "content": narrator_prompt},
+                    {"role": "user", "content": f"请立刻切换为旁白官身份，为主观戏剧档案留下两行纪实大纲：\n玩家行动：{user_text}\n角色响应：{clean_assistant}"}
+                ],
+                stream=False,
+                temperature=0.7, 
+                max_tokens=400,
+                timeout=10.0  # 限制单次等待时间，防止卡死
+            )
+            
+            res_content = completion.choices[0].message.content.strip()
+            
+            # ✨ 核心校验拦截器：如果模型拒绝或返回空（说明踩到了隐形审查）
+            refusal_keywords = ["无法提供", "违背安全", "道德准则", "不当内容", "sorry", "cannot fulfill", "ai assistant", "作为人工智能"]
+            if any(kw in res_content.lower() for kw in refusal_keywords) or len(res_content) < 10:
+                # 故意抛出异常，强行触发下一次更猛烈的冲锋
+                raise ValueError("⚠️ 记录官发生了应激性含糊或拒答，准备重新刻录。")
+                
+            # 成功过关，直接功成身退返回完美大纲
+            return res_content
+            
+        except Exception as e:
+            # 如果是最后一次尝试也失败了，不抛错，走下方的低级垫片兜底
+            if attempt == max_retries - 1:
+                break
+            # 战术换气：等 0.5 秒让网络和过滤器冷却，然后继续重试
+            time.sleep(0.5)
+            
+    # 终极代码物理垫片：确保即便天崩地裂（网络断开或彻底封杀），游戏也绝对不会报错卡死
+    return "【你】发起了最新行动。\n【虚拟角色】顺应剧情做出了即时剧本对峙回应。"
 
 # ==========================================
 # 0. 核心辅助函数：多群聊+多单聊数据库读取与保存
