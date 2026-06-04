@@ -579,6 +579,9 @@ def render_message_controls_by_id(msg_id, is_last_msg, agent_name_fallback=""):
                 save_local_data()
                 st.rerun()
 
+# ==========================================
+# 3. 主界面渲染与历史切片折叠机制（完美闭合、全知纪实舱完全体版）
+# ==========================================
 history_len = len(chat_history_view)
 DISPLAY_LIMIT = 4
 
@@ -692,30 +695,6 @@ else:
                     """, unsafe_allow_html=True)
                     
         render_message_controls_by_id(message["msg_id"], is_last_msg=is_last, agent_name_fallback=message.get("agent_name", ""))
-else:
-    for i, message in enumerate(chat_history_view):
-        if "msg_id" not in message:
-            message["msg_id"] = f"backfill_{i}_{hash(message['content'])}"
-            
-        is_last = (i == history_len - 1) and (message["role"] == "assistant")
-        avatar_icon = "💋" if message["role"] == "assistant" else "😎"
-        with st.chat_message(message["role"], avatar=avatar_icon):
-            p_name = message.get("agent_name", "")
-            prefix = f"💬 **【{p_name}】**：\n\n" if p_name else ""
-            st.markdown(prefix + message["content"])
-        render_message_controls_by_id(message["msg_id"], is_last_msg=is_last, agent_name_fallback=message.get("agent_name", ""))
-
-# ==========================================
-# 4. 自动推演激活区
-# ==========================================
-st.write("---")
-col_action1, _ = st.columns([0.2, 0.8])
-with col_action1:
-    if st.button("🎬 继续（AI自动推演剧情）", use_container_width=True):
-        st.session_state.continue_trigger = True
-        st.rerun()
-
-user_input = st.chat_input("在此处输入聊天内容...", key=f"chat_input_v_{st.session_state.clear_version}")
 
 # ==========================================
 # 5. 会话调用执行中枢
