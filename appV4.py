@@ -789,27 +789,32 @@ if is_group_chat:
             f"【🔥 微信多人群聊点名特赦令】：\n你现在正处于【{g_name}】多人现场！轮到你回应了，请保持 third person 纯小说风格叙事！"
         )
 
+        # === 🛠️ 核心修复：群聊记忆长效编年史注入中枢 ===
         api_payload = [{"role": "system", "content": agent_dynamic_system}]
+
+        # 从当前被点名角色的独立数据库里，抽取她参与群聊沉淀下来的前 200 轮事实大纲
+        historical_summaries = agent_db.get("summarized_history", [])[-200:]
+
+        if historical_summaries:
+            formatted_lines = []
+            for idx, line in enumerate(historical_summaries):
+                formatted_lines.append(f"🎬 [群戏剧回顾 · 第 {idx + 1} 幕纠缠档案]:\n{line}")
+
+            chronicle_content = (
+                f"💡【核心群聊历史依赖数据加载：过往群会话逐轮事实编年史】\n"
+                f"以下是你（{curr_agent}）与玩家及其他成员自本场群戏开局以来发生的事实链，已完全融于本能，无需在后续回复中复述它们：\n\n" +
+                "\n\n-------------------- \n\n".join(formatted_lines)
+            )
+            api_payload.append({"role": "user", "content": chronicle_content})
+            api_payload.append({
+                "role": "assistant",
+                "content": f"（深吸一口气，全盘继承本群过往所有同台对峙的既定事实，眼神在群内众人身上扫过）……群内之前发生的一切细节早已深植于我的本能。我已经回到了当下的这一轮。我会直接面对他们。"
+            })
+        # =================================================
 
         cleaned_context = []
         for msg in chat_history_view[-2:]:
-            if msg["role"] == "user":
-                cleaned_context.append({"role": "user", "content": msg["content"]})
-            else:
-                prefix_name = msg.get("agent_name", "神秘人")
-                clean_content = msg['content'].replace(f"（【{prefix_name}】在群聊【{g_name}】现场当众说道）：\n", "")
-                if prefix_name == curr_agent:
-                    cleaned_context.append({"role": "assistant", "content": clean_content})
-                else:
-                    cleaned_context.append({"role": "user", "content": f"⚔️ [群会话]: 成员【{prefix_name}】公开发言：\n“{clean_content}”"})
 
-        identity_lock_patch = {
-            "role": "user",
-            "content": f"⚡ [舞台全知叙事共鸣协议]:\n"
-                       f"现在，请立刻代入全知小说家视角，对【{curr_agent}】在群内同台下的言行进行极致的第三人称小说化演绎。旁白、动作与挣扎一律直接使用名字{curr_agent}；称呼屏幕前的玩家一律使用【你】。在 1️⃣ 2️⃣ 3️⃣ 定格后，利落完结收尾。"
-        }
-
-        api_payload.extend(cleaned_context)
         api_payload.append(identity_lock_patch)
         api_payload.append(lazy_insurance_prompt)
 
