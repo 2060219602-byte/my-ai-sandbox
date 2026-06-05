@@ -498,17 +498,38 @@ st.sidebar.header("🚨 危险清理区")
 if is_group_chat:
     if st.sidebar.button("🗑️ 彻底解散并永久删除当前群聊房间", type="primary", use_container_width=True):
         g_target = curr_sk.replace("💬 群聊：", "")
-        st.session_state.all_sessions_db["group_rooms"].pop(g_target, None)
+        
+        # 1. 深度无痕清洗群内所有AI角色的记忆污点
         for agent in available_roles_list:
-            st.session_state.all_sessions_db["roles"][agent]["chat_history"] = [
-                msg for msg in st.session_state.all_sessions_db["roles"][agent]["chat_history"] if
-                msg.get("from_group") != g_target and g_target not in msg.get("content", "")
-            ]
+            if agent in st.session_state.all_sessions_db["roles"]:
+                role_ref = st.session_state.all_sessions_db["roles"][agent]
+                
+                # ✨【无痕清洗 A】：彻底拔除聊天历史中所有属于该群聊的消息，或者内容包含群名标签的消息
+                if "chat_history" in role_ref:
+                    role_ref["chat_history"] = [
+                        msg for msg in role_ref["chat_history"] 
+                        if msg.get("from_group") != g_target and f"群聊【{g_target}】" not in msg.get("content", "")
+                    ]
+                
+                # ✨【无痕清洗 B】：彻底清空大模型为本轮群聊对线生成的旁白事实大纲，防止单聊时系统认知错乱
+                if "summarized_history" in role_ref:
+                    role_ref["summarized_history"] = []
+                
+                # ✨【无痕清洗 C】：将该女性角色的生理肉体档案瞬间“重置复原”到常态，擦除群聊中失控、暴露或崩溃的所有激荡数值
+                role_ref["character_status"] = f"[{agent}]\n阴道：干燥紧闭。\n乳头：平软未勃起。\n大腿内侧：皮肤处于常温状态。"
+        
+        # 2. 从服务器本地数据库字典中彻底抹去这个房间
+        st.session_state.all_sessions_db["group_rooms"].pop(g_target, None)
+        
+        # 3. 将玩家的当前视图安全重定向回第一个单聊联系人
         st.session_state.current_session_key = "👤 单聊：" + available_roles_list[0]
         st.session_state.group_active_agent = ""
         st.session_state.group_active_queue = []
+        
+        # 4. 🔥【核心修复】：强制锁定线程锁，将全新的“净化版数据”绝对同步更新到本地 JSON 文件中
         save_local_data()
-        st.toast(f"🔥 群聊【{g_target}】已被解散且相关记忆已抹除！")
+        
+        st.toast(f"🔥 修罗场房间【{g_target}】已彻底解散！她们的记忆与生理档案已无痕退回单聊常态！")
         st.rerun()
 else:
     if st.sidebar.button("🧹 只清空当前角色聊天历史", type="secondary", use_container_width=True):
