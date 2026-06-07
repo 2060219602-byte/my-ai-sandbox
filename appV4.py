@@ -1145,6 +1145,10 @@ else:
                 # 🌟 [单聊多角色动态提取引擎 · 完美符号对齐版]
                 # ========================================================
                 # 🎯 核心修正：使用 [：:] 完美通杀全角和半角冒号，并在人名块后面增加 \s*，全面容忍模型乱敲的空格与换行
+                # ========================================================
+                # 🌟 [单聊多角色动态提取引擎 · 完美符号对齐版]
+                # ========================================================
+                # 🎯 核心修正：使用 [：:] 完美通杀全角和半角冒号，并在人名块后面增加 \s*，全面容忍模型乱敲的空格与换行
                 block_pattern = r'(\[.*?\])\s*\n*\s*阴道的感觉[：:]\s*([\s\S]*?)\s*乳头的感觉[：:]\s*([\s\S]*?)\s*大腿内侧的感觉[：:]\s*([\s\S]*?)(?=\n\s*\[|\n\s*====|\Z)'
                 captured_blocks = list(re.finditer(block_pattern, raw_status_response))
 
@@ -1177,6 +1181,13 @@ else:
                         """)
 
                     new_status_block = "\n\n".join(final_db_block_list)
+                    role_data["character_status"] = new_status_block
+                else:
+                    # 💡 终极兜底保护：如果大模型抽风没对齐，若有输出则用原始输出，全空则保留原有状态
+                    if raw_status_response:
+                        new_status_block = raw_status_response
+                    else:
+                        new_status_block = role_data.get("character_status", "")
                     role_data["character_status"] = new_status_block
                 else:
                     # 💡 终极兜底保护：如果大模型彻底抽风连宽大正则都没对齐，强行把原始输出塞进状态栏，确保你的数值不丢失、不卡死
