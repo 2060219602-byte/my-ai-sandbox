@@ -1155,6 +1155,9 @@ else:
                 final_db_block_list = []
                 final_html_elements = []
 
+                # ========================================================
+                # 🌟 [单聊多角色动态提取引擎 · 完美修复版]
+                # ========================================================
                 if captured_blocks:
                     for block in captured_blocks:
                         active_role_name = block.group(1).strip()  # 🎯 自动捕捉 AI 自己判断出来的女性人名
@@ -1183,18 +1186,12 @@ else:
                     new_status_block = "\n\n".join(final_db_block_list)
                     role_data["character_status"] = new_status_block
                 else:
-                    # 💡 终极兜底保护：如果大模型抽风没对齐，若有输出则用原始输出，完全没输出则保留上一次的旧状态
+                    # 💡 完美的终极兜底保护：如果大模型抽风没对齐正则，若有输出则用原始输出，完全没输出则保留上一次的旧状态
                     if raw_status_response.strip():
                         new_status_block = raw_status_response
                     else:
                         new_status_block = role_data.get("character_status", "")
                     role_data["character_status"] = new_status_block
-                else:
-                    # 💡 终极兜底保护：如果大模型彻底抽风连宽大正则都没对齐，强行把原始输出塞进状态栏，确保你的数值不丢失、不卡死
-                    new_status_block = raw_status_response
-                    role_data["character_status"] = new_status_block
-                else:
-                    new_status_block = role_data.get("character_status", "")
 
                 # 4. 前端合体高阶多轨实时呈现
                 with response_placeholder.container():
