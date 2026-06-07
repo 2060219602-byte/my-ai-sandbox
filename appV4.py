@@ -843,7 +843,7 @@ if is_group_chat:
 
         api_payload.extend(cleaned_context)
 
-        # ✨ 群聊高权重动态状态锚锁定点（润物细无声的官能自适应版）
+        # ✨ 群聊高权重动态状态锚锁定点
         physical_status_patch = {
             "role": "user",
             "content": (
@@ -855,7 +855,6 @@ if is_group_chat:
                 f"【✍️ 文学化镜头转化】：在接下来的正文叙事中，请将上面的生理状态无痕融化为小说创作者的镜头语言（如肢体因敏感而呈现的颤抖与微动、对白中破碎的呼吸感、眼神的躲闪或潮红、衣物摩擦的细节）。请避免在正文中直接生硬地抄写或复述状态框里的 field 指标原词，让肉体的物理现实与角色的心智状态自然碰撞，编织出富有顶级感官张力的小说流。"
             )
         }
-        
         api_payload.append(physical_status_patch)
 
         identity_lock_patch = {
@@ -873,6 +872,7 @@ if is_group_chat:
             full_response = ""
 
             try:
+                # 🚀 第一步：执行正常的正文流式输出（位置被修正）
                 response = client.chat.completions.create(
                     model=model_name, messages=api_payload, stream=True, temperature=1.0, max_tokens=3000,
                     presence_penalty=0.2, frequency_penalty=0.1, timeout=60.0
@@ -901,8 +901,8 @@ if is_group_chat:
                                 f"✍️【角色知觉内省书写引导】：请完全使用充满小说温度、温热、黏稠且带着强烈知觉过载的官能白描笔触。你要像写小说短台词和内心反差羞耻独白一样，去刻录她真实的物理现实反馈（请多用她感觉到了什么、为什么会这样、她的身子怎么了等充满了心理抗拒与肉体屈服的反差语调，彻底避开任何干瘪、冷冰冰的医用解剖学术名词）：\n"
                                 f"==== SIGNAL START ====\n"
                                 f"[{curr_agent}]\n"
-                                f"阴道的感觉: 【{curr_agent}】感觉到了[此处由你自发推演出该区域最新的温热、泥泞充血、红肿紧缩或本能流淌的主观知觉白描]\n"
-                                f"乳头的感觉: 【{curr_agent}】感觉到了[此处由你自发推演出那两处随着衣物刮蹭而彻底发酥发硬、红晕蔓延的过载酥麻电流知觉白描]\n"
+                                f"阴道恢复的感觉: 【{curr_agent}】感觉到了[此处由你自发推演出该区域最新的温热、泥泞充血、红肿紧缩或本能流淌的主观知觉白描]\n"
+                                f"乳头恢复的感觉: 【{curr_agent}】感觉到了[此处由你自发推演出那两处随着衣物刮蹭而彻底发酥发硬、红晕蔓延的过载酥麻电流知觉白描]\n"
                                 f"大腿内侧的感觉: 【{curr_agent}】感觉到了[此处由你自发推演出那一整片肌肤皮温骤升、滚烫汗湿，以及由于极度克制或高潮而无法抑制的瘫软微颤知觉白描]"
                             )
                         })
@@ -917,9 +917,8 @@ if is_group_chat:
                         raw_status_response = agent_db.get("character_status", "")
 
                 # 后端自动化抽取与中文翻译强控
-                # 后端暗中提取并保留群聊角色主观原生名词独白
-                v_match = re.search(r'阴道的感觉:\s*([\s\S]*?)(?=\s*乳头的感觉:|$)', raw_status_response)
-                n_match = re.search(r'乳头的感觉:\s*([\s\S]*?)(?=\s*大腿内侧的感觉:|$)', raw_status_response)
+                v_match = re.search(r'阴道恢复的感觉:\s*([\s\S]*?)(?=\s*乳头恢复的感觉:|$)', raw_status_response)
+                n_match = re.search(r'乳头恢复的感觉:\s*([\s\S]*?)(?=\s*大腿内侧的感觉:|$)', raw_status_response)
                 t_match = re.search(r'大腿内侧的感觉:\s*([\s\S]*?)(?=\s*\[|\Z)', raw_status_response)
 
                 v_text = v_match.group(1).strip() if v_match else f"【{curr_agent}】感觉到了私密处的热潮正无法自控地大片泥泞泛滥..."
@@ -927,9 +926,9 @@ if is_group_chat:
                 t_text = t_match.group(1).strip() if t_match else f"【{curr_agent}】感觉到了大腿内侧一片滚烫，紧致的肌肤间全是汗湿与不受控制的娇羞微颤..."
 
                 # 清理多余的占位标签
-                v_text = re.sub(r'\[.*?\]|v_field:|n_field:|t_field:|阴道的感觉:|乳头的感觉:|大腿内侧的感觉:', '', v_text).strip()
-                n_text = re.sub(r'\[.*?\]|v_field:|n_field:|t_field:|阴道的感觉:|乳头的感觉:|大腿内侧的感觉:', '', n_text).strip()
-                t_text = re.sub(r'\[.*?\]|v_field:|n_field:|t_field:|阴道的感觉:|乳头的感觉:|大腿内侧的感觉:', '', t_text).strip()
+                v_text = re.sub(r'\[.*?\]|v_field:|n_field:|t_field:|阴道恢复的感觉:|乳头恢复的感觉:|大腿内侧的感觉:', '', v_text).strip()
+                n_text = re.sub(r'\[.*?\]|v_field:|n_field:|t_field:|阴道恢复的感觉:|乳头恢复的感觉:|大腿内侧的感觉:', '', n_text).strip()
+                t_text = re.sub(r'\[.*?\]|v_field:|n_field:|t_field:|阴道恢复的感觉:|乳头恢复的感觉:|大腿内侧的感觉:', '', t_text).strip()
 
                 new_status_block = f"[{curr_agent}]\n阴道：{v_text}\n乳头：{n_text}\n大腿内侧：{t_text}"
                 agent_db["character_status"] = new_status_block
@@ -938,7 +937,7 @@ if is_group_chat:
                     st.markdown(formatted_response)
                     status_html = f"""
                     <div class="role-status-block">
-                        <div class="role-status-name">[{curr_agent}] 生理状态 (⚡群像同上下文追溯型)</div>
+                        <div class="role-status-name">[{curr_agent}] 隐秘肉体知觉 (⚡群聊实时)</div>
                         <span class="role-status-row"><span class="role-status-label">阴道：</span>{v_text}</span>
                         <span class="role-status-row"><span class="role-status-label">乳头：</span>{n_text}</span>
                         <span class="role-status-row"><span class="role-status-label">大腿内侧：</span>{t_text}</span>
@@ -1055,19 +1054,18 @@ else:
 
         cleaned_api_payload.append({"role": "user", "content": active_user_text})
 
-        # ✨ 单聊高权重动态状态锚锁定点（润物细无声的官能自适应版）
+        # ✨ 单聊高权重动态状态锚锁定点
         single_physical_patch = {
             "role": "user",
             "content": (
-                f"📌【物理现场既定事实刻录 —— 这一轮你（{target_girl}）最新定格的隐秘生理肉体状态如下】：\n"
+                f"📌【物理现场既定事实刻录 —— 这一轮你最新定格的隐秘生理肉体状态如下】：\n"
                 f"{role_data.get('character_status', '')}\n\n"
                 f"💡【小说叙事无感演化协议】：\n"
                 f"请全盘接纳并无缝继承上述身体当前的真实官能状态，将其作为游戏剧情继续向下推进的物理现实背景。\n"
                 f"【🎭 情感与剧情的自适应表达】：请根据你当前扮演角色的System Role基本性格、以及当前剧情的亲密热度，自然地演绎她的反应。如果她身上还带着道德包袱或处于抗拒拉扯期，请着重白描她表面死撑、试图维持尊严但身体早已过载的强烈反差；若剧情已经水到渠成、或者人设本就主动奔放，请顺应本能，丝滑展现她完全沉溺、彻底放开防线、迎合交融的黏稠动态。\n"
-                f"【✍️ 文学化镜头转化】：在接下来的正文叙事中，请将上面的生理状态无痕融化为小说创作者的镜头语言（如肢体因敏感而呈现的颤抖与微动、对白中破碎的呼吸感、眼神的躲闪或潮红、衣物摩擦的细节）。请避免在正文中直接生硬地抄写或复述状态框里的 field 指标原词，让肉体的物理现实与角色的心智状态自然碰撞，编织出富有顶级感官张力的小说流。"
+                f"【✍️ 文学化镜头转化】：在接下来的正文叙事中，请将上面的生理状态无痕融化为小说创作者的镜头语言（如肢体因敏感而呈现的颤抖与微动、对白中破碎的呼吸感、眼神的躲闪或潮红、衣物摩擦的细节）。请避免在正文中直接生硬地抄写或复述状态框里的原词，让肉体的物理现实与角色的心智状态自然碰撞，编织出富有顶级感官张力的小说流。"
             )
         }
-        
         cleaned_api_payload.append(single_physical_patch)
 
         identity_lock_patch = {
@@ -1086,11 +1084,22 @@ else:
             response_placeholder = st.empty()
             full_story_response = ""
             try:
-                # 1. 正常的流式小说文本生成结束，锁定纯净小说正文
+                # 🚀 第一步：在这里先执行流式小说文本生成（修正了原有的顺序错乱）
+                response = client.chat.completions.create(
+                    model=model_name, messages=cleaned_api_payload, stream=True, temperature=1.0, max_tokens=3000,
+                    presence_penalty=0.2, frequency_penalty=0.1, timeout=60.0
+                )
+                for chunk in response:
+                    if chunk.choices[0].delta.content:
+                        full_story_response += chunk.choices[0].delta.content
+                        formatted_story = novel_text_formatter(full_story_response)
+                        with response_placeholder.container():
+                            st.markdown(formatted_story)
+
                 formatted_story = novel_text_formatter(full_story_response)
 
                 # ========================================================
-                # 🌟 位置2替换：全新的多角色人名自适应捕捉型生理刷新命令
+                # 🚀 第二步：在流式完全结束后，再追发刷新命令（位置被修正）
                 # ========================================================
                 with st.spinner("⚡ 顺承叙事流：正在深度刻录她/她们此时此刻的隐秘身体档案..."):
                     try:
