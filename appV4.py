@@ -1183,8 +1183,8 @@ else:
                     new_status_block = "\n\n".join(final_db_block_list)
                     role_data["character_status"] = new_status_block
                 else:
-                    # 💡 终极兜底保护：如果大模型抽风没对齐，若有输出则用原始输出，全空则保留原有状态
-                    if raw_status_response:
+                    # 💡 终极兜底保护：如果大模型抽风没对齐，若有输出则用原始输出，完全没输出则保留上一次的旧状态
+                    if raw_status_response.strip():
                         new_status_block = raw_status_response
                     else:
                         new_status_block = role_data.get("character_status", "")
