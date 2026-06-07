@@ -1140,9 +1140,9 @@ else:
                                 f"3. 纯粹白描：请直接、写实地输出该部位此时此刻最直接的物理、生理知觉事实。专注于肉体白描，将心理活动与剧情铺垫留给正文小说。\n\n"
                                 f"==== SIGNAL START ====\n"
                                 f"[此处写处于核心互动女主的真实名字]\n"
-                                f"阴道的感觉: 【真实姓名】感觉到了[此处只写最新的物理生理知觉事实，15~25字]\n"
-                                f"乳头的感觉: 【真实姓名】感觉到了[此处只写最新的物理生理知觉事实，15~25字]\n"
-                                f"大腿内侧的感觉: 【真实姓名】感觉到了[此处只写最新的物理生理知觉事实，15~25字]\n\n"
+                                f"阴道的感觉: 【真实姓名】感觉到了[此处只写最新的物理生理知觉事实，25~50字]\n"
+                                f"乳头的感觉: 【真实姓名】感觉到了[此处只写最新的物理生理知觉事实，25~50字]\n"
+                                f"大腿内侧的感觉: 【真实姓名】感觉到了[此处只写最新的物理生理知觉事实，25~50字]\n\n"
                                 f"[若正文中确实有第二位女主‘同时且并列’参与了上述实质肢体/欲望纠缠，请依此格式顺延输出，其余情况保持单模块输出]\n"
                                 f"==== SIGNAL END ===="
                             )
@@ -1151,7 +1151,7 @@ else:
                         # 发起不带 Stream 的二次追发，专门用于高阶指标计算
                         chase_response = client.chat.completions.create(
                             model=model_name, messages=context_chase_payload, stream=False,
-                            temperature=0.5, max_tokens=1200, timeout=40.0
+                            temperature=0.4, max_tokens=1200, timeout=40.0
                         )
                         raw_status_response = chase_response.choices[0].message.content.strip()
                     except Exception as chase_err:
