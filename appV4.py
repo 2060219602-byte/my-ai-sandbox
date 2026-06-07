@@ -1021,7 +1021,7 @@ else:
             f"【该角色的基本人设设定 (System Role)】：\n{role_data.get('system_role', '')}\n\n"
             f"{memory_ledger_prompt}\n"
             f"【当前演出的背景剧情设定】：\n{role_data.get('background_story', '')}\n\n"
-            f"【你当前的隐秘肉体状态参考（已知既定事实）】：\n{role_data.get('character_status', '')}"
+            f"【你当前的隐秘肉体状态（已知既定事实）】：\n{role_data.get('character_status', '')}"
         )
 
         # === 🛠️ 核心修改：将包含越狱与整合规则的字典作为第一个 System 载入，极大幅度提高命中缓存机率 ===
