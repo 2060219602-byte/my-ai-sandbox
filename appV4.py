@@ -136,26 +136,40 @@ def novel_text_formatter(raw_text: str) -> str:
 # ==========================================
 # 🎯 前端专属：多轨精确生理状态渲染拦截器（兼容旧历史数据的渲染）
 # ==========================================
+# ==========================================
+# 🎯 前端专属：多轨精确生理状态渲染拦截器（完美兼容多角色与新老历史数据）
+# ==========================================
 def display_novel_with_bold_status(text: str):
     """
-    在前端渲染时，自适应拦截并用高级 HTML 框对文末女性角色的原生名词生理状态进行精美排版。
+    在前端渲染时，自适应拦截并用高级 HTML 框对文末女性角色的生理状态进行精美排版。
     """
-    # 🎯 宽大匹配正则：完美包容各种换行、空格、全角和半角冒号，彻底解决对齐报错
-    status_block_pattern = r'(\[.*?\])\s*\n\s*阴道[：:]\s*([\s\S]*?)乳头[：:]\s*([\s\S]*?)大腿内侧[：:]\s*([\s\S]*?)(?=\n\s*\[|$)'
+    if not text:
+        return
+
+    # 🎯 顶级宽大匹配正则：完美包容 [名字]、阴道(或阴道恢复的感觉)、全半角冒号、换行和空格
+    status_block_pattern = r'(\[.*?\])\s*\n*\s*(?:阴道|阴道恢复的感觉)[：:]\s*([\s\S]*?)(?:乳头|乳头恢复的感觉)[：:]\s*([\s\S]*?)(?:大腿内侧|大腿内侧的感觉)[：:]\s*([\s\S]*?)(?=\n\s*\[|\n\s*====|$)'
     matches = list(re.finditer(status_block_pattern, text))
 
     if matches:
+        # 剥离出纯小说正文（即第一个状态框之前的内容）
         first_match_start = matches[0].start()
         main_story = text[:first_match_start].strip()
 
         if main_story:
             st.markdown(main_story)
 
+        # 逐个渲染抓取到的生理状态框
         for match in matches:
-            role_name = match.group(1)
-            vagina_detail = match.group(2).strip().strip(';').strip('，').strip('。')
-            nipple_detail = match.group(3).strip().strip(';').strip('，').strip('。')
-            thigh_detail = match.group(4).strip().strip(';').strip('，').strip('。')
+            role_name = match.group(1).strip()
+            # 净化末尾可能存在的标点残渣
+            vagina_detail = match.group(2).strip().strip(';').strip('，').strip('。').strip('】').strip(']').strip()
+            nipple_detail = match.group(3).strip().strip(';').strip('，').strip('。').strip('】').strip(']').strip()
+            thigh_detail = match.group(4).strip().strip(';').strip('，').strip('。').strip('】').strip(']').strip()
+
+            # 强力净化可能残留的高级 field 标签
+            vagina_detail = re.sub(r'.*?感觉[：:]\s*', '', vagina_detail)
+            nipple_detail = re.sub(r'.*?感觉[：:]\s*', '', nipple_detail)
+            thigh_detail = re.sub(r'.*?感觉[：:]\s*', '', thigh_detail)
 
             status_html = f"""
             <div class="role-status-block">
