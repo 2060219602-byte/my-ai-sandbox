@@ -139,6 +139,9 @@ def novel_text_formatter(raw_text: str) -> str:
 # ==========================================
 # 🎯 前端专属：多轨精确生理状态渲染拦截器（完美兼容多角色与新老历史数据）
 # ==========================================
+# ==========================================
+# 🎯 前端专属：超强自适应生理状态渲染拦截器（通杀一切不听话的格式）
+# ==========================================
 def display_novel_with_bold_status(text: str):
     """
     在前端渲染时，自适应拦截并用高级 HTML 框对文末女性角色的生理状态进行精美排版。
@@ -146,30 +149,31 @@ def display_novel_with_bold_status(text: str):
     if not text:
         return
 
-    # 🎯 顶级宽大匹配正则：完美包容 [名字]、阴道(或阴道恢复的感觉)、全半角冒号、换行和空格
-    status_block_pattern = r'(\[.*?\])\s*\n*\s*(?:阴道|阴道恢复的感觉)[：:]\s*([\s\S]*?)(?:乳头|乳头恢复的感觉)[：:]\s*([\s\S]*?)(?:大腿内侧|大腿内侧的感觉)[：:]\s*([\s\S]*?)(?=\n\s*\[|\n\s*====|$)'
-    matches = list(re.finditer(status_block_pattern, text))
+    # 1. 强力拔除大模型偶尔夹带的系统开始和结束标签，防止污染小说正文
+    clean_text = re.sub(r'====\s*SIGNAL\s*(?:START|END)\s*====', '', text)
+    
+    # 2. 顶级无锚点模糊匹配正则：完全不要方括号限制，只要抓到 阴道/乳头/大腿内侧 的组合就拦截
+    status_block_pattern = r'([^\n\s]+?)\s*\n*\s*(?:阴道恢复的感觉|阴道的感觉|阴道)[：:]\s*([\s\S]*?)(?:乳头恢复的感觉|乳头的感觉|乳头)[：:]\s*([\s\S]*?)(?:大腿内侧的感觉|大腿内侧)[：:]\s*([\s\S]*?)(?=\n\s*[^\n\s]+?\s*\n*\s*(?:阴道|乳头)|$)'
+    matches = list(re.finditer(status_block_pattern, clean_text))
 
     if matches:
-        # 剥离出纯小说正文（即第一个状态框之前的内容）
+        # 剥离出纯小说正文
         first_match_start = matches[0].start()
-        main_story = text[:first_match_start].strip()
+        main_story = clean_text[:first_match_start].strip()
 
         if main_story:
             st.markdown(main_story)
 
         # 逐个渲染抓取到的生理状态框
         for match in matches:
-            role_name = match.group(1).strip()
-            # 净化末尾可能存在的标点残渣
-            vagina_detail = match.group(2).strip().strip(';').strip('，').strip('。').strip('】').strip(']').strip()
-            nipple_detail = match.group(3).strip().strip(';').strip('，').strip('。').strip('】').strip(']').strip()
-            thigh_detail = match.group(4).strip().strip(';').strip('，').strip('。').strip('】').strip(']').strip()
-
-            # 强力净化可能残留的高级 field 标签
-            vagina_detail = re.sub(r'.*?感觉[：:]\s*', '', vagina_detail)
-            nipple_detail = re.sub(r'.*?感觉[：:]\s*', '', nipple_detail)
-            thigh_detail = re.sub(r'.*?感觉[：:]\s*', '', thigh_detail)
+            # 自动提取人名，并强行规范化加上优雅的方括号
+            raw_name = match.group(1).strip().strip('[').strip(']').strip('【').strip('】')
+            role_name = f"[{raw_name}]"
+            
+            # 提取并清洗具体的肉体知觉文字
+            vagina_detail = match.group(2).strip().strip(';').strip('，').strip('。').strip()
+            nipple_detail = match.group(3).strip().strip(';').strip('，').strip('。').strip()
+            thigh_detail = match.group(4).strip().strip(';').strip('，').strip('。').strip()
 
             status_html = f"""
             <div class="role-status-block">
@@ -1160,36 +1164,36 @@ else:
                 final_html_elements = []
 
                 # ========================================================
-                # 🌟 [单聊多角色动态提取引擎 · 符号对齐与双向渲染修复版]
+                # 🌟 [单聊多角色动态提取引擎 · 彻底去符号依赖校准版]
                 # ========================================================
-                # 🎯 核心修正：捕获模型吐出的“阴道的感觉”或“阴道”，并统一清洗，确保与前端拦截器无缝咬合
-                block_pattern = r'(\[.*?\])\s*\n*\s*(?:阴道恢复的感觉|阴道)[：:]\s*([\s\S]*?)\s*(?:乳头恢复的感觉|乳头)[：:]\s*([\s\S]*?)\s*(?:大腿内侧的感觉|大腿内侧)[：:]\s*([\s\S]*?)(?=\n\s*\[|\n\s*====|\Z)'
-                captured_blocks = list(re.finditer(block_pattern, raw_status_response))
+                # 强力清洗原始响应里可能混入的系统骨架标签
+                clean_raw_response = re.sub(r'====\s*SIGNAL\s*(?:START|END)\s*====', '', raw_status_response).strip()
+
+                # 采用全新的模糊容错正则
+                block_pattern = r'([^\n\s]+?)\s*\n*\s*(?:阴道恢复的感觉|阴道的感觉|阴道)[：:]\s*([\s\S]*?)\s*(?:乳头恢复的感觉|乳头的感觉|乳头)[：:]\s*([\s\S]*?)\s*(?:大腿内侧的感觉|大腿内侧)[：:]\s*([\s\S]*?)(?=\n\s*[^\n\s]+?|$)'
+                captured_blocks = list(re.finditer(block_pattern, clean_raw_response))
 
                 final_db_block_list = []
                 final_html_elements = []
 
                 if captured_blocks:
                     for block in captured_blocks:
-                        active_role_name = block.group(1).strip()  # 🎯 捕获人名如 [露娜]
+                        raw_name = block.group(1).strip().strip('[').strip(']').strip('【').strip('】')
+                        active_role_name = f"[{raw_name}]"  # 强制统一为带方括号的名称
+                        
                         v_text = block.group(2).strip()
                         n_text = block.group(3).strip()
                         t_text = block.group(4).strip()
 
-                        # 强力清洗大模型可能胡乱夹带的占位符和前缀
-                        v_text = re.sub(r'\[.*?\]|阴道恢复的感觉:|阴道恢复的感觉：|阴道:|阴道：', '', v_text).strip()
-                        n_text = re.sub(r'\[.*?\]|乳头恢复的感觉:|乳头恢复的感觉：|乳头:|乳头：', '', n_text).strip()
-                        t_text = re.sub(r'\[.*?\]|大腿内侧的感觉:|大腿内侧的感觉：|大腿内侧:|大腿内侧：', '', t_text).strip()
-                        
-                        # 再次去除可能附带的括号残渣
-                        v_text = v_text.strip('】').strip(']').strip('。').strip('，')
-                        n_text = n_text.strip('】').strip(']').strip('。').strip('，')
-                        t_text = t_text.strip('】').strip(']').strip('。').strip('，')
+                        # 清洗可能夹带的内容占位字符
+                        v_text = re.sub(r'阴道恢复的感觉:|阴道的感觉:|阴道:', '', v_text).strip().strip('。').strip('，')
+                        n_text = re.sub(r'乳头恢复的感觉:|乳头的感觉:|乳头:', '', n_text).strip().strip('。').strip('，')
+                        t_text = re.sub(r'大腿内侧的感觉:|大腿内侧的感觉：|大腿内侧:', '', t_text).strip().strip('。').strip('，')
 
-                        # ✨ 核心同步修复：写入历史和数据库的格式，必须转化为前端 display_novel_with_bold_status 能一眼认出的标准全角格式！
+                        # 完美格式化，供 display_novel_with_bold_status 拦截使用
                         final_db_block_list.append(f"{active_role_name}\n阴道：{v_text}\n乳头：{n_text}\n大腿内侧：{t_text}")
 
-                        # 实时渲染的高级 HTML 框组件
+                        # 实时渲染的 HTML 组件
                         final_html_elements.append(f"""
                         <div class="role-status-block">
                             <div class="role-status-name">{active_role_name} 隐秘肉体知觉</div>
@@ -1202,9 +1206,9 @@ else:
                     new_status_block = "\n\n".join(final_db_block_list)
                     role_data["character_status"] = new_status_block
                 else:
-                    # 💡 终极兜底：如果没匹配上，优先保留之前的状态数据，不干扰前端
-                    if raw_status_response.strip() and "阴道" in raw_status_response:
-                        new_status_block = raw_status_response
+                    # 💡 终极兜底保护
+                    if clean_raw_response and "阴道" in clean_raw_response:
+                        new_status_block = clean_raw_response
                     else:
                         new_status_block = role_data.get("character_status", "")
                     role_data["character_status"] = new_status_block
