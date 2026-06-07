@@ -1086,44 +1086,40 @@ else:
             response_placeholder = st.empty()
             full_story_response = ""
             try:
-                response = client.chat.completions.create(
-                    model=model_name, messages=cleaned_api_payload, stream=True, temperature=1.0, max_tokens=3000,
-                    presence_penalty=0.2, frequency_penalty=0.1, timeout=60.0
-                )
-                for chunk in response:
-                    if chunk.choices[0].delta.content:
-                        full_story_response += chunk.choices[0].delta.content
-                        formatted_story = novel_text_formatter(full_story_response)
-                        with response_placeholder.container():
-                            st.markdown(formatted_story)
-
+                # 1. 正常的流式小说文本生成结束，锁定纯净小说正文
                 formatted_story = novel_text_formatter(full_story_response)
 
                 # ========================================================
-                # 2. 🌟 官能生理数据追加追溯刷新命令
+                # 🌟 位置2替换：全新的多角色人名自适应捕捉型生理刷新命令
                 # ========================================================
-                with st.spinner("⚡ 顺承叙事流：正在深度刻录她此时此刻的隐秘身体档案..."):
+                with st.spinner("⚡ 顺承叙事流：正在深度刻录她/她们此时此刻的隐秘身体档案..."):
                     try:
                         context_chase_payload = list(cleaned_api_payload)
                         context_chase_payload.append({"role": "assistant", "content": formatted_story})
 
+                        # 🎯 注入最直白、主观视角、多角色自适应捕捉的追加提示词
                         context_chase_payload.append({
                             "role": "user",
                             "content": (
                                 f"⚡ [舞台物理引擎实时刷新命令]：\n"
-                                f"请继续完全代入角色扮演的戏剧范畴。顺承你刚才亲手编织出的小说剧情，"
-                                f"在上一轮既定状态：【{role_data.get('character_status', '')}】的基础上，"
-                                f"以第三人称限制性主观知觉视角，写下【{target_girl}】在此一瞬间身体最敏感、最赤裸的三处真实肉体变化。\n\n"
-                                f"⚠️【最高格式死命令】：你必须且只能严格按照以下格式直接输出。格式必须严格对齐，每一个部位的知觉文字严格控制在 50~80 字以内：\n"
-                                f"✍️【角色知觉内省书写引导】：请完全使用充满小说温度、温热、黏稠且带着强烈知觉过载的官能白描笔触。你要像写小说短台词和内心反差羞耻独白一样，去刻录她真实的物理现实反馈（请多用她感觉到了什么、为什么会这样、她的身子怎么了等充满了心理抗拒与肉体屈服的反差语调，彻底避开任何干瘪、冷冰冰的医用解剖学术名词）：\n"
+                                f"请继续完全代入角色扮演的戏剧范畴。顺承你刚才在小说正文中亲手编织出的最新剧情发展（无论是单一女主还是多位女性角色同台交互），"
+                                f"以第三人称限制性主观知觉视角，推演出当前现场所有出场、且参与了实质肉体或情感纠缠的女性角色在此一瞬间最新、最赤裸的真实肉体变化。\n\n"
+                                f"⚠️【格式与多角色演化死命令】：\n"
+                                f"1. 请完全由你（大模型）自发判断刚刚的正文里有几位女性出场并发生了身体/知觉波荡。有几位女性，就必须写几个独立的信号块！\n"
+                                f"2. 请彻底废除任何死板的代码代号，直接使用她们在小说正文中的【真实姓名/称呼】（例如：[顾清漪]、[母亲] 等）作为每个信号块的开头！\n"
+                                f"3. 每个出场女性的信号块格式必须严格按照以下三行对齐输出，每一个部位的知觉文字严格控制在 50~80 字以内，字数精炼饱满：\n\n"
                                 f"==== SIGNAL START ====\n"
-                                f"[{target_girl}]\n"
-                                f"阴道的感觉: 【{target_girl}】感觉到了[此处由你自发推演出她该区域最新的温热、泥泞充血、红肿紧缩或本能流淌的主观知觉白描]\n"
-                                f"乳头的感觉: 【{target_girl}】感觉到了[此处由你自发推演出那两处随着衣物刮蹭而彻底发酥发硬、红晕蔓延的过载酥麻电流知觉白描]\n"
-                                f"大腿内侧的感觉: 【{target_girl}】感觉到了[此处由你自发推演出那一整片肌肤皮温骤升、滚烫汗湿，以及由于极度克制或高潮而无法抑制的瘫软微颤知觉白描]"
+                                f"[此处写第一位出场女性的真实名字]\n"
+                                f"阴道的感觉: 某某（此处替换为她的名字）感觉到了[由你推演她该区域最新的温热、泥泞充血、紧缩或本能流淌的主观知觉白描]\n"
+                                f"乳头的感觉: 某某（此处替换为她的名字）感觉到了[由你推演那两处随着衣物刮蹭而发酥发硬、红晕蔓延的过载知觉白描]\n"
+                                f"大腿内侧的感觉: 某某（此处替换为她的名字）感觉到了[由你推演那一整片肌肤皮温骤升、滚烫汗湿与因克制而瘫软微颤的知觉白描]\n\n"
+                                f"[此处若有第二位出场女性，请紧接着用一模一样的三行格式输出她的肉体知觉，若无则不写]\n"
+                                f"==== SIGNAL END ====\n\n"
+                                f"✍️【文学感官化书写引导】：请完全使用充满小说温度、温热、黏稠且带着强烈知觉过载的官能笔触，刻录她/她们真实的心理抗拒与肉体屈服反差，彻底避开任何干瘪、冷冰冰的医用解剖学术名词。"
                             )
                         })
-                        
+
+                        # 发起不带 Stream 的二次追发，专门用于高阶指标计算
                         chase_response = client.chat.completions.create(
                             model=model_name, messages=context_chase_payload, stream=False,
                             temperature=0.5, max_tokens=1200, timeout=40.0
@@ -1133,36 +1129,51 @@ else:
                         print(f"📡 单聊追发失败: {chase_err}")
                         raw_status_response = role_data.get("character_status", "")
 
-               # 后端暗中提取并保留角色主观原生名词独白
-                v_match = re.search(r'阴道的感觉:\s*([\s\S]*?)(?=\s*乳头的感觉:|$)', raw_status_response)
-                n_match = re.search(r'乳头的感觉:\s*([\s\S]*?)(?=\s*大腿内侧的感觉:|$)', raw_status_response)
-                t_match = re.search(r'大腿内侧的感觉:\s*([\s\S]*?)(?=\s*\[|\Z)', raw_status_response)
+                # ========================================================
+                # 🌟 [多角色动态提取引擎]：自适应剥离并清洗多位女性的官能状态
+                # ========================================================
+                block_pattern = r'(\[.*?\])\s*\n\s*阴道的感觉:\s*([\s\S]*?)\s*乳头的感觉:\s*([\s\S]*?)\s*大腿内侧的感觉:\s*([\s\S]*?)(?=\n\s*\[|\n\s*====|\Z)'
+                captured_blocks = list(re.finditer(block_pattern, raw_status_response))
 
-                v_text = v_match.group(1).strip() if v_match else f"【{target_girl}】感觉到了私密处的热潮正无法自控地大片泥泞泛滥..."
-                n_text = n_match.group(1).strip() if n_match else f"【{target_girl}】感觉到了敏感顶端在布料刮蹭下阵阵发酥发硬，敏感到近乎战栗..."
-                t_text = t_match.group(1).strip() if t_match else f"【{target_girl}】感觉到了大腿内侧一片滚烫，紧致的肌肤间全是汗湿与不受控制的娇羞微颤..."
+                final_db_block_list = []
+                final_html_elements = []
 
-                # 清理多余的占位标签
-                v_text = re.sub(r'\[.*?\]|v_field:|n_field:|t_field:|阴道的感觉:|乳头的感觉:|大腿内侧的感觉:', '', v_text).strip()
-                n_text = re.sub(r'\[.*?\]|v_field:|n_field:|t_field:|阴道的感觉:|乳头的感觉:|大腿内侧的感觉:', '', n_text).strip()
-                t_text = re.sub(r'\[.*?\]|v_field:|n_field:|t_field:|阴道的感觉:|乳头的感觉:|大腿内侧的感觉:', '', t_text).strip()
+                if captured_blocks:
+                    for block in captured_blocks:
+                        active_role_name = block.group(1).strip()  # 🎯 提取 AI 自动判断出的人名
+                        v_text = block.group(2).strip()
+                        n_text = block.group(3).strip()
+                        t_text = block.group(4).strip()
 
-                new_status_block = f"[{target_girl}]\n阴道：{v_text}\n乳头：{n_text}\n大腿内侧：{t_text}"
-                role_data["character_status"] = new_status_block
+                        # 深度净化残留标签
+                        v_text = re.sub(r'\[.*?\]|阴道的感觉:|乳头的感觉:|大腿内侧的感觉:', '', v_text).strip()
+                        n_text = re.sub(r'\[.*?\]|阴道的感觉:|乳头的感觉:|大腿内侧的感觉:', '', n_text).strip()
+                        t_text = re.sub(r'\[.*?\]|阴道的感觉:|乳头的感觉:|大腿内侧的感觉:', '', t_text).strip()
 
-                # 4. 前端合体高阶呈现
+                        # 格式化组装进本地 JSON 数据库
+                        final_db_block_list.append(f"{active_role_name}\n阴道：{v_text}\n乳头：{n_text}\n大腿内侧：{t_text}")
+
+                        # 格式化组装用于前端展示的高级浪漫 HTML 框
+                        final_html_elements.append(f"""
+                        <div class="role-status-block">
+                            <div class="role-status-name">{active_role_name} 隐秘肉体知觉</div>
+                            <span class="role-status-row"><span class="role-status-label">阴道：</span>{v_text}</span>
+                            <span class="role-status-row"><span class="role-status-label">乳头：</span>{n_text}</span>
+                            <span class="role-status-row"><span class="role-status-label">大腿内侧：</span>{t_text}</span>
+                        </div>
+                        """)
+
+                    new_status_block = "\n\n".join(final_db_block_list)
+                    role_data["character_status"] = new_status_block
+                else:
+                    new_status_block = role_data.get("character_status", "")
+
+                # 4. 前端合体高阶多轨实时呈现
                 with response_placeholder.container():
                     st.markdown(formatted_story)
-
-                    status_html = f"""
-                    <div class="role-status-block">
-                        <div class="role-status-name">[{target_girl}] 生理状态 (⚡单聊官能高感知型)</div>
-                        <span class="role-status-row"><span class="role-status-label">阴道：</span>{v_text}</span>
-                        <span class="role-status-row"><span class="role-status-label">乳头：</span>{n_text}</span>
-                        <span class="role-status-row"><span class="role-status-label">大腿内侧：</span>{t_text}</span>
-                    </div>
-                    """
-                    st.markdown(status_html, unsafe_allow_html=True)
+                    if final_html_elements:
+                        joined_html = "\n".join(final_html_elements)
+                        st.markdown(joined_html, unsafe_allow_html=True)
 
                 # 5. 保存并同步更新入历史对话切片
                 single_reply_id = f"reply_{int(time.time() * 1000)}_{random.randint(1000, 9999)}"
