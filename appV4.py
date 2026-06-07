@@ -1119,11 +1119,11 @@ else:
                                 f"3. 每个出场女性的信号块格式必须严格按照以下三行对齐输出，每一个部位的知觉文字严格控制在 50~80 字以内，字数精炼饱满：\n\n"
                                 f"==== SIGNAL START ====\n"
                                 f"[此处写第一位出场女性的真实名字]\n"
-                                f"阴道的感觉: 某某（此处替换为她的名字）感觉到了[由你推演她该区域最新的温热、泥泞充血、紧缩或本能流淌的主观知觉白描]\n"
-                                f"乳头的感觉: 某某（此处替换为她的名字）感觉到了[由你推演那两处随着衣物刮蹭而发酥发硬、红晕蔓延的过载知觉白描]\n"
-                                f"大腿内侧的感觉: 某某（此处替换为她的名字）感觉到了[由你推演那一整片肌肤皮温骤升、滚烫汗湿与因克制而瘫软微颤的知觉白描]\n\n"
-                                f"[此处若有第二位出场女性，请紧接着用一模一样的三行格式输出她的肉体知觉，若无则不写]\n"
-                                f"==== SIGNAL END ====\n\n"
+                                f"阴道的感觉: [此处由你自发写出她是谁]感觉到了[此处由你自发推演出该区域最新的主观知觉白描]\n"
+                                f"乳头的感觉: [此处由你自发写出她是谁]感觉到了[此处由你自发推演出该区域最新的主观知觉白描]\n"
+                                f"大腿内侧的感觉: [此处由你自发写出她是谁]感觉到了[此处由你自发推演出该区域最新的主观知觉白描]\n\n"
+                                f"[此处若有第二位出场女性，请紧接着用一模一样的格式输出她的肉体知觉，若无则不写]\n"
+                                f"==== SIGNAL END ===="
                                 f"✍️【文学感官化书写引导】：请完全使用充满小说温度、温热、黏稠且带着强烈知觉过载的官能笔触，刻录她/她们真实的心理抗拒与肉体屈服反差，彻底避开任何干瘪、冷冰冰的医用解剖学术名词。"
                             )
                         })
@@ -1141,7 +1141,11 @@ else:
                 # ========================================================
                 # 🌟 [多角色动态提取引擎]：自适应剥离并清洗多位女性的官能状态
                 # ========================================================
-                block_pattern = r'(\[.*?\])\s*\n\s*阴道的感觉:\s*([\s\S]*?)\s*乳头的感觉:\s*([\s\S]*?)\s*大腿内侧的感觉:\s*([\s\S]*?)(?=\n\s*\[|\n\s*====|\Z)'
+                # ========================================================
+                # 🌟 [单聊多角色动态提取引擎 · 完美符号对齐版]
+                # ========================================================
+                # 🎯 核心修正：使用 [：:] 完美通杀全角和半角冒号，并在人名块后面增加 \s*，全面容忍模型乱敲的空格与换行
+                block_pattern = r'(\[.*?\])\s*\n*\s*阴道的感觉[：:]\s*([\s\S]*?)\s*乳头的感觉[：:]\s*([\s\S]*?)\s*大腿内侧的感觉[：:]\s*([\s\S]*?)(?=\n\s*\[|\n\s*====|\Z)'
                 captured_blocks = list(re.finditer(block_pattern, raw_status_response))
 
                 final_db_block_list = []
@@ -1149,20 +1153,20 @@ else:
 
                 if captured_blocks:
                     for block in captured_blocks:
-                        active_role_name = block.group(1).strip()  # 🎯 提取 AI 自动判断出的人名
+                        active_role_name = block.group(1).strip()  # 🎯 自动捕捉 AI 自己判断出来的女性人名
                         v_text = block.group(2).strip()
                         n_text = block.group(3).strip()
                         t_text = block.group(4).strip()
 
-                        # 深度净化残留标签
-                        v_text = re.sub(r'\[.*?\]|阴道的感觉:|乳头的感觉:|大腿内侧的感觉:', '', v_text).strip()
-                        n_text = re.sub(r'\[.*?\]|阴道的感觉:|乳头的感觉:|大腿内侧的感觉:', '', n_text).strip()
-                        t_text = re.sub(r'\[.*?\]|阴道的感觉:|乳头的感觉:|大腿内侧的感觉:', '', t_text).strip()
+                        # 强力剥离残留的多余占位文本，防止前端文字重叠
+                        v_text = re.sub(r'\[.*?\]|阴道的感觉:|阴道的感觉：|乳头的感觉:|乳头的感觉：|大腿内侧的感觉:|大腿内侧的感觉：', '', v_text).strip()
+                        n_text = re.sub(r'\[.*?\]|阴道的感觉:|阴道的感觉：|乳头的感觉:|乳头的感觉：|大腿内侧的感觉:|大腿内侧的感觉：', '', n_text).strip()
+                        t_text = re.sub(r'\[.*?\]|阴道的感觉:|阴道的感觉：|乳头的感觉:|乳头的感觉：|大腿内侧的感觉:|大腿内侧的感觉：', '', t_text).strip()
 
-                        # 格式化组装进本地 JSON 数据库
+                        # 格式化组装同步本地 JSON 数据库格式（维持全角以供最上方的 display_novel_with_bold_status 精准拦截）
                         final_db_block_list.append(f"{active_role_name}\n阴道：{v_text}\n乳头：{n_text}\n大腿内侧：{t_text}")
 
-                        # 格式化组装用于前端展示的高级浪漫 HTML 框
+                        # 格式化组装用于流式结束后实时在网页呈现的高级浪漫 HTML 框
                         final_html_elements.append(f"""
                         <div class="role-status-block">
                             <div class="role-status-name">{active_role_name} 隐秘肉体知觉</div>
@@ -1173,6 +1177,10 @@ else:
                         """)
 
                     new_status_block = "\n\n".join(final_db_block_list)
+                    role_data["character_status"] = new_status_block
+                else:
+                    # 💡 终极兜底保护：如果大模型彻底抽风连宽大正则都没对齐，强行把原始输出塞进状态栏，确保你的数值不丢失、不卡死
+                    new_status_block = raw_status_response
                     role_data["character_status"] = new_status_block
                 else:
                     new_status_block = role_data.get("character_status", "")
