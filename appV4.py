@@ -1092,7 +1092,7 @@ else:
                             "role": "user",
                             "content": (
                                 f"⚡ [舞台物理引擎实时刷新命令]:\n"
-                                f"请顺承你刚才亲手编织出的精彩长篇肉戏。在上一轮既定基数：【{role_data.get('character_status', '')}】的基础上，"
+                                f"请紧密顺承你刚才亲手编织的小说正文剧情节奏。无论当前处于何种戏剧阶段，在上一轮既定基数：【{role_data.get('character_status', '')}】的基础上，"
                                 f"深层次演化【{target_girl}】在此一瞬间最新的局部反应。\n\n"
                                 f"【⚙️ 信号属性定义表 / Signal Definition Map】:\n"
                                 f"- v_field = 受试女性私密结合通道（跟踪内壁充血、体液分泌流量与拉丝轨迹）\n"
