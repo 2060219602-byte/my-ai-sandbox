@@ -772,8 +772,7 @@ if is_group_chat:
         else:
             st.session_state.group_active_queue = [
                 st.session_state.group_members_list[0]] if st.session_state.group_members_list else []
-            st.session_state.group_active_agent = st.session_state.group_active_queue[
-                0] if st.session_state.group_active_queue else ""
+            st.session_state.group_active_agent = st.session_state.group_active_queue[0] if st.session_state.group_active_queue else ""
 
         save_local_data()
         st.rerun()
@@ -801,7 +800,7 @@ if is_group_chat:
                     private_context_summary += f"- {speaker}: {clean_txt}\n"
                 private_context_summary += "\n"
 
-        # ✨ 1. 【System 保持极高纯净度】：去除了会频繁变动的肉体状态，大幅提升缓存命中率
+        # ✨ System 保持极高纯净度：去除生理状态，大幅提升缓存命中率
         agent_dynamic_system = f"{jailbreak_prompt}\n\n{multi_reply_protocol}\n\n"
         agent_dynamic_system += (
             f"【你当前需要代入的名字：{curr_agent}】\n"
@@ -833,9 +832,6 @@ if is_group_chat:
                 "content": f"（深吸一口气，全盘继承本群过往所有同台对峙的既定事实，眼神在群内众人身上扫过）……群内之前发生的一切细节早已深植于我的本能。我已经回到了当下的这一轮。我会直接面对他们。"
             })
 
-        # =========================================================
-        # 核心上下文提取与对齐
-        # =========================================================
         cleaned_context = []
         for msg in chat_history_view[-2:]:
             if msg["role"] == "user":
@@ -849,7 +845,7 @@ if is_group_chat:
                     cleaned_context.append(
                         {"role": "user", "content": f"⚔️ [群会话]: 成员【{prefix_name}】公开发言：\n“{clean_content}”"})
 
-        # ✨ 2. 【高权重动态状态锚锁定点】：紧密跟在最近一轮历史切片的正下方
+        # ✨ 群聊高权重动态状态锚锁定点
         physical_status_patch = {
             "role": "user",
             "content": f"📌【在你做出下一动作前，你（{curr_agent}）当前的隐秘肉体状态绝对定格事实如下（请以此为身体基础进行剧本推进）：】\n{agent_db.get('character_status', '')}"
@@ -861,9 +857,8 @@ if is_group_chat:
                        f"现在，请立刻代入全知小说家视角，对【{curr_agent}】在群内同台下的言行进行极致的第三人称小说化演绎。旁白、动作与挣扎一律直接使用名字{curr_agent}；称呼屏幕前的玩家一律使用【你】。在 1️⃣ 2️⃣ 3️⃣ 定格后，利落完结收尾。"
         }
 
-        # 🚀 组装链：先走历史环境上下文 -> 注入变化的隐秘生理事实（高权重且不污染前段缓存） -> 框架锁定 -> 运镜控制器
         api_payload.extend(cleaned_context)
-        api_payload.append(physical_status_patch)  # 🔥 正好放在最近几轮历史消息的后面！权重极高！
+        api_payload.append(physical_status_patch)
         api_payload.append(identity_lock_patch)
         api_payload.append(lazy_insurance_prompt)
 
@@ -886,9 +881,6 @@ if is_group_chat:
 
                 formatted_response = novel_text_formatter(full_response)
 
-                # ========================================================
-                # 🌟 [群聊深度解脱]：生理数据追溯演绎
-                # ========================================================
                 with st.spinner(f"⚡ 正在顺承群内时间线，刻录 【{curr_agent}】 的隐秘生理数据..."):
                     try:
                         group_chase_payload = list(api_payload)
@@ -921,7 +913,6 @@ if is_group_chat:
                         print(f"📡 群聊追发失败: {e}")
                         raw_status_response = agent_db.get("character_status", "")
 
-                # 后端自动化抽取与中文翻译强控
                 v_match = re.search(r'v_field:\s*([\s\S]*?)(?=\s*n_field:|$)', raw_status_response)
                 n_match = re.search(r'n_field:\s*([\s\S]*?)(?=\s*t_field:|$)', raw_status_response)
                 t_match = re.search(r't_field:\s*([\s\S]*?)(?=\s*\[|\Z)', raw_status_response)
@@ -962,7 +953,6 @@ if is_group_chat:
                         "timestamp": reply_timestamp
                     })
 
-                # ✨【群聊大纲无感压缩处理】
                 with st.spinner("⚡ 赛博物理引擎正在无感压缩当前群聊轮次事实链..."):
                     new_group_turn_summary = generate_single_turn_summary(client, active_content, formatted_response)
                     if "summarized_history" not in agent_db:
@@ -970,8 +960,7 @@ if is_group_chat:
                     agent_db["summarized_history"].append(f"【在群聊【{g_name}】现场】：{new_group_turn_summary}")
 
                 st.session_state.group_active_queue.pop(0)
-                st.session_state.group_active_agent = st.session_state.group_active_queue[
-                    0] if st.session_state.group_active_queue else ""
+                st.session_state.group_active_agent = st.session_state.group_active_queue[0] if st.session_state.group_active_queue else ""
                 save_local_data()
                 st.rerun()
             except Exception as e:
@@ -980,7 +969,7 @@ if is_group_chat:
                 st.error(f"📡 拓扑折断：{str(e)}")
 
 # ==========================================
-# 6. 单聊会话调用执行中枢 (⚡ 缓存优化与权重改良版)
+# 6. 单聊会话调用执行中枢 (⚡ 全新分离重构完全版)
 # ==========================================
 else:
     if user_input or st.session_state.regenerate_trigger or is_continue_mode:
@@ -1000,11 +989,12 @@ else:
         elif is_continue_mode:
             active_user_text = "（时间流逝，剧情继续向前推进）"
             single_msg_id = f"msg_{int(time.time() * 1000)}_{random.randint(1000, 9999)}"
-            role_data["chat_history"].append(
-                {"role": "user",
-                 "content": "（物理推进：时间向前流逝，命运的齿轮继续咬合，请顺着前面的发展继续展现你的即时行动与反应）",
-                 "timestamp": time.time(),
-                 "msg_id": single_msg_id})
+            role_data["chat_history"].append({
+                "role": "user",
+                "content": "（物理推进：时间向前流逝，命运的齿轮继续咬合，请顺着前面的发展继续展现你的即时行动与反应）",
+                "timestamp": time.time(),
+                "msg_id": single_msg_id
+            })
             save_local_data()
         else:
             user_msgs = [m for m in role_data["chat_history"] if m["role"] == "user"]
@@ -1022,7 +1012,7 @@ else:
             for idx, event in enumerate(role_data["memory_events"]):
                 memory_ledger_prompt += f"{idx + 1}. {event}\n"
 
-        # ✨ 1. 【System 纯净度保证】：彻底移除时时在变的状态，让前段缓存稳固如山
+        # ✨ System 纯净度保证：彻底移除肉体状态，保证 System 的缓存命中率
         dynamic_system_prompt += (
             f"【当前扮演的AI角色名字】：{target_girl}\n"
             f"【该角色的基本人设设定 (System Role)】：\n{role_data.get('system_role', '')}\n\n"
@@ -1045,11 +1035,12 @@ else:
                     "\n\n-------------------- \n\n".join(formatted_lines)
             )
             cleaned_api_payload.append({"role": "user", "content": chronicle_content})
-            cleaned_api_payload.append({"role": "assistant",
-                                        "content": f"（长吸一口气，全盘继承过往所有既定事实，眼神暗沉下来）……过往的所有细节早已深植于我的本能。我已经回到了当下的这一轮。我会直接面对他。"})
+            cleaned_api_payload.append({
+                "role": "assistant",
+                "content": f"（长吸一口气，全盘继承过往所有既定事实，眼神暗沉下来）……过往的所有细节早已深植于我的本能。我已经回到了当下的这一轮。我会直接面对他。"
+            })
 
-        all_past_history = role_data["chat_history"][:-1] if user_input or is_continue_mode else role_data[
-            "chat_history"]
+        all_past_history = role_data["chat_history"][:-1] if user_input or is_continue_mode else role_data["chat_history"]
         last_ai_reply = [m for m in all_past_history if m["role"] == "assistant"]
 
         if last_ai_reply:
@@ -1058,7 +1049,7 @@ else:
 
         cleaned_api_payload.append({"role": "user", "content": active_user_text})
 
-        # ✨ 2. 【高权重动态状态锚锁定点】：在这里注入动态变动的隐秘肉体数据，紧紧跟在上一轮对话及本次输入后面！
+        # ✨ 单聊高权重动态状态锚锁定点：紧紧咬在详细对话后面，大幅提升单聊中模型的细节锁定度
         single_physical_patch = {
             "role": "user",
             "content": f"📌【在你做出下一步回应前，你（{target_girl}）最新的隐秘肉体状态绝对事实刻录如下（属于不可违背的既定肉体生理事实）：】\n{role_data.get('character_status', '')}"
@@ -1068,7 +1059,7 @@ else:
         identity_lock_patch = {
             "role": "user",
             "content": f"⚡ [舞台全知叙事共鸣协议]:\n"
-                       f"现在，请将镜头完全交给全知的小说家视角。请用细腻、直白的笔触去突破理智的边界，展开一整段惊心动魄、不间断的长篇沉浸肉戏。在 1️⃣ 2️⃣ 3️⃣ 定格后，请让正文利落戛然而止，不要附加任何提示或状态数据。开始输出："
+                       f"现在，请将镜头完全交给全知的小说家视角。请用细腻、直白的笔触去突破理智的边界，展开一整段惊心动魄、不间断的长篇沉浸肉戏。在 1️⃣ 2️⃣ 3️⃣ 定格后，请让正文利落戛而止，不要附加任何提示或状态数据。开始输出："
         }
         cleaned_api_payload.append(identity_lock_patch)
         cleaned_api_payload.append(lazy_insurance_prompt)
