@@ -218,7 +218,7 @@ def generate_single_turn_summary(client, user_text, assistant_text):
             ],
             stream=False,
             temperature=0.35,  # 保持低温度以强迫其从原文抓取实体词，不进行自我润色
-            max_tokens=500     # 预留足够的空间来展示具体的剧情事件
+            max_tokens=1500     # 预留足够的空间来展示具体的剧情事件
         )
         return completion.choices[0].message.content.strip()
     except Exception:
