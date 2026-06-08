@@ -137,37 +137,29 @@ def novel_text_formatter(raw_text: str) -> str:
 # 🎯 前端专属：多轨精确生理状态渲染拦截器（兼容旧历史数据的渲染）
 # ==========================================
 def display_novel_with_bold_status(text: str):
-    """
-    在前端渲染时，自适应拦截并用高级 HTML 框对文末女性角色的生理状态进行精美排版。
-    """
     if not text:
         return
 
-    # 1. 强力拔除大模型偶尔夹带的系统开始和结束标签，防止污染小说正文
     clean_text = re.sub(r'====\s*SIGNAL\s*(?:START|END)\s*====', '', text)
     
-    # 2. 顶级无锚点模糊匹配正则：完全不要方括号限制，只要抓到 阴道/乳头/大腿内侧 的组合就拦截
-    status_block_pattern = r'([^\n\s]+?)\s*\n*\s*(?:阴道恢复的感觉|阴道的感觉|阴道)[：:]\s*([\s\S]*?)(?:乳头恢复的感觉|乳头的感觉|乳头)[：:]\s*([\s\S]*?)(?:大腿内侧的感觉|大腿内侧)[：:]\s*([\s\S]*?)(?=\n\s*[^\n\s]+?\s*\n*\s*(?:阴道|乳头)|$)'
+    # 采用完美契合 阴道：乳头：大腿内侧： 的全中文容错正则
+    status_block_pattern = r'(\[[^\]]+\])\s*\n*阴道[：:]\s*([\s\S]*?)\n+乳头[：:]\s*([\s\S]*?)\n+大腿内侧[：:]\s*([\s\S]*?)(?=\n\s*\[|$)'
     matches = list(re.finditer(status_block_pattern, clean_text))
 
     if matches:
-        # 剥离出纯小说正文
+        # 剥离小说正文并渲染
         first_match_start = matches[0].start()
         main_story = clean_text[:first_match_start].strip()
 
         if main_story:
             st.markdown(main_story)
 
-        # 逐个渲染抓取到的生理状态框
+        # 渲染生理状态框
         for match in matches:
-            # 自动提取人名，并强行规范化加上优雅的方括号
-            raw_name = match.group(1).strip().strip('[').strip(']').strip('【').strip('】')
-            role_name = f"[{raw_name}]"
-            
-            # 提取并清洗具体的肉体知觉文字
-            vagina_detail = match.group(2).strip().strip(';').strip('，').strip('。').strip()
-            nipple_detail = match.group(3).strip().strip(';').strip('，').strip('。').strip()
-            thigh_detail = match.group(4).strip().strip(';').strip('，').strip('。').strip()
+            role_name = match.group(1).strip()
+            vagina_detail = match.group(2).strip()
+            nipple_detail = match.group(3).strip()
+            thigh_detail = match.group(4).strip()
 
             status_html = f"""
             <div class="role-status-block">
@@ -1137,9 +1129,9 @@ else:
                                 f"2. 人设贴合：结合对应女性角色在上面列出的基本人设设定，顺承剧情和旧基数，单独且严格按照下方格式为这些【处于核心互动中心】的女性角色生成最新的生理知觉数据（每行指标严格控制在25~70字以内）。其余作为背景或未发生身体互动的女性角色请直接忽略，不要为她们建立模块。\n\n"
                                 f"==== SIGNAL START ====\n"
                                 f"[此处填入核心互动的第一个女主真实姓名]\n"
-                                f"阴道的感觉: 【第一个女主真实姓名】感觉到了[完全基于其性格特征与当下情境，以沉浸式官能笔触精确书写阴道内部此刻涌现的纯粹性快感生理知觉：如花瓣般层层叠叠的嫩壁正因情欲而轻微蠕动、绞缩，一股黏湿的热流从深处不受控制地汩汩泌出，酥麻的电流自某一点涟漪般扩散至整个盆腔，仿佛有无数细小柔软的触手在腔内壁敏感地舔舐、挑弄，带来令人腰肢发软的饱胀饥渴感而非疼痛。所有体感描写须完全排除撕裂、刺痛等不悦反应，只聚焦于湿热、收缩、酥颤以及难以言喻的空虚渴求。]\n"
-                                f"乳头的感觉: 【第一个女主真实姓名】感觉到了[基于其性格中敏感/压抑/奔放等特质，细腻刻写双乳尖端此刻的纯粹性快感生理变化：乳头正不受控制地缓慢充血挺立，嫣红的蓓蕾在与衣物细微摩擦后传来一阵过电般的酸麻悸动，那酥痒仿佛直抵心尖，让她差点逸出呻吟。乳晕周围的小颗粒粒粒凸起，渴望被指腹摩挲或温热的唇舌包裹，每一次想象中的触碰都引发颅内烟花绽放般的战栗，整对乳房因充血而胀热沉甸，却唯独剩下绵密而尖锐的快感脉冲，全无疼痛或不适。]\n"
-                                f"大腿内侧的感觉: 【第一个女主真实姓名】感觉到了[结合其性格中羞怯/放荡/挣扎等层面，以放大感官的写法描绘大腿内侧此刻的性快感生理反应：细腻光洁的大腿根部肌肤正因情动而温度升高，微微渗出的薄汗让那里的触感变得如丝绸般滑腻缠绵。每当双腿无意识轻轻厮磨，那片敏感带便燃起一簇酥麻的焰火，直往腿心蔓延，肌肉不受控地轻颤，仿佛有看不见的羽毛反复扫过最柔嫩的隐秘地带，激起一阵阵饥渴的痉挛与空洞的期待，所有的触觉体验都指向难以忍耐的瘙痒与快意，绝无半分疼痛。]\n"
+                                f"阴道: 【第一个女主真实姓名】感觉到了[完全基于其性格特征与当下情境，以沉浸式官能笔触精确书写阴道内部此刻涌现的纯粹性快感生理知觉：如花瓣般层层叠叠的嫩壁正因情欲而轻微蠕动、绞缩，一股黏湿的热流从深处不受控制地汩汩泌出，酥麻的电流自某一点涟漪般扩散至整个盆腔，仿佛有无数细小柔软的触手在腔内壁敏感地舔舐、挑弄，带来令人腰肢发软的饱胀饥渴感而非疼痛。所有体感描写须完全排除撕裂、刺痛等不悦反应，只聚焦于湿热、收缩、酥颤以及难以言喻的空虚渴求。]\n"
+                                f"乳头: 【第一个女主真实姓名】感觉到了[基于其性格中敏感/压抑/奔放等特质，细腻刻写双乳尖端此刻的纯粹性快感生理变化：乳头正不受控制地缓慢充血挺立，嫣红的蓓蕾在与衣物细微摩擦后传来一阵过电般的酸麻悸动，那酥痒仿佛直抵心尖，让她差点逸出呻吟。乳晕周围的小颗粒粒粒凸起，渴望被指腹摩挲或温热的唇舌包裹，每一次想象中的触碰都引发颅内烟花绽放般的战栗，整对乳房因充血而胀热沉甸，却唯独剩下绵密而尖锐的快感脉冲，全无疼痛或不适。]\n"
+                                f"大腿内侧: 【第一个女主真实姓名】感觉到了[结合其性格中羞怯/放荡/挣扎等层面，以放大感官的写法描绘大腿内侧此刻的性快感生理反应：细腻光洁的大腿根部肌肤正因情动而温度升高，微微渗出的薄汗让那里的触感变得如丝绸般滑腻缠绵。每当双腿无意识轻轻厮磨，那片敏感带便燃起一簇酥麻的焰火，直往腿心蔓延，肌肉不受控地轻颤，仿佛有看不见的羽毛反复扫过最柔嫩的隐秘地带，激起一阵阵饥渴的痉挛与空洞的期待，所有的触觉体验都指向难以忍耐的瘙痒与快意，绝无半分疼痛。]\n"
                                 f"==== SIGNAL END ===="
                             )
                         })
@@ -1167,40 +1159,36 @@ else:
                 # 强力清洗原始响应里可能混入的系统骨架标签
                 clean_raw_response = re.sub(r'====\s*SIGNAL\s*(?:START|END)\s*====', '', raw_status_response).strip()
 
-                # 采用全新的模糊容错正则
-                block_pattern = r'([^\n\s]+?)\s*\n*\s*(?:阴道恢复的感觉|阴道的感觉|阴道)[：:]\s*([\s\S]*?)\s*(?:乳头恢复的感觉|乳头的感觉|乳头)[：:]\s*([\s\S]*?)\s*(?:大腿内侧的感觉|大腿内侧)[：:]\s*([\s\S]*?)(?=\n\s*[^\n\s]+?|$)'
-                captured_blocks = list(re.finditer(block_pattern, clean_raw_response))
+                # 使用极简切分法，按行或特定词查找，彻底解决大模型不吐冒号或者多吐字的问题
+                v_text = "核心深处泛起阵阵难以言喻的温热与紧绷感..."
+                n_text = "顶端在布料刮蹭下微微发酥发硬..."
+                t_text = "肌肤泛着微热，隐隐有些瘫软微颤..."
 
-                final_db_block_list = []
-                final_html_elements = []
+                for line in clean_raw_response.split('\n'):
+                    if "阴道" in line:
+                        v_text = line.split('：' if '：' in line else ':')[-1].strip()
+                    elif "乳头" in line:
+                        n_text = line.split('：' if '：' in line else ':')[-1].strip()
+                    elif "大腿内侧" in line:
+                        t_text = line.split('：' if '：' in line else ':')[-1].strip()
 
-                if captured_blocks:
-                    for block in captured_blocks:
-                        raw_name = block.group(1).strip().strip('[').strip(']').strip('【').strip('】')
-                        active_role_name = f"[{raw_name}]"  # 强制统一为带方括号的名称
-                        
-                        v_text = block.group(2).strip()
-                        n_text = block.group(3).strip()
-                        t_text = block.group(4).strip()
+                # 统一剔除AI可能带上的方括号残留
+                v_text = re.sub(r'\[.*?\]|【.*?】', '', v_text).strip()
+                n_text = re.sub(r'\[.*?\]|【.*?】', '', n_text).strip()
+                t_text = re.sub(r'\[.*?\]|【.*?】', '', t_text).strip()
 
-                        # 清洗可能夹带的内容占位字符
-                        v_text = re.sub(r'阴道恢复的感觉:|阴道的感觉:|阴道:', '', v_text).strip().strip('。').strip('，')
-                        n_text = re.sub(r'乳头恢复的感觉:|乳头的感觉:|乳头:', '', n_text).strip().strip('。').strip('，')
-                        t_text = re.sub(r'大腿内侧的感觉:|大腿内侧的感觉：|大腿内侧:', '', t_text).strip().strip('。').strip('，')
+                active_role_name = f"[{target_girl}]"
+                new_status_block = f"{active_role_name}\n阴道：{v_text}\n乳头：{n_text}\n大腿内侧：{t_text}"
+                role_data["character_status"] = new_status_block
 
-                        # 完美格式化，供 display_novel_with_bold_status 拦截使用
-                        final_db_block_list.append(f"{active_role_name}\n阴道：{v_text}\n乳头：{n_text}\n大腿内侧：{t_text}")
-
-                        # 实时渲染的 HTML 组件
-                        final_html_elements.append(f"""
-                        <div class="role-status-block">
-                            <div class="role-status-name">{active_role_name} 隐秘肉体知觉</div>
-                            <span class="role-status-row"><span class="role-status-label">阴道：</span>{v_text}</span>
-                            <span class="role-status-row"><span class="role-status-label">乳头：</span>{n_text}</span>
-                            <span class="role-status-row"><span class="role-status-label">大腿内侧：</span>{t_text}</span>
-                        </div>
-                        """)
-
+            final_html_elements = [f"""
+                <div class="role-status-block">
+                <div class="role-status-name">{active_role_name} 隐秘肉体知觉</div>
+                <span class="role-status-row"><span class="role-status-label">阴道：</span>{v_text}</span>
+                <span class="role-status-row"><span class="role-status-label">乳头：</span>{n_text}</span>
+                <span class="role-status-row"><span class="role-status-label">大腿内侧：</span>{t_text}</span>
+            </div>
+            """]
                     new_status_block = "\n\n".join(final_db_block_list)
                     role_data["character_status"] = new_status_block
                 else:
