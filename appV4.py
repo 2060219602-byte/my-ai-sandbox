@@ -1144,28 +1144,40 @@ else:
                         raw_status_response = role_data.get("character_status", "")
 
                 # ========================================================
-                # 🌟 第三步：极简容错动态提取（彻底解决语法与正则断裂）
+                # 🌟 第三步：降维打击模糊提取（免疫一切换行与排版污染）
                 # ========================================================
                 clean_raw_response = re.sub(r'====\s*SIGNAL\s*(?:START|END)\s*====', '', raw_status_response).strip()
 
-                # 设定默认兜底值
+                # 1. 设定稳固的默认兜底值
                 v_text = "核心深处泛起阵阵难以言喻的温热与紧绷感..."
                 n_text = "顶端在布料刮蹭下微微发酥发硬..."
                 t_text = "肌肤泛着微热，隐隐有些瘫软微颤..."
 
-                # 按行清洗与提取
-                for line in clean_raw_response.split('\n'):
-                    if "阴道" in line:
-                        v_text = line.split('：' if '：' in line else ':')[-1].strip()
-                    elif "乳头" in line:
-                        n_text = line.split('：' if '：' in line else ':')[-1].strip()
-                    elif "大腿内侧" in line:
-                        t_text = line.split('：' if '：' in line else ':')[-1].strip()
+                # 2. 【核心修复】无视换行，使用强力局部正则独立抓取每个部位后面的所有文本
+                # 匹配“阴道”后面一直到“乳头”或文本结束的所有文字
+                v_match = re.search(r'阴道[恢复的感觉：:]*(.*?)(?=乳头|$)', clean_raw_response, re.DOTALL)
+                # 匹配“乳头”后面一直到“大腿”或文本结束的所有文字
+                n_match = re.search(r'乳头[恢复的感觉：:]*(.*?)(?=大腿|$)', clean_raw_response, re.DOTALL)
+                # 匹配“大腿内侧”后面一直到文本结束的所有文字
+                t_match = re.search(r'大腿内侧[的感觉：:]*(.*?)(?=$)', clean_raw_response, re.DOTALL)
 
-                # 统一剔除AI可能意外带上的方括号、特殊符号残留
-                v_text = re.sub(r'\[.*?\]|【.*?】|阴道恢复的感觉:|阴道的感觉:', '', v_text).strip().strip('。').strip('，')
-                n_text = re.sub(r'\[.*?\]|【.*?】|乳头恢复的感觉:|乳头的感觉:', '', n_text).strip().strip('。').strip('，')
-                t_text = re.sub(r'\[.*?\]|【.*?】|大腿内侧的感觉:|大腿内侧:', '', t_text).strip().strip('。').strip('，')
+                if v_match and v_match.group(1).strip():
+                    v_text = v_match.group(1).strip()
+                if n_match and n_match.group(1).strip():
+                    n_text = n_match.group(1).strip()
+                if t_match and t_match.group(1).strip():
+                    t_text = t_match.group(1).strip()
+
+                # 3. 强效清洗多余的前缀、后缀、标点和冒号残留
+                def clean_field(raw_txt):
+                    # 剥离各种中英文冒号、减号、数字前缀及方括号
+                    txt = re.sub(r'^[:：\-\s\d\.]+|^[【\[].*?[】\]][:：]*', '', raw_txt).strip()
+                    # 掐头去尾掉多余的句号和逗号
+                    return txt.strip('。').strip('，').strip(';').strip('；')
+
+                v_text = clean_field(v_text)
+                n_text = clean_field(n_text)
+                t_text = clean_field(t_text)
 
                 active_role_name = f"[{target_girl}]"
                 new_status_block = f"{active_role_name}\n阴道：{v_text}\n乳头：{n_text}\n大腿内侧：{t_text}"
