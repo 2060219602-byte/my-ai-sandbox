@@ -1018,7 +1018,7 @@ if is_group_chat:
                 st.error(f"📡 拓扑折断：{str(e)}")
 
 # ==========================================
-# 6. 单聊会话调用执行中枢 (⚡ 彻底修复状态卡死更新版)
+# 6. 单聊会话调用执行中枢 (⚡ 终极位置优化：末尾绝对指令强控版)
 # ==========================================
 else:
     if user_input or st.session_state.regenerate_trigger or is_continue_mode:
@@ -1052,26 +1052,19 @@ else:
 
         st.session_state.regenerate_trigger = False
 
+        # ✨【优化 1】：System 提示词极度精简，只留越狱、基本人设和背景，大幅提升响应速度
         dynamic_system_prompt = f"{jailbreak_prompt}\n\n"
-        dynamic_system_prompt += f"{multi_reply_protocol}\n\n"
-
-        memory_ledger_prompt = ""
-        if role_data.get("memory_events"):
-            memory_ledger_prompt = "【📌 绝对核心备忘录线索】\n"
-            for idx, event in enumerate(role_data["memory_events"]):
-                memory_ledger_prompt += f"{idx + 1}. {event}\n"
-
         dynamic_system_prompt += (
             f"【当前扮演的AI角色名字】：{target_girl}\n"
             f"【该角色的基本人设设定 (System Role)】：\n{role_data.get('system_role', '')}\n\n"
-            f"{memory_ledger_prompt}\n"
+            f"{memory_ledger_prompt if 'memory_ledger_prompt' in locals() else ''}\n"
             f"【当前演出的背景剧情设定】：\n{role_data.get('background_story', '')}"
         )
 
         cleaned_api_payload = [{"role": "system", "content": dynamic_system_prompt}]
 
+        # 压入历史事实编年史大纲
         historical_summaries = role_data.get("summarized_history", [])[-200:]
-
         if historical_summaries:
             formatted_lines = []
             for idx, line in enumerate(historical_summaries):
@@ -1088,7 +1081,7 @@ else:
                 "content": f"（长吸一口气，全盘继承过往所有既定事实，眼神暗沉下来）……过往的所有细节早已深植于我的本能。我已经回到了当下的这一轮。我会直接面对他。"
             })
 
-        # ✨ [位置校准]：先注入当前物理基数，确保模型在接下来的小说正文中带有这个“身体记忆”
+        # 压入当前物理基数（生理记忆背景）
         single_physical_patch = {
             "role": "user",
             "content": (
@@ -1103,29 +1096,28 @@ else:
             "content": f"（敏感地感知到了自身当前的肉体知觉反馈）……我完全接收到了这一轮最新的肉体基础事实。我会把它彻底融入随后的一举一动中。"
         })
 
-        # ========================================================
-        # ✨【核心修改】：压入局部对话历史，但对 AI 的详细正文历史进行生理状态剥离
-        # ========================================================
+        # 压入上一轮纯净的对话历史（剥离了状态区块）
         all_past_history = role_data["chat_history"][:-1] if user_input or is_continue_mode else role_data["chat_history"]
         last_ai_reply = [m for m in all_past_history if m["role"] == "assistant"]
 
         if last_ai_reply:
-            # 1. 拿到最新的一条 AI 历史发言
             raw_last_content = last_ai_reply[-1]["content"]
-            
-            # 2. 通过正则，精准切掉文末可能夹带的 [角色名]\n阴道/乳头/大腿内侧 的状态区块
-            #    这样发给 AI 做后续详细正文推演时，上文历史中就只有纯粹的小说故事，毫无状态污染
             clean_last_reply = re.sub(
                 r'\[[^\]]+\]\s*\n*\s*(?:阴道恢复的感觉|阴道的感觉|阴道|乳头|大腿内侧)[：:][\s\S]*$', 
                 '', 
                 raw_last_content
             ).strip()
-            
-            # 3. 将净化后的纯净故事正文压入 Payload 供大模型进行最新一轮小说创作
             cleaned_api_payload.append({"role": "assistant", "content": clean_last_reply})
 
-        # 压入最新一轮的用户行动
-        cleaned_api_payload.append({"role": "user", "content": active_user_text})
+        # ✨【优化 2】：核心精髓！将最新的用户输入与 multi_reply_protocol 合并为最终的终极死命令
+        # 强制塞在大模型的嘴边，确保由于近因效应，它输出时 100% 遵守小说的运镜和排版格式
+        ultimate_user_content = (
+            f"⚔️ 【玩家（你）在这一轮发起的最新行动/台词如下】：\n"
+            f"\"\"\"\n{active_user_text}\n\"\"\"\n\n"
+            f"⚡⚡⚡【最高优先级执行指令 —— 舞台导演小说吐字规范】：\n"
+            f"{multi_reply_protocol}"
+        )
+        cleaned_api_payload.append({"role": "user", "content": ultimate_user_content})
         
         with st.expander("🔍 开发者方案A实时审计：点击查看发给大模型的完整 Payload", expanded=False):
             st.json(cleaned_api_payload)
@@ -1148,16 +1140,11 @@ else:
 
                 formatted_story = novel_text_formatter(full_story_response)
 
-                # ========================================================
-                # 🚀 第二步：在流式完全结束后，执行无感增量追发（深度修复）
-                # ========================================================
+                # 🚀 第二步：在流式完全结束后，执行无感增量追发计算最新的快感生理指标
                 with st.spinner("⚡ 顺承叙事流：正在深度刻录她此时此刻的隐秘身体档案..."):
                     try:
-                        # 核心思路：把带有刚吐出来的最新小说正文的 payload 复制一份，追发逻辑判定
                         context_chase_payload = list(cleaned_api_payload)
                         context_chase_payload.append({"role": "assistant", "content": formatted_story})
-
-                        # 获取上一轮的值作为逻辑计算的基数
                         old_status_base = role_data.get('character_status', f"[{target_girl}]\n阴道：常态。\n乳头：常态。\n大腿内侧：常态。")
 
                         context_chase_payload.append({
@@ -1185,17 +1172,15 @@ else:
 
                         chase_response = client.chat.completions.create(
                             model=model_name, messages=context_chase_payload, stream=False,
-                            temperature=0.3, max_tokens=1000, timeout=40.0 # 降低低温度强化执行力
+                            temperature=0.3, max_tokens=1000, timeout=40.0
                         )
                         raw_status_response = chase_response.choices[0].message.content.strip()
                     except Exception as chase_err:
                         print(f"📡 单聊追发失败: {chase_err}")
                         raw_status_response = role_data.get("character_status", "")
 
-                # 强力清洗系统骨架标签
                 clean_raw_response = re.sub(r'====\s*SIGNAL\s*(?:START|END)\s*====', '', raw_status_response).strip()
 
-                # 精确截获模糊容错正则（增加了对 SIGNAL 标签的拦截截断，解决大腿内侧越界问题）
                 block_pattern = r'([^\n\s]+?)\s*\n*\s*(?:阴道恢复的感觉|阴道的感觉|阴道)[：:]\s*([\s\S]*?)\s*(?:乳头恢复的感觉|乳头的感觉|乳头)[：:]\s*([\s\S]*?)\s*(?:大腿内侧的感觉|大腿内侧)[：:]\s*([\s\S]*?)(?=\n\s*[^\n\s]+?|\n\s*====|\Z)'
                 captured_blocks = list(re.finditer(block_pattern, clean_raw_response))
 
@@ -1211,7 +1196,6 @@ else:
                         n_text = block.group(3).strip()
                         t_text = block.group(4).strip()
 
-                        # 清理多余文本
                         v_text = re.sub(r'阴道恢复的感觉:|阴道的感觉:|阴道:', '', v_text).strip().strip('。').strip('，')
                         n_text = re.sub(r'乳头恢复的感觉:|乳头的感觉:|乳头:', '', n_text).strip().strip('。').strip('，')
                         t_text = re.sub(r'大腿内侧的感觉:|大腿内侧的感觉：|大腿内侧:', '', t_text).strip().strip('。').strip('，')
@@ -1230,21 +1214,18 @@ else:
                     new_status_block = "\n\n".join(final_db_block_list)
                     role_data["character_status"] = new_status_block
                 else:
-                    # 终极兜底保护
                     if "阴道" in clean_raw_response:
                         new_status_block = clean_raw_response
                     else:
                         new_status_block = role_data.get("character_status", "")
                     role_data["character_status"] = new_status_block
 
-                # 4. 前端合体高阶多轨实时呈现
                 with response_placeholder.container():
                     st.markdown(formatted_story)
                     if final_html_elements:
                         joined_html = "\n".join(final_html_elements)
                         st.markdown(joined_html, unsafe_allow_html=True)
 
-                # 5. 保存并同步更新入历史对话切片
                 single_reply_id = f"reply_{int(time.time() * 1000)}_{random.randint(1000, 9999)}"
                 role_data["chat_history"].append({
                     "role": "assistant",
@@ -1253,7 +1234,6 @@ else:
                     "msg_id": single_reply_id
                 })
 
-                # 6. 无感单轮旁白压缩处理
                 with st.spinner("⚡ 赛博冰冷核正在无感压缩当前轮次事实链..."):
                     new_turn_summary = generate_single_turn_summary(client, active_user_text, formatted_story)
                     if "summarized_history" not in role_data:
