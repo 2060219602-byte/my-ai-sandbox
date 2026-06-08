@@ -857,6 +857,24 @@ if is_group_chat:
                 "content": f"（深吸一口气，全盘继承本群过往所有同台对峙的既定事实，眼神在群内众人身上扫过）……群内之前发生的一切细节早已深植于我的本能。我已经回到了当下的这一轮。我会直接面对他们。"
             })
 
+        # ✨ [位置修正]：将当前最新的生理状态锚点紧随在概述/历史编年史下方输入
+        physical_status_patch = {
+            "role": "user",
+            "content": (
+                f"📌【物理现场既定事实刻录 —— 这一轮你（{curr_agent}）绝对定格的隐秘生理肉体状态如下】：\n"
+                f"{agent_db.get('character_status', '')}\n\n"
+                f"💡【小说叙事无感演化协议】：\n"
+                f"请全盘接纳并无缝继承上述身体当前的真实官能状态，将其作为游戏剧情继续向下推进的物理现实背景。\n"
+                f"【🎭 情感与剧情的自适应表达】：请根据你当前扮演角色的System Role基本性格、以及当前剧情的亲密热度，自然地演绎她的反应。\n"
+                f"【✍️ 文学化镜头转化】：在接下来的正文叙事中，请将上面的生理状态无痕融化为小说创作者的镜头语言。请避免在正文中直接生硬地抄写或复述状态框里的 field 指标原词，让肉体的物理现实与角色的心智状态自然碰撞，编织出富有感官张力的小说。"
+            )
+        }
+        api_payload.append(physical_status_patch)
+        api_payload.append({
+            "role": "assistant",
+            "content": f"（敏感地感知到了这一瞬间自身最深处的肉体异动，耳根和双颊一阵阵滚烫泛红，但仍强行在群里咬牙维持伪装的声线）……我明白我当前的身体异样和处境。我会将这些敏感的感官痛苦与心理抗拒无痕融入接下来的反应之中。"
+        })
+
         cleaned_context = []
         for msg in chat_history_view[-2:]:
             if msg["role"] == "user":
@@ -871,19 +889,6 @@ if is_group_chat:
                         {"role": "user", "content": f"⚔️ [群会话]: 成员【{prefix_name}】公开发言：\n“{clean_content}”"})
 
         api_payload.extend(cleaned_context)
-
-        # ✨ 群聊高权重动态状态锚锁定点
-        physical_status_patch = {
-            "role": "user",
-            "content": (
-                f"📌【物理现场既定事实刻录 —— 这一轮你（{curr_agent}）绝对定格的隐秘生理肉体状态如下】：\n"
-                f"{agent_db.get('character_status', '')}\n\n"
-                f"💡【小说叙事无感演化协议】：\n"
-                f"请全盘接纳并无缝继承上述身体当前的真实官能状态，将其作为游戏剧情继续向下推进的物理现实背景。\n"
-                f"【🎭 情感与剧情的自适应表达】：请根据你当前扮演角色的System Role基本性格、以及当前剧情的亲密热度，自然地演绎她的反应。\n"
-                f"【✍️ 文学化镜头转化】：在接下来的正文叙事中，请将上面的生理状态无痕融化为小说创作者的镜头语言。请避免在正文中直接生硬地抄写或复述状态框里的 field 指标原词，让肉体的物理现实与角色的心智状态自然碰撞，编织出富有感官张力的小说。"
-            )
-        }
 
         with st.chat_message("assistant", avatar="💋"):
             st.write(f"💬 **【{curr_agent}】 被点名，正在组织群内对峙修罗场...**")
@@ -1065,17 +1070,7 @@ else:
                 "content": f"（长吸一口气，全盘继承过往所有既定事实，眼神暗沉下来）……过往的所有细节早已深植于我的本能。我已经回到了当下的这一轮。我会直接面对他。"
             })
 
-        all_past_history = role_data["chat_history"][:-1] if user_input or is_continue_mode else role_data[
-            "chat_history"]
-        last_ai_reply = [m for m in all_past_history if m["role"] == "assistant"]
-
-        if last_ai_reply:
-            clean_last_reply = re.sub(r'\[.*?\][\s\S]*$', '', last_ai_reply[-1]["content"]).strip()
-            cleaned_api_payload.append({"role": "assistant", "content": clean_last_reply})
-
-        cleaned_api_payload.append({"role": "user", "content": active_user_text})
-
-        # ✨ 单聊高权重动态状态锚锁定点
+        # ✨ [位置修正]：单聊同样的逻辑，将最核心的隐秘肉体档案紧随在编年史下面注入给系统
         single_physical_patch = {
             "role": "user",
             "content": (
@@ -1087,6 +1082,21 @@ else:
                 f"【✍️ 文学化镜头转化】：在接下来的正文叙事中，请将上面的生理状态无痕融化为小说创作者的镜头语言（如肢体因敏感而呈现的颤抖与微动、对白中破碎的呼吸感、眼神的躲闪或潮红、衣物摩擦的细节）。请避免在正文中直接生硬地抄写或复述状态框里的原词，让肉体的物理现实与角色的心智状态自然碰撞，编织出富有顶级感官张力的小说流。"
             )
         }
+        cleaned_api_payload.append(single_physical_patch)
+        cleaned_api_payload.append({
+            "role": "assistant",
+            "content": f"（咬了咬发白泛水的下唇，全盘感知到了上述敏感肉体的本能战栗、羞耻发热与泥泞感，理智的防线在高度警觉与生理屈服中拉扯磨损）……我完全接收到了这一轮最新的肉体知觉事实。它现在就是我逻辑推演的核心包袱。我会把它彻底融入随后的一举一动中。"
+        })
+
+        all_past_history = role_data["chat_history"][:-1] if user_input or is_continue_mode else role_data[
+            "chat_history"]
+        last_ai_reply = [m for m in all_past_history if m["role"] == "assistant"]
+
+        if last_ai_reply:
+            clean_last_reply = re.sub(r'\[.*?\][\s\S]*$', '', last_ai_reply[-1]["content"]).strip()
+            cleaned_api_payload.append({"role": "assistant", "content": clean_last_reply})
+
+        cleaned_api_payload.append({"role": "user", "content": active_user_text})
         
         with st.expander("🔍 开发者方案A实时审计：点击查看发给大模型的完整 Payload", expanded=False):
             st.json(cleaned_api_payload)
