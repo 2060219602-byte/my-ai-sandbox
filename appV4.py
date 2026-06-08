@@ -1052,19 +1052,20 @@ else:
 
         st.session_state.regenerate_trigger = False
 
-        # ✨【优化 1】：System 提示词极度精简，只留越狱、基本人设和背景，大幅提升响应速度
+        # ========================================================
+        # ✨【Payload 顺序微调】：将永久核心记忆紧随在编年史大纲之后注入
+        # ========================================================
+        # 1. 初始化并注入全局 System 提示词（只留越狱、基本人设和背景环境）
         dynamic_system_prompt = f"{jailbreak_prompt}\n\n"
         dynamic_system_prompt += (
             f"【当前扮演的AI角色名字】：{target_girl}\n"
             f"【该角色的基本人设设定 (System Role)】：\n{role_data.get('system_role', '')}\n\n"
-            f"{memory_ledger_prompt if 'memory_ledger_prompt' in locals() else ''}\n"
             f"【当前演出的背景剧情设定】：\n{role_data.get('background_story', '')}"
         )
 
-        # 1. 初始化并注入全局 System 提示词
         cleaned_api_payload = [{"role": "system", "content": dynamic_system_prompt}]
 
-        # 2. 注入历史事实编年史大纲（若有）
+        # 2. 注入历史事实编年史大纲
         historical_summaries = role_data.get("summarized_history", [])[-200:]
         if historical_summaries:
             formatted_lines = []
@@ -1082,6 +1083,18 @@ else:
                 "content": f"（长吸一口气，全盘继承过往所有既定事实，眼神暗沉下来）……过往的所有细节早已深植于我的本能。我已经回到了当下的这一轮。我会直接面对他。"
             })
 
+        # ✨【核心新增：位置修正】在概述/历史编年史之后，立刻刻录玩家手动添加的永久核心记忆
+        if role_data.get("memory_events"):
+            memory_ledger_prompt = "📌【绝对核心个人记忆备忘录 —— 这是你铭刻于灵魂的永久既定事实线索】：\n"
+            for idx, event in enumerate(role_data["memory_events"]):
+                memory_ledger_prompt += f"{idx + 1}. {event}\n"
+            
+            cleaned_api_payload.append({"role": "user", "content": memory_ledger_prompt})
+            cleaned_api_payload.append({
+                "role": "assistant",
+                "content": f"（眼神微微闪烁，这些刻骨铭心的核心记忆备忘浮上心头）……我明白了，这些是影响我和他之间纠缠的永恒事实，我已经死死记在心底。接下来的回应我会完美契合这些羁绊事实。"
+            })
+
         # 3. 注入上一轮纯净的对话历史（剥离了状态区块的纯正文）
         all_past_history = role_data["chat_history"][:-1] if user_input or is_continue_mode else role_data["chat_history"]
         last_ai_reply = [m for m in all_past_history if m["role"] == "assistant"]
@@ -1095,22 +1108,22 @@ else:
             ).strip()
             cleaned_api_payload.append({"role": "assistant", "content": clean_last_reply})
 
-        # ✨【核心微调位置】：将生理反应状态挪动到详细对话历史的下方，紧贴最新的互动现场
+        # 4. 注入生理反应状态（紧贴在当前互动现场的上方）
         single_physical_patch = {
             "role": "user",
             "content": (
                 f"📌【物理现场既定事实刻录 —— 这一轮动作前你（{target_girl}）最新的隐秘生理肉体状态如下】：\n"
                 f"{role_data.get('character_status', '')}\n\n"
-                f"💡【小说叙事演化要求】：上述状态为你此刻身体最真实的物理现状与感官起点。请在接下来的正文情节中，自然无缝地体现并推进这一状态。不要生硬复述词汇，用镜头语言使其合情合理地向更深层的快感演化。"
+                f"💡【小说叙事演化要求】：上述状态为你此刻身体最真实的物理现状与感官起点。请在接下来的正文情节中，自然无缝地体现并推进这一状态。用镜头语言使其合情合理的自然变化。"
             )
         }
         cleaned_api_payload.append(single_physical_patch)
         cleaned_api_payload.append({
             "role": "assistant",
-            "content": f"（敏感地感知到了身体深处这一瞬间正堆叠的真实知觉与敏感热度，防线在高度警觉中拉扯动摇）……我完全接收到了这一轮最新的肉体知觉。它已经成为我本能反应的核心包袱，我会把它彻底融入随后的一举一动中。"
+            "content": f"（敏感地感知到了身体深处这一瞬间正堆叠的真实知觉与敏感热度，理智在拉扯动摇）……我完全接收到了这一轮最新的肉体知觉。它已经成为我本能反应的核心包袱，我会把它彻底融入随后的一举一动中。"
         })
 
-        # 4. 合并最新的用户输入与小说格式死命令，压在 AI 吐字的最边缘
+        # 5. 合并最新的用户输入与小说格式死命令，压在 AI 吐字的最边缘
         ultimate_user_content = (
             f"⚔️ 【玩家（你）在这一轮发起的最新行动/台词如下】：\n"
             f"\"\"\"\n{active_user_text}\n\"\"\"\n\n"
