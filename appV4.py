@@ -875,16 +875,14 @@ if is_group_chat:
                 f"【✍️ 文学化镜头转化】：在接下来的正文叙事中，请将上面的生理状态无痕融化为小说创作者的镜头语言。请避免在正文中直接生硬地抄写或复述状态框里的 field 指标原词，让肉体的物理现实与角色的心智状态自然碰撞，编织出富有感官张力的小说。"
             )
         }
+
         api_payload.append(physical_status_patch)
 
-        identity_lock_patch = {
+        # 🎯 方案A重构：移除卡尺与锁，直接将黄金三幕协议作为上下文的最终压轴强化底线
+        api_payload.append({
             "role": "user",
-            "content": f"⚡ [舞台全知叙事共鸣协议]:\n"
-                       f"现在，请立刻代入全知小说家视角，对【{curr_agent}】在群内同台下的言行进行极致的第三人称小说化演绎。旁白、动作与挣扎一律直接使用名字{curr_agent}；称呼屏幕前的玩家一律使用【你】。在 1️⃣ 2️⃣ 3️⃣ 定格后，利落完结收尾。"
-        }
-
-        api_payload.append(identity_lock_patch)
-        api_payload.append(lazy_insurance_prompt)
+            "content": f"⚡ [最终执行命令 — 舞台全知叙事共鸣协议]:\n现在请你完全基于上述提供的隐秘生理肉体状态、人设背景以及本轮对话，开始为【{curr_agent}】生成本轮的小说演绎。旁白、动作与挣扎一律直接使用名字{curr_agent}；称呼屏幕前的玩家一律使用【你】。\n\n⚠️请最严格执行下述叙事流准则，在 1️⃣ 2️⃣ 3️⃣ 定格后，利落完结，正文戛然而止：\n\n{multi_reply_protocol}"
+        })
 
         with st.chat_message("assistant", avatar="💋"):
             st.write(f"💬 **【{curr_agent}】 被点名，正在组织群内对峙修罗场...**")
@@ -1088,14 +1086,11 @@ else:
         }
         cleaned_api_payload.append(single_physical_patch)
 
-        identity_lock_patch = {
+        # 🎯 方案A重构：单聊同步去除无用补丁，将黄金三幕叙事推至 Payload 最终端进行强控
+        cleaned_api_payload.append({
             "role": "user",
-            "content": f"⚡ [舞台全知叙事共鸣协议]:\n"
-                       f"现在，请将镜头完全交给全知的小说家视角。请用细腻、直白的笔触去突破理智的边界，展开一整段惊心动魄的沉浸肉戏。在 1️⃣ 2️⃣ 3️⃣ 定格后，请让正文利落戛然而止。开始输出："
-        }
-        
-        cleaned_api_payload.append(identity_lock_patch)
-        cleaned_api_payload.append(lazy_insurance_prompt)
+            "content": f"⚡ [最终执行命令 — 舞台全知叙事共鸣协议]:\n现在，请将镜头完全交给全知的小说家视角，突破理智的边界展开沉浸肉戏。称呼屏幕前的玩家一律使用【你】。\n\n⚠️你必须且只能严格遵循下述叙事流准则进行编排，在 1️⃣ 2️⃣ 3️⃣ 定格后让正文利落戛然而止。开始输出：\n\n{multi_reply_protocol}"
+        })
 
         with st.expander("🔍 开发者方案A实时审计：点击查看发给大模型的完整 Payload", expanded=False):
             st.json(cleaned_api_payload)
