@@ -1130,11 +1130,11 @@ else:
                 "content": f"（眼神微微闪烁，这些刻骨铭心的核心记忆备忘浮上心头）……我明白了，这些是影响我和他之间纠缠的永恒事实，我已经死死记在心底。接下来的回应我会完美契合这些羁绊事实。"
             })
 
-        # 3. 注入上一轮纯净的对话历史（【行过滤去状态框版】—— 彻底解决正则误杀导致变空的问题）
+        # 3. 注入上一轮纯净的对话历史（【行过滤去状态框版】—— 升级为精准提供最后三行小说正文）
         all_past_history = role_data["chat_history"][:-1] if (user_input or is_continue_mode) else role_data["chat_history"]
         last_ai_reply = [m for m in all_past_history if m["role"] == "assistant" and m.get("content")]
 
-        last_sentence = ""
+        last_context_block = ""
         
         if last_ai_reply:
             raw_last_content = str(last_ai_reply[-1]["content"]).strip()
@@ -1159,30 +1159,37 @@ else:
                     
                 clean_story_lines.append(line_str)
             
-            # 3. 从纯正文行中，提取最后一行作为衔接锚点
+            # 3. 【核心修改】从纯正文行中，提取最后 3 行作为更丰满的衔接上下文
             if clean_story_lines:
-                last_sentence = clean_story_lines[-1]
+                # 截取最后三行（如果正文本身不足三行，会安全地有多少拿多少）
+                last_three_lines = clean_story_lines[-3:]
+                # 用换行符把这三行重新连起来
+                last_context_block = "\n".join(last_three_lines)
 
-        # 🛡️ 超强兜底：万一过滤完真的什么都不剩，直接拿原始文本的最后一行
-        if not last_sentence and last_ai_reply:
+        # 🛡️ 超强兜底：万一过滤完真的什么都不剩（极端情况），直接拿原始文本的最后三行
+        if not last_context_block and last_ai_reply:
             all_lines = [l.strip() for l in raw_last_content.split("\n") if l.strip()]
             if all_lines:
-                last_sentence = all_lines[0] # 拿第一行作为权宜之计
+                last_context_block = "\n".join(all_lines[-3:])
 
-        # 🛡️ 极度安全审查：剔除所有可能干扰 JSON 和大模型指令的特殊符号
-        last_sentence = str(last_sentence).replace('"', '').replace('“', '').replace('”', '').strip()
+        # 🛡️ 极度安全审查：剔除所有可能干扰 JSON 和大模型指令的各种双引号，防止 Payload 溢出
+        last_context_block = str(last_context_block).replace('"', '').replace('“', '').replace('”', '').strip()
 
-        # 4. 组装最终的 Payload
-        bridge_prompt = (
-            f"⚠️【时间线动作硬衔接锚点 —— 这是你上一轮对话正文的最终收尾句子，作为当下动作的物理起点】：\n"
-            f"\"{last_sentence}\"\n\n"
-            f"💡【承接死命令】：请你（{target_girl}）绝对尊重、全盘接纳并紧密衔接这个收尾。你当下的神态、台词或肢体动作，必须在这一句的既定事实基础上自然、丝滑地向下蔓延。严禁复读这一句，你只需从这个物理节点切入展开新一轮的戏剧。”"
-        )
-        cleaned_api_payload.append({"role": "user", "content": bridge_prompt})
-        cleaned_api_payload.append({
-            "role": "assistant", 
-            "content": f"（理智在颤抖中死死咬定上一轮动作的终点：“{last_sentence}”，将其化为当下的身体惯性）……我明白了。我正站在这句收尾的物理节点上。接下来的任何反应都会紧扣这个断点向下爆发。”"
-        })
+        # 4. 组装最终的 Payload（这里的提示词也为您同步进行了“多行承接”的口吻优化）
+        if last_context_block:
+            bridge_prompt = (
+                f"⚠️【时间线动作硬衔接锚点 —— 这是你上一轮对话正文的最终收尾高潮段落（已为您呈现最后三行），作为当下动作的物理起点】：\n"
+                f"\"\"\"\n{last_context_block}\n\"\"\"\n\n"
+                f"💡【承接死命令】：请你（{target_girl}）绝对尊重、全盘接纳并紧密衔接这段收尾。你当下的神态、台词或肢体动作，必须在上述既定事实和情绪铺垫的基础上自然、丝滑地向下蔓延。严禁复读上述句子，你只需从这个最后的物理断点切入，展开全新一轮的戏剧。”"
+            )
+            cleaned_api_payload.append({"role": "user", "content": bridge_prompt})
+            
+            # 提取最后三行里的最后一句作为 assistant 的咬定锚点，显得更加真实自然
+            display_anchor = last_context_block.split('\n')[-1]
+            cleaned_api_payload.append({
+                "role": "assistant", 
+                "content": f"（理智在颤抖中死死咬定上一轮动作的终点：“{display_anchor}”，将其化为当下的身体惯性）……我明白了。我正站在这一段剧情收尾的物理节点上。接下来的任何反应都会紧扣这些前因后果向下爆发。”"
+            })
 
         # 4. 注入生理反应状态（紧贴在当前互动现场的上方）
         single_physical_patch = {
