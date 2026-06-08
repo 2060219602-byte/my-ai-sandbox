@@ -1061,9 +1061,10 @@ else:
             f"【当前演出的背景剧情设定】：\n{role_data.get('background_story', '')}"
         )
 
+        # 1. 初始化并注入全局 System 提示词
         cleaned_api_payload = [{"role": "system", "content": dynamic_system_prompt}]
 
-        # 压入历史事实编年史大纲
+        # 2. 注入历史事实编年史大纲（若有）
         historical_summaries = role_data.get("summarized_history", [])[-200:]
         if historical_summaries:
             formatted_lines = []
@@ -1081,22 +1082,7 @@ else:
                 "content": f"（长吸一口气，全盘继承过往所有既定事实，眼神暗沉下来）……过往的所有细节早已深植于我的本能。我已经回到了当下的这一轮。我会直接面对他。"
             })
 
-        # 压入当前物理基数（生理记忆背景）
-        single_physical_patch = {
-            "role": "user",
-            "content": (
-                f"📌【物理现场既定事实刻录 —— 这一轮动作前你（{target_girl}）最新的隐秘生理肉体状态如下】：\n"
-                f"{role_data.get('character_status', '')}\n\n"
-                f"💡【小说叙事演化要求】：请在接下来的正文情节中，自然无缝地体现并推进这一状态。不要生硬复述词汇，用镜头语言使其合情合理地恶化、叠加或恢复。"
-            )
-        }
-        cleaned_api_payload.append(single_physical_patch)
-        cleaned_api_payload.append({
-            "role": "assistant",
-            "content": f"（敏感地感知到了自身当前的肉体知觉反馈）……我完全接收到了这一轮最新的肉体基础事实。我会把它彻底融入随后的一举一动中。"
-        })
-
-        # 压入上一轮纯净的对话历史（剥离了状态区块）
+        # 3. 注入上一轮纯净的对话历史（剥离了状态区块的纯正文）
         all_past_history = role_data["chat_history"][:-1] if user_input or is_continue_mode else role_data["chat_history"]
         last_ai_reply = [m for m in all_past_history if m["role"] == "assistant"]
 
@@ -1109,8 +1095,22 @@ else:
             ).strip()
             cleaned_api_payload.append({"role": "assistant", "content": clean_last_reply})
 
-        # ✨【优化 2】：核心精髓！将最新的用户输入与 multi_reply_protocol 合并为最终的终极死命令
-        # 强制塞在大模型的嘴边，确保由于近因效应，它输出时 100% 遵守小说的运镜和排版格式
+        # ✨【核心微调位置】：将生理反应状态挪动到详细对话历史的下方，紧贴最新的互动现场
+        single_physical_patch = {
+            "role": "user",
+            "content": (
+                f"📌【物理现场既定事实刻录 —— 这一轮动作前你（{target_girl}）最新的隐秘生理肉体状态如下】：\n"
+                f"{role_data.get('character_status', '')}\n\n"
+                f"💡【小说叙事演化要求】：上述状态为你此刻身体最真实的物理现状与感官起点。请在接下来的正文情节中，自然无缝地体现并推进这一状态。不要生硬复述词汇，用镜头语言使其合情合理地向更深层的快感演化。"
+            )
+        }
+        cleaned_api_payload.append(single_physical_patch)
+        cleaned_api_payload.append({
+            "role": "assistant",
+            "content": f"（敏感地感知到了身体深处这一瞬间正堆叠的真实知觉与敏感热度，防线在高度警觉中拉扯动摇）……我完全接收到了这一轮最新的肉体知觉。它已经成为我本能反应的核心包袱，我会把它彻底融入随后的一举一动中。"
+        })
+
+        # 4. 合并最新的用户输入与小说格式死命令，压在 AI 吐字的最边缘
         ultimate_user_content = (
             f"⚔️ 【玩家（你）在这一轮发起的最新行动/台词如下】：\n"
             f"\"\"\"\n{active_user_text}\n\"\"\"\n\n"
