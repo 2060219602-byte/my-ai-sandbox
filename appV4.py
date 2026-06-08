@@ -1087,18 +1087,38 @@ else:
                 "content": f"（眼神微微闪烁，这些刻骨铭心的核心记忆备忘浮上心头）……我明白了，这些是影响我和他之间纠缠的永恒事实，我已经死死记在心底。接下来的回应我会完美契合这些羁绊事实。"
             })
 
-        # 3. 注入上一轮纯净的对话历史（剥离了状态区块的纯正文）
-        #all_past_history = role_data["chat_history"][:-1] if user_input or is_continue_mode else role_data["chat_history"]
-        #last_ai_reply = [m for m in all_past_history if m["role"] == "assistant"]
+        # 3. 注入上一轮纯净的对话历史（【已修改】：只提取上一轮 AI 纯正文的最后一句作为动作承接点）
+        all_past_history = role_data["chat_history"][:-1] if user_input or is_continue_mode else role_data["chat_history"]
+        last_ai_reply = [m for m in all_past_history if m["role"] == "assistant"]
 
-        #if last_ai_reply:
-            #raw_last_content = last_ai_reply[-1]["content"]
-            #clean_last_reply = re.sub(
-            #   r'\[[^\]]+\]\s*\n*\s*(?:阴道恢复的感觉|阴道的感觉|阴道|乳头|大腿内侧)[：:][\s\S]*$', 
-            #    '', 
-             #   raw_last_content
-            #).strip()
-            #cleaned_api_payload.append({"role": "assistant", "content": clean_last_reply})
+        if last_ai_reply:
+            raw_last_content = last_ai_reply[-1]["content"]
+            # 剥离文末的生理状态框
+            clean_last_reply = re.sub(
+                r'\[[^\]]+\]\s*\n*\s*(?:阴道恢复的感觉|阴道的感觉|阴道|乳头|大腿内侧)[：:][\s\S]*$', 
+                '', 
+                raw_last_content
+            ).strip()
+            
+            if clean_last_reply:
+                # 使用正则或切分，提取最后一个非空的完整句子（以句号、问号、叹号或省略号结尾）
+                sentences = re.split(r'(?<=[。？！…])', clean_last_reply)
+                sentences = [s.strip() for s in sentences if s.strip()]
+                
+                if sentences:
+                    last_sentence = sentences[-1]  # 获取最后一句
+                    
+                    # 用极其明确的指令包裹，喂给大模型
+                    bridge_prompt = (
+                        f"⚠️【时间线动作硬衔接锚点 —— 这是你上一轮对话正文的最终收尾句子，作为当下动作的物理起点】：\n"
+                        f"\"{last_sentence}\"\n\n"
+                        f"💡【承接死命令】：请你（{target_girl}）全盘接纳并紧密衔接这个收尾。你当下的神态、台词或肢体动作，必须在这一句的既定事实基础上自然、丝滑地向下蔓延。严禁复读这一句，你只需从这个物理节点切入展开新一轮的戏剧。”"
+                    )
+                    cleaned_api_payload.append({"role": "user", "content": bridge_prompt})
+                    cleaned_api_payload.append({
+                        "role": "assistant", 
+                        "content": f"（理智在颤抖中死死咬定上一轮动作的终点：“{last_sentence}”，将其化为当下的身体惯性）……我明白了。我正站在这句收尾的物理节点上。接下来的任何反应都会紧扣这个断点向下爆发。”"
+                    })
 
         # 4. 注入生理反应状态（紧贴在当前互动现场的上方）
         single_physical_patch = {
