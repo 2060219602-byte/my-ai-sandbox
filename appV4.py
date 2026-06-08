@@ -1087,52 +1087,59 @@ else:
                 "content": f"（眼神微微闪烁，这些刻骨铭心的核心记忆备忘浮上心头）……我明白了，这些是影响我和他之间纠缠的永恒事实，我已经死死记在心底。接下来的回应我会完美契合这些羁绊事实。"
             })
 
-        # 3. 注入上一轮纯净的对话历史（【终极强化修复版】：确保绝不为空，完美提取最后一句）
-        all_past_history = role_data["chat_history"][:-1] if user_input or is_continue_mode else role_data["chat_history"]
-        last_ai_reply = [m for m in all_past_history if m["role"] == "assistant"]
+        # 3. 注入上一轮纯净的对话历史（【行过滤去状态框版】—— 彻底解决正则误杀导致变空的问题）
+        all_past_history = role_data["chat_history"][:-1] if (user_input or is_continue_mode) else role_data["chat_history"]
+        last_ai_reply = [m for m in all_past_history if m["role"] == "assistant" and m.get("content")]
 
+        last_sentence = ""
+        
         if last_ai_reply:
-            raw_last_content = last_ai_reply[-1]["content"]
+            raw_last_content = str(last_ai_reply[-1]["content"]).strip()
             
-            # 1. 尝试剥离文末的生理状态框
-            clean_last_reply = re.sub(
-                r'\[[^\]]+\]\s*\n*\s*(?:阴道恢复的感觉|阴道的感觉|阴道|乳头|大腿内侧)[：:][\s\S]*$', 
-                '', 
-                raw_last_content
-            ).strip()
+            # 1. 直接按行切分原始文本
+            raw_lines = raw_last_content.split("\n")
+            clean_story_lines = []
             
-            # 🛡️ 兜底机制 1：如果剥离后变空了，说明整条历史可能格式不对，直接使用原始文本
-            if not clean_last_reply:
-                clean_last_reply = raw_last_content.strip()
-                
-            last_sentence = ""
-            if clean_last_reply:
-                # 2. 移除可能干扰切分的末尾大括号/系统提示标签（如部分旧数据的格式）
-                clean_last_reply = re.sub(r'====\s*SIGNAL\s*(?:START|END)\s*====', '', clean_last_reply).strip()
-                
-                # 3. 精准切句（按句号、问号、叹号、省略号切分）
-                sentences = re.split(r'(?<=[。？！…\n])', clean_last_reply)
-                sentences = [s.strip() for s in sentences if s.strip() and not s.startswith('[') and '阴道' not in s and '乳头' not in s]
-                
-                if sentences:
-                    last_sentence = sentences[-1]
+            # 2. 扔掉所有属于生理状态框、系统信号、人名标签的行，只保留纯小说叙事行
+            for line in raw_lines:
+                line_str = line.strip()
+                if not line_str:
+                    continue
+                # 如果这一行包含生理核心词或标签，判定为状态框，不放入正文列表
+                if "阴道" in line_str or "乳头" in line_str or "大腿内侧" in line_str or "SIGNAL" in line_str:
+                    continue
+                # 过滤掉单独呈现的方括号人名标签（例如：[儿媳林舒妍]）
+                if line_str.startswith("[") and line_str.endswith("]") and len(line_str) < 15:
+                    continue
+                if line_str.startswith("【") and line_str.endswith("】") and len(line_str) < 15:
+                    continue
+                    
+                clean_story_lines.append(line_str)
             
-            # 🛡️ 兜底机制 2：如果切句后依旧不幸为空，直接强行截取倒数 40 个字作为物理起点
-            if not last_sentence and clean_last_reply:
-                last_sentence = clean_last_reply[-40:] if len(clean_last_reply) > 40 else clean_last_reply
+            # 3. 从纯正文行中，提取最后一行作为衔接锚点
+            if clean_story_lines:
+                last_sentence = clean_story_lines[-1]
 
-            # 4. 只有当确实拿到了上轮收尾，才进行包裹和发送
-            if last_sentence:
-                bridge_prompt = (
-                    f"⚠️【时间线动作硬衔接锚点 —— 这是你上一轮对话正文的最终收尾句子，作为当下动作的物理起点】：\n"
-                    f"\"{last_sentence}\"\n\n"
-                    f"💡【承接死命令】：请你（{target_girl}）全盘接纳并紧密衔接这个收尾。你当下的神态、台词或肢体动作，必须在这一句的既定事实基础上自然、丝滑地向下蔓延。严禁复读这一句，你只需从这个物理节点切入展开新一轮的戏剧。”"
-                )
-                cleaned_api_payload.append({"role": "user", "content": bridge_prompt})
-                cleaned_api_payload.append({
-                    "role": "assistant", 
-                    "content": f"（理智在颤抖中死死咬定上一轮动作的终点：“{last_sentence}”，将其化为当下的身体惯性）……我明白了。我正站在这句收尾的物理节点上。接下来的任何反应都会紧扣这个断点向下爆发。”"
-                })
+        # 🛡️ 超强兜底：万一过滤完真的什么都不剩，直接拿原始文本的最后一行
+        if not last_sentence and last_ai_reply:
+            all_lines = [l.strip() for l in raw_last_content.split("\n") if l.strip()]
+            if all_lines:
+                last_sentence = all_lines[0] # 拿第一行作为权宜之计
+
+        # 🛡️ 极度安全审查：剔除所有可能干扰 JSON 和大模型指令的特殊符号
+        last_sentence = str(last_sentence).replace('"', '').replace('“', '').replace('”', '').strip()
+
+        # 4. 组装最终的 Payload
+        bridge_prompt = (
+            f"⚠️【时间线动作硬衔接锚点 —— 这是你上一轮对话正文的最终收尾句子，作为当下动作的物理起点】：\n"
+            f"\"{last_sentence}\"\n\n"
+            f"💡【承接死命令】：请你（{target_girl}）绝对尊重、全盘接纳并紧密衔接这个收尾。你当下的神态、台词或肢体动作，必须在这一句的既定事实基础上自然、丝滑地向下蔓延。严禁复读这一句，你只需从这个物理节点切入展开新一轮的戏剧。”"
+        )
+        cleaned_api_payload.append({"role": "user", "content": bridge_prompt})
+        cleaned_api_payload.append({
+            "role": "assistant", 
+            "content": f"（理智在颤抖中死死咬定上一轮动作的终点：“{last_sentence}”，将其化为当下的身体惯性）……我明白了。我正站在这句收尾的物理节点上。接下来的任何反应都会紧扣这个断点向下爆发。”"
+        })
 
         # 4. 注入生理反应状态（紧贴在当前互动现场的上方）
         single_physical_patch = {
