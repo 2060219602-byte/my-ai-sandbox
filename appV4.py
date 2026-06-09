@@ -115,19 +115,18 @@ st.markdown("""
 # ==========================================
 def novel_text_formatter(raw_text: str) -> str:
     """
-    🎬 前端智能流式小说排版引擎：
+    🎬 前端智能流式小说排版引擎 (自动缩进版)：
     1. 依据句号（。）进行精确分段换行。
-    2. 若句号包含在双引号“...”内部（即角色对话中），则自动锁定不分段。
-    3. 带有双引号的对话整体自成独立大段，与其前后的旁白自动产生呼吸空行。
+    2. 包含在双引号“...”内部的对话不拆分句号，且对话整体自成大段。
+    3. ✨ 核心升级：为所有拆分出的前端新段落自动补全【全角双空格缩进】，渲染出版级小说质感。
     """
     if not raw_text:
         return raw_text
 
-    # 清洗掉原始文本中过度混乱的强行换行，合并为统一的文本流进行精细化拆解
+    # 1. 剔除原始文本中大模型自带的多余或混乱换行，将其融为统一的叙事文本流
     clean_stream = re.sub(r'\n+', ' ', raw_text).strip()
 
-    # 正则表达式：匹配全角双引号包裹的对话内容，或者匹配不含引号的普通文本切片
-    # 这样可以确保文本被拆分为：["普通旁白文本...", "“对话内容...”", "普通旁白文本..."]
+    # 2. 正则拆解：区分出普通的旁白部分与“包含在双引号内”的独立对话
     tokens = re.findall(r'“[^”]*”|[^“”]+', clean_stream)
     
     processed_blocks = []
@@ -138,24 +137,28 @@ def novel_text_formatter(raw_text: str) -> str:
             continue
         
         if token.startswith("“") and token.endswith("”"):
-            # 🎯 命中对话规则：对话整体独立成段，内部的句号完全被保护，不进行切分
-            processed_blocks.append(f"\n\n{token}\n\n")
+            # 🎯 命中对话规则：对话整体独立成大段，并强制首行缩进两个全角空格
+            processed_blocks.append(f"\n\n  {token}\n\n")
         else:
-            # 🎯 命中旁白规则：普通叙事文本遇到句号（。）立刻执行前端分段换行
-            # 将句号替换为 句号+双换行，并清洗掉多余的空格，营造小说呼吸感
+            # 🎯 命中旁白规则：叙事文本根据句号（。）执行前端切分
             narrative_segments = token.split("。")
             valid_segments = [seg.strip() for seg in narrative_segments if seg.strip()]
             
-            # 重新用“句号+换行”连接
             if valid_segments:
-                token_processed = "。\n\n".join(valid_segments)
-                # 如果原本末尾就有句号，补上最后一个句号
+                # 给旁白切分出来的每一个独立短句，都在开头塞入全角双空格
+                indented_segments = [f"  {seg}" for seg in valid_segments]
+                # 重新用带有句号和换行的符号拼装
+                token_processed = "。\n\n".join(indented_segments)
+                
+                # 🛡️ 句尾兜底：如果本段文本原本就有句号结尾，将最后一句的句尾补上
                 if token.endswith("。"):
                     token_processed += "。"
                 processed_blocks.append(token_processed)
 
-    # 将所有解析完毕的区块重新熔铸，并利用正则净化掉由于拼装导致的多余空行
+    # 3. 将所有切片熔铸为最终的视觉效果文本
     reconstructed_text = "".join(processed_blocks)
+    
+    # 4. 终极净化：通过正则，把由于拼接产生的多余换行统一收窄为标准的小说空行
     final_output = re.sub(r'\n{3,}', '\n\n', reconstructed_text).strip()
 
     return final_output
@@ -1236,11 +1239,10 @@ else:
                 for chunk in response:
                     if chunk.choices[0].delta.content:
                         full_story_response += chunk.choices[0].delta.content
-                        formatted_story = novel_text_formatter(full_story_response)
+                        # ✨ 仅在前端渲染时临时切段，纯粹用于视觉显示
+                        display_view = novel_text_formatter(full_story_response)
                         with response_placeholder.container():
-                            st.markdown(formatted_story)
-
-                formatted_story = novel_text_formatter(full_story_response)
+                            st.markdown(display_view)
 
                 # 🚀 第二步：在流式完全结束后，仅将上一轮生理状态+这一轮详细对话组装为纯净Payload送审
                 with st.spinner("⚡ 顺承叙事流：正在深度刻录她此时此刻的隐秘身体档案..."):
@@ -1321,10 +1323,13 @@ else:
                         joined_html = "\n".join(final_html_elements)
                         st.markdown(joined_html, unsafe_allow_html=True)
 
+                # 🚀 第三步：保存到数据库和历史记录
                 single_reply_id = f"reply_{int(time.time() * 1000)}_{random.randint(1000, 9999)}"
                 role_data["chat_history"].append({
                     "role": "assistant",
-                    "content": formatted_story + "\n\n" + new_status_block,
+                    # ✨ 核心修正：存入数据库的 content 必须是干净的原始文本 full_story_response！
+                    # 这样后续追发、历史压缩、上下文依赖才不会被前端的 \n\n 污染导致逻辑折断
+                    "content": full_story_response + "\n\n" + new_status_block,
                     "timestamp": time.time(),
                     "msg_id": single_reply_id
                 })
