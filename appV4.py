@@ -1106,7 +1106,7 @@ else:
             # 3. 【核心修改】从纯正文行中，提取最后 3 行作为更丰满的衔接上下文
             if clean_story_lines:
                 # 截取最后三行（如果正文本身不足三行，会安全地有多少拿多少）
-                last_three_lines = clean_story_lines[-3:]
+                last_three_lines = clean_story_lines[-1:]
                 # 用换行符把这三行重新连起来
                 last_context_block = "\n".join(last_three_lines)
 
@@ -1114,7 +1114,7 @@ else:
         if not last_context_block and last_ai_reply:
             all_lines = [l.strip() for l in raw_last_content.split("\n") if l.strip()]
             if all_lines:
-                last_context_block = "\n".join(all_lines[-3:])
+                last_context_block = "\n".join(all_lines[-1:])
 
         # 🛡️ 极度安全审查：剔除所有可能干扰 JSON 和大模型指令的各种双引号，防止 Payload 溢出
         last_context_block = str(last_context_block).replace('"', '').replace('“', '').replace('”', '').strip()
