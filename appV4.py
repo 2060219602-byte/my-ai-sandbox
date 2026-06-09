@@ -137,7 +137,7 @@ def novel_text_formatter(raw_text: str) -> str:
             continue
         
         if token.startswith("“") and token.endswith("”"):
-            # 🎯 命中对话规则：对话整体独立成大段，并强制首行缩进两个全角空格
+            # 🎯 命中对话规则：使用两个全角中文空格    绕过 Streamlit 的 Markdown 吞空格特性
             processed_blocks.append(f"\n\n  {token}\n\n")
         else:
             # 🎯 命中旁白规则：叙事文本根据句号（。）执行前端切分
@@ -145,7 +145,7 @@ def novel_text_formatter(raw_text: str) -> str:
             valid_segments = [seg.strip() for seg in narrative_segments if seg.strip()]
             
             if valid_segments:
-                # 给旁白切分出来的每一个独立短句，都在开头塞入全角双空格
+                # 给旁白切分出来的每一个独立短句开头塞入两个全角中文空格   
                 indented_segments = [f"  {seg}" for seg in valid_segments]
                 # 重新用带有句号和换行的符号拼装
                 token_processed = "。\n\n".join(indented_segments)
@@ -785,6 +785,7 @@ if history_len > DISPLAY_LIMIT:
         render_message_controls_by_id(message["msg_id"], is_last_msg=is_last,
                                       agent_name_fallback=message.get("agent_name", ""))
 else:
+    # 智能处理未超限时的正常渲染（统一应用包含 novel_text_formatter 的规范排版）
     for i, message in enumerate(chat_history_view):
         if "msg_id" not in message:
             message["msg_id"] = f"backfill_{i}_{hash(message['content'])}"
@@ -798,22 +799,6 @@ else:
                 display_novel_with_bold_status(prefix + message["content"])
             else:
                 st.markdown(prefix + novel_text_formatter(message["content"]), unsafe_allow_html=True)
-        render_message_controls_by_id(message["msg_id"], is_last_msg=is_last,
-                                      agent_name_fallback=message.get("agent_name", ""))
-else:
-    for i, message in enumerate(chat_history_view):
-        if "msg_id" not in message:
-            message["msg_id"] = f"backfill_{i}_{hash(message['content'])}"
-
-        is_last = (i == history_len - 1) and (message["role"] == "assistant")
-        avatar_icon = "💋" if message["role"] == "assistant" else "😎"
-        with st.chat_message(message["role"], avatar=avatar_icon):
-            p_name = message.get("agent_name", "")
-            prefix = f"💬 **【{p_name}】**：\n\n" if p_name else ""
-            if message["role"] == "assistant":
-                display_novel_with_bold_status(prefix + message["content"])
-            else:
-                st.markdown(prefix + message["content"])
         render_message_controls_by_id(message["msg_id"], is_last_msg=is_last,
                                       agent_name_fallback=message.get("agent_name", ""))
 
@@ -974,9 +959,10 @@ if is_group_chat:
                 # 🚀 第二步：在流式完全结束后，执行无感增量追发计算最新的快感生理指标
                 with st.spinner("⚡ 顺承叙事流：正在深度刻录她此时此刻的隐秘身体档案..."):
                     try:
-                        context_chase_payload = list(cleaned_api_payload)
-                        context_chase_payload.append({"role": "assistant", "content": formatted_story})
-                        old_status_base = role_data.get('character_status', f"[{target_girl}]\n阴道：常态。\n乳头：常态。\n大腿内侧：常态。")
+                        # 修正群聊中的上下文追加逻辑，使用群聊分支定义的变量 formatted_response 并确保基础 payload 来源正确
+                        context_chase_payload = list(api_payload)
+                        context_chase_payload.append({"role": "assistant", "content": formatted_response})
+                        old_status_base = agent_db.get('character_status', f"[{curr_agent}]\n阴道：常态。\n乳头：常态。\n大腿内侧：常态。")
 
                         context_chase_payload.append({
                             "role": "user",
