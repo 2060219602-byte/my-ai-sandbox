@@ -137,16 +137,16 @@ def novel_text_formatter(raw_text: str) -> str:
             continue
         
         if token.startswith("“") and token.endswith("”"):
-            # 🎯 命中对话规则：使用两个全角中文空格    绕过 Streamlit 的 Markdown 吞空格特性
-            processed_blocks.append(f"\n\n  {token}\n\n")
+            # 🎯 命中对话规则：使用 &emsp;&emsp; 强制前端渲染出两个中文字符的绝对缩进
+            processed_blocks.append(f"\n\n&emsp;&emsp;{token}\n\n")
         else:
             # 🎯 命中旁白规则：叙事文本根据句号（。）执行前端切分
             narrative_segments = token.split("。")
             valid_segments = [seg.strip() for seg in narrative_segments if seg.strip()]
             
             if valid_segments:
-                # 给旁白切分出来的每一个独立短句开头塞入两个全角中文空格   
-                indented_segments = [f"  {seg}" for seg in valid_segments]
+                # 使用 &emsp;&emsp; 确保无论 Streamlit 引擎如何解析，都会强行留出首行双空格
+                indented_segments = [f"&emsp;&emsp;{seg}" for seg in valid_segments]
                 # 重新用带有句号和换行的符号拼装
                 token_processed = "。\n\n".join(indented_segments)
                 
