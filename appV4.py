@@ -110,57 +110,66 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
-# ==========================================
-# ✨ 核心原汁原味：完美锁定“标点+括号”复合句尾的分段处理器
-# ==========================================
 def novel_text_formatter(raw_text: str) -> str:
     """
-    🎬 前端智能流式小说排版引擎 (自动缩进版)：
-    1. 依据句号（。）进行精确分段换行。
-    2. 包含在双引号“...”内部的对话不拆分句号，且对话整体自成大段。
-    3. ✨ 核心升级：为所有拆分出的前端新段落自动补全【全角双空格缩进】，渲染出版级小说质感。
+    🎬 智能流式小说排版引擎 (特定边界拦截版)：
+    1. 依据纯文本区间的句号（。）进行精确分段换行。
+    2. 自动检测闭合容器：若句号包含在 “ ”、( )、或 （ ） 内部，强制锁死不进行分段。
+    3. 全端应用 &emsp;&emsp; 强制首行无损缩进。
     """
     if not raw_text:
         return raw_text
 
-    # 1. 剔除原始文本中大模型自带的多余或混乱换行，将其融为统一的叙事文本流
+    # 1. 净化基础文本：清除原始换行符使其回归一整条纯粹的叙事水流
     clean_stream = re.sub(r'\n+', ' ', raw_text).strip()
 
-    # 2. 正则拆解：区分出普通的旁白部分与“包含在双引号内”的独立对话
-    tokens = re.findall(r'“[^”]*”|[^“”]+', clean_stream)
+    segments = []
+    current_segment = []
     
+    # 计数器/标志位：用于追踪当前字符是否深陷于“免分段特殊区域”
+    in_quote = False       # 双引号 “ ” 内部
+    paren_depth = 0        # 英文括号 ( ) 嵌套层级
+    zh_paren_depth = 0     # 中文括号 （ ） 嵌套层级
+
+    # 2. 状态机物理逐字卡尺扫描
+    for char in clean_stream:
+        # 激活或解除容器屏蔽锁
+        if char == "“":
+            in_quote = True
+        elif char == "”":
+            in_quote = False
+        elif char == "(":
+            paren_depth += 1
+        elif char == ")":
+            paren_depth = max(0, paren_depth - 1)
+        elif char == "（":
+            zh_paren_depth += 1
+        elif char == "）":
+            zh_paren_depth = max(0, zh_paren_depth - 1)
+
+        current_segment.append(char)
+
+        # 🎯 核心判定点：当且仅当遇到句号，且外部所有拦截容器全部处于彻底释放(False/0)状态时，才触发强制切段
+        if char == "。" and not in_quote and paren_depth == 0 and zh_paren_depth == 0:
+            seg_str = "".join(current_segment).strip()
+            if seg_str:
+                segments.append(seg_str)
+            current_segment = []
+
+    # 句尾残留收尾：处理最后一段没有以绝对句号收尾的零散文本
+    if current_segment:
+        seg_str = "".join(current_segment).strip()
+        if seg_str:
+            segments.append(seg_str)
+
+    # 3. 为切分出来的每个合法独立小说大段注入无损首行缩进实体
     processed_blocks = []
+    for seg in segments:
+        if seg:
+            processed_blocks.append(f"&emsp;&emsp;{seg}")
 
-    for token in tokens:
-        token = token.strip()
-        if not token:
-            continue
-        
-        if token.startswith("“") and token.endswith("”"):
-            # 🎯 命中对话规则：使用 &emsp;&emsp; 强制前端渲染出两个中文字符的绝对缩进
-            processed_blocks.append(f"\n\n&emsp;&emsp;{token}\n\n")
-        else:
-            # 🎯 命中旁白规则：叙事文本根据句号（。）执行前端切分
-            narrative_segments = token.split("。")
-            valid_segments = [seg.strip() for seg in narrative_segments if seg.strip()]
-            
-            if valid_segments:
-                # 使用 &emsp;&emsp; 确保无论 Streamlit 引擎如何解析，都会强行留出首行双空格
-                indented_segments = [f"&emsp;&emsp;{seg}" for seg in valid_segments]
-                # 重新用带有句号和换行的符号拼装
-                token_processed = "。\n\n".join(indented_segments)
-                
-                # 🛡️ 句尾兜底：如果本段文本原本就有句号结尾，将最后一句的句尾补上
-                if token.endswith("。"):
-                    token_processed += "。"
-                processed_blocks.append(token_processed)
-
-    # 3. 将所有切片熔铸为最终的视觉效果文本
-    reconstructed_text = "".join(processed_blocks)
-    
-    # 4. 终极净化：通过正则，把由于拼接产生的多余换行统一收窄为标准的小说空行
-    final_output = re.sub(r'\n{3,}', '\n\n', reconstructed_text).strip()
-
+    # 4. 熔铸最终成型文本流，通过标准双回车在 Markdown 渲染层分裂出完美呼吸感的空行
+    final_output = "\n\n".join(processed_blocks)
     return final_output
 
 
