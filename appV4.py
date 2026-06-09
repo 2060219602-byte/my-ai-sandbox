@@ -1127,19 +1127,24 @@ else:
                 {"role": "user", "content": user_input, "timestamp": time.time(), "msg_id": single_msg_id})
             save_local_data()
         elif is_continue_mode:
-            active_user_text = "（时间流逝，剧情继续向前推进）"
+            # ✨ 净化：点击继续推演时，确保当前轮次的行动提示词纯净，不掺杂任何历史包袱
+            active_user_text = "（玩家点击了继续推演，请顺着当下的时间线和动作惯性，自发向下演绎精彩剧本）"
             single_msg_id = f"msg_{int(time.time() * 1000)}_{random.randint(1000, 9999)}"
             role_data["chat_history"].append({
                 "role": "user",
-                "content": "（物理推进：时间向前流逝，命运的齿轮继续咬合，请顺着前面的发展继续展现你的即时行动与反应）",
+                "content": active_user_text,
                 "timestamp": time.time(),
                 "msg_id": single_msg_id
             })
             save_local_data()
         else:
-            user_msgs = [m for m in role_data["chat_history"] if m["role"] == "user"]
-            if user_msgs:
-                active_user_text = user_msgs[-1]["content"]
+            # ✨ 修复：如果是通过 [🔄 重发] 按钮触发的重新生成，或者是兜底逻辑
+            # 我们绝对不能盲目抓取历史 user_msgs[-1]，因为上一轮的详细长文已经通过第 4 步完整传过去了。
+            # 如果此时 chat_history 最后一轮是 user，说明是正常发言；如果最后一轮是 assistant，说明是点击了重发。
+            if role_data["chat_history"] and role_data["chat_history"][-1]["role"] == "user":
+                active_user_text = role_data["chat_history"][-1]["content"]
+            else:
+                active_user_text = "（玩家发起了剧情重算/推演，请基于前置物理背景继续展现你的即时行动与反应）"
 
         st.session_state.regenerate_trigger = False
 
@@ -1240,9 +1245,14 @@ else:
         })
 
         # 6. 合并最新的用户输入与小说格式死命令
+        # ✨ 优化：动态判断引导词，如果 active_user_text 包含“继续推演”或“重算”，使用【大导演剧情演进令】，否则使用【玩家即时行动令】
+        if "继续推演" in active_user_text or "重算" in active_user_text:
+            narrative_anchor = f"🎬 【当前大导演剧情演进令 —— 物理时间流逝背景】：\n{active_user_text}\n\n"
+        else:
+            narrative_anchor = f"⚔️ 【玩家（你）在这一轮发起的最新即时行动/台词如下】：\n\"\"\"\n{active_user_text}\n\"\"\"\n\n"
+
         ultimate_user_content = (
-            f"⚔️ 【玩家（你）在这一轮发起的最新行动/台词如下】：\n"
-            f"\"\"\"\n{active_user_text}\n\"\"\"\n\n"
+            f"{narrative_anchor}"
             f"⚡⚡⚡【最高优先级执行指令 —— 舞台导演小说吐字规范】：\n"
             f"{multi_reply_protocol}"
         )
