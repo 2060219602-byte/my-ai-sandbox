@@ -1183,7 +1183,7 @@ else:
                 "content": f"（眼神微微闪烁，这些刻骨铭心的核心记忆备忘浮上心头）……我明白了，这些是影响我和他之间纠缠的永恒事实，我已经死死记在心底。接下来的回应我会完美契合这些羁绊事实。"
             })
 
-        # 4. 注入上一轮纯净的对话历史
+        # 4. 注入上一轮纯净的对话历史（完全变更为上个对话 AI 的详细完整回复）
         all_past_history = role_data["chat_history"][:-1] if (user_input or is_continue_mode) else role_data["chat_history"]
         last_ai_reply = [m for m in all_past_history if m["role"] == "assistant" and m.get("content")]
 
@@ -1197,6 +1197,7 @@ else:
                 line_str = line.strip()
                 if not line_str:
                     continue
+                # 过滤掉末尾挂载的纯后台生理知觉文本块，保留全部详细小说叙事正文
                 if "阴道" in line_str or "乳头" in line_str or "大腿内侧" in line_str or "SIGNAL" in line_str:
                     continue
                 if line_str.startswith("[") and line_str.endswith("]") and len(line_str) < 15:
@@ -1205,28 +1206,22 @@ else:
                     continue
                 clean_story_lines.append(line_str)
             
-            act3_match = re.search(r'3️⃣\s*([\s\S]*?)(?=\s*====|\s*\[|\Z)', raw_last_content)
-            if act3_match and act3_match.group(1).strip():
-                raw_act3_text = act3_match.group(1).strip()
-                act3_lines = [l.strip() for l in raw_act3_text.split("\n") if l.strip() and not any(k in l for k in ["阴道", "乳头", "大腿内侧"])]
-                last_context_block = "\n".join(act3_lines)
-            else:
-                if clean_story_lines:
-                    last_context_block = "\n".join(clean_story_lines[-3:])
-
-        last_context_block = str(last_context_block).replace('"', '').replace('“', '').replace('”', '').strip()
+            if clean_story_lines:
+                last_context_block = "\n".join(clean_story_lines)
 
         if last_context_block:
             bridge_prompt = (
-                f"⚠️【时间线动作硬衔接锚点 —— 这是你上一轮对话正文的最终收尾高潮段落（已为您呈现最后三行），作为当下动作的物理起点】：\n"
+                f"⚠️【时间线剧情完美继承锚点 —— 这是你上一轮对话 AI 的全部详细回复内容，作为当下演出的前置物理背景】：\n"
                 f"\"\"\"\n{last_context_block}\n\"\"\"\n\n"
-                f"💡【承接死命令】：请你（{target_girl}）绝对尊重、全盘接纳并紧密衔接这段收尾。你当下的神态、台词或肢体动作，必须在上述既定事实和情绪铺垫的基础上自然、丝滑地向下蔓延。严禁复读上述句子，你只需从这个最后的物理断点切入，展开全新一轮的戏剧。”"
+                f"💡【承接死命令】：请你（{target_girl}）绝对尊重、全盘继承上述所有的剧情事实、台词与场景细节。你当前的演出必须在此宏大细致的情绪铺垫和动作惯性基础上继续自然、丝滑地向下蔓延。"
             )
             cleaned_api_payload.append({"role": "user", "content": bridge_prompt})
-            display_anchor = last_context_block.split('\n')[-1]
+            
+            # 取最后一句话用于生成 AI 的系统伪确认，让其思维锁死收尾状态
+            display_anchor = clean_story_lines[-1] if clean_story_lines else "上一幕剧情"
             cleaned_api_payload.append({
                 "role": "assistant", 
-                "content": f"（理智在颤抖中死死咬定上一轮动作的终点：“{display_anchor}”，将其化为当下的身体惯性）……我明白了。我正站在这一段剧情收尾的物理节点上。接下来的任何反应都会紧扣这些前因后果向下爆发。”"
+                "content": f"（脑海中全盘承载并复盘了上一轮完整的详细剧情细节，并牢牢锁定最终节点“{display_anchor}”）……我明白了。上个对话的完整上下文已经完全内化到我的本能和记忆中。我会严格承接这段戏剧，展开全新一轮的博弈演化。”"
             })
 
         # 5. 注入生理反应状态
