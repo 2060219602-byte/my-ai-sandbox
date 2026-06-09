@@ -1189,7 +1189,7 @@ else:
             })
 
         # ========================================================
-        # 4. 注入上一轮纯净的对话历史（已修复：移除中间高污染的伪回复）
+        # 4 & 5 强力瘦身版：完美继承1-3段正文 + 生理状态动态融入
         # ========================================================
         all_past_history = role_data["chat_history"][:-1] if (user_input or is_continue_mode) else role_data["chat_history"]
         last_ai_reply = [m for m in all_past_history if m["role"] == "assistant" and m.get("content")]
@@ -1197,52 +1197,32 @@ else:
         last_context_block = ""
         if last_ai_reply:
             raw_last_content = str(last_ai_reply[-1]["content"]).strip()
-            raw_lines = raw_last_content.split("\n")
-            clean_story_lines = []
             
-            for line in raw_lines:
-                line_str = line.strip()
-                if not line_str:
-                    continue
-                # 过滤掉末尾挂载的纯后台生理知觉文本块，保留全部详细小说叙事正文
-                if "阴道" in line_str or "乳头" in line_str or "大腿内侧" in line_str or "SIGNAL" in line_str:
-                    continue
-                if line_str.startswith("[") and line_str.endswith("]") and len(line_str) < 15:
-                    continue
-                if line_str.startswith("【") and line_str.endswith("】") and len(line_str) < 15:
-                    continue
-                clean_story_lines.append(line_str)
-            
-            if clean_story_lines:
-                last_context_block = "\n".join(clean_story_lines)
+            # ✨ 聪明过滤：如果上一轮文本末尾挂载了后台生理词块（通常被包裹在特异标签或尾部），进行切分
+            # 如果没有明显的分割线，就全盘保留作为正文，绝对不再用单个词去盲目过滤，防止误杀 1️⃣ 和 2️⃣
+            if "📌【物理现场既定事实" in raw_last_content:
+                last_context_block = raw_last_content.split("📌【物理现场既定事实")[0].strip()
+            elif "SIGNAL" in raw_last_content:
+                last_context_block = raw_last_content.split("SIGNAL")[0].strip()
+            else:
+                last_context_block = raw_last_content
 
+        # 🚀 按照你的标准逻辑：将“完整正文”与“最新生理状态”无缝合并为一个包裹发给 AI
         if last_context_block:
-            bridge_prompt = (
-                f"⚠️【时间线剧情完美继承锚点 —— 这是你上一轮对话 AI 的全部详细回复内容，作为当下演出的前置物理背景】：\n"
+            unified_context_prompt = (
+                f"⚠️【时间线剧情完美继承锚点 —— 上一轮详细回复正文】：\n"
                 f"\"\"\"\n{last_context_block}\n\"\"\"\n\n"
-                f"💡【承接死命令】：请你（{target_girl}）绝对尊重、全盘继承上述所有的剧情事实、台词与场景细节。你当前的演出必须在此宏大细致的情绪铺垫和动作惯性基础上继续自然、丝滑地向下蔓延。"
+                f"📌【物理现场既定事实刻录 —— 这一轮动作前你（{target_girl}）最新的隐秘生理肉体状态】：\n"
+                f"\"\"\"\n{role_data.get('character_status', '')}\n\"\"\"\n\n"
+                f"💡【小说演化令】：请全盘承接上述的小说剧情细节与此刻体内的真实感官底色，丝滑地展开全新一轮的博弈推演。"
             )
-            cleaned_api_payload.append({"role": "user", "content": bridge_prompt})
-            # 🛑 核心修复：在这里彻底删除了原有的 assistant 伪确认（不再提取 clean_story_lines[-1] 污染大模型）
-
-        # ========================================================
-        # 5. 注入生理反应状态（已修复：两处合并为一处，绝不重复提及第三段信息）
-        # ========================================================
-        single_physical_patch = {
-            "role": "user",
-            "content": (
-                f"📌【物理现场既定事实刻录 —— 这一轮动作前你（{target_girl}）最新的隐秘生理肉体状态如下】：\n"
-                f"{role_data.get('character_status', '')}\n\n"
-                f"💡【小说叙事演化要求】：上述状态为你此刻身体最真实的物理现状与感官起点。请在接下来的正文情节中，自然无缝地体现并推进这一状态。用镜头语言使其合情合理的自然变化。"
-            )
-        }
-        cleaned_api_payload.append(single_physical_patch)
-        
-        # ✨ 终极优化：全盘接收前置所有的正文和身体状态，只做一次高纯度的全能心理内化，绝不给大模型喂具体的历史台词
-        cleaned_api_payload.append({
-            "role": "assistant",
-            "content": f"（眼神微微颤动，将上一轮同他发生的全部戏剧交锋细节、以及此刻体内正在堆叠翻涌的真实知觉敏感度，悉数内化于灵魂深处）……我全部明白了。前置的所有因果和肉体状态已化为我当下的本能反应，我会强忍着感官的羞耻与动摇，在这个基础上直接展开全新一轮的博弈推演。”"
-        })
+            cleaned_api_payload.append({"role": "user", "content": unified_context_prompt})
+            
+            # ✨ 彻底砍掉原本冗余的、强制塞嘴给 assistant 的大段废话，只给一句极简的心理聚焦，防止带偏AI
+            cleaned_api_payload.append({
+                "role": "assistant",
+                "content": "（将上一轮的戏剧交锋、以及此刻体内翻涌的真实知觉悉数沉淀于本能中）……呼，我全部明白了。直接面对眼前的博弈。”"
+            })
         
         # 6. 合并最新的用户输入与小说格式死命令
         # ✨ 优化：动态判断引导词，如果 active_user_text 包含“继续推演”或“重算”，使用【大导演剧情演进令】，否则使用【玩家即时行动令】
