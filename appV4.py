@@ -112,28 +112,59 @@ st.markdown("""
 
 def novel_text_formatter(raw_text: str) -> str:
     """
-    🎬 智能流式小说排版引擎 (特定边界拦截版)：
+    🎬 智能流式小说排版引擎 (特定边界拦截+数字符号分段版)：
     1. 依据纯文本区间的句号（。）进行精确分段换行。
     2. 自动检测闭合容器：若句号包含在 “ ”、( )、或 （ ） 内部，强制锁死不进行分段。
-    3. 全端应用 &emsp;&emsp; 强制首行无损缩进。
+    3. ✨新增逻辑：如果遇到 1️⃣、2️⃣、3️⃣ 标识符，强制在其前方切断，使其独立作为新幕起点。
+    4. 全端应用 &emsp;&emsp; 强制首行无损缩进。
     """
     if not raw_text:
         return raw_text
 
-    # 1. 净化基础文本：清除原始换行符使其回归一整条纯粹的叙事水流
+    # 1. 规范化基础文本：先去掉换行，同时给 1️⃣ 2️⃣ 3️⃣ 前后强制垫上辅助标记，方便后续状态机平滑切分
+    # 这样可以防止数字符号粘连在句尾导致排版错乱
     clean_stream = re.sub(r'\n+', ' ', raw_text).strip()
+    clean_stream = re.sub(r'(1️⃣|2️⃣|3️⃣)', r' \1 ', clean_stream)
+    clean_stream = re.sub(r'\s+', ' ', clean_stream).strip()
 
     segments = []
     current_segment = []
     
-    # 计数器/标志位：用于追踪当前字符是否深陷于“免分段特殊区域”
     in_quote = False       # 双引号 “ ” 内部
     paren_depth = 0        # 英文括号 ( ) 嵌套层级
     zh_paren_depth = 0     # 中文括号 （ ） 嵌套层级
 
-    # 2. 状态机物理逐字卡尺扫描
-    for char in clean_stream:
-        # 激活或解除容器屏蔽锁
+    # 提前准备好需要拦截的特定数字字符组（Emoji 占多字节，用列表精确匹配）
+    target_markers = ["1️⃣", "2️⃣", "3️⃣"]
+
+    # 2. 改进版状态机扫描
+    i = 0
+    stream_len = len(clean_stream)
+    
+    while i < stream_len:
+        # ⚡ 核心增量：前瞻扫描是否撞上了三幕数字标识符
+        matched_marker = None
+        for marker in target_markers:
+            if clean_stream.startswith(marker, i):
+                matched_marker = marker
+                break
+        
+        # 🎯 命中 1️⃣、2️⃣、3️⃣ 的切段逻辑
+        if matched_marker:
+            # 如果当前缓冲区里有文本，先把前面的文本作为一个独立段落切分出去
+            if current_segment:
+                seg_str = "".join(current_segment).strip()
+                if seg_str:
+                    segments.append(seg_str)
+                current_segment = []
+            
+            # 把当前这个大数字符直接塞进历史段落区，让其单独成大段，并跳过它的索引长度
+            segments.append(matched_marker)
+            i += len(matched_marker)
+            continue
+
+        # 容器状态标记更新
+        char = clean_stream[i]
         if char == "“":
             in_quote = True
         elif char == "”":
@@ -149,27 +180,38 @@ def novel_text_formatter(raw_text: str) -> str:
 
         current_segment.append(char)
 
-        # 🎯 核心判定点：当且仅当遇到句号，且外部所有拦截容器全部处于彻底释放(False/0)状态时，才触发强制切段
+        # 🎯 命中句号（且不在任何括号或对话内）的切段逻辑
         if char == "。" and not in_quote and paren_depth == 0 and zh_paren_depth == 0:
             seg_str = "".join(current_segment).strip()
             if seg_str:
                 segments.append(seg_str)
             current_segment = []
+        
+        i += 1
 
-    # 句尾残留收尾：处理最后一段没有以绝对句号收尾的零散文本
+    # 句尾残留文本收尾
     if current_segment:
         seg_str = "".join(current_segment).strip()
         if seg_str:
             segments.append(seg_str)
 
-    # 3. 为切分出来的每个合法独立小说大段注入无损首行缩进实体
+    # 3. 熔铸排版：为每一段注入缩进。注意：1️⃣ 2️⃣ 3️⃣ 本身作为小标题不需要在其前方加缩进
     processed_blocks = []
     for seg in segments:
-        if seg:
+        if not seg:
+            continue
+        if seg in target_markers:
+            # 如果是数字标识符，直接加回车成独立大标题行，不加 &emsp;
+            processed_blocks.append(f"\n\n{seg}")
+        else:
+            # 正常剧情文本段落，强控双全角空格缩进
             processed_blocks.append(f"&emsp;&emsp;{seg}")
 
-    # 4. 熔铸最终成型文本流，通过标准双回车在 Markdown 渲染层分裂出完美呼吸感的空行
+    # 4. 合并输出
     final_output = "\n\n".join(processed_blocks)
+    # 深度净化可能出现的连续多余回车
+    final_output = re.sub(r'\n{3,}', '\n\n', final_output).strip()
+    
     return final_output
 
 
