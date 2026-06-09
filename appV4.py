@@ -1228,12 +1228,11 @@ else:
                 for chunk in response:
                     if chunk.choices[0].delta.content:
                         full_story_response += chunk.choices[0].delta.content
-                        # ✨ 在流式渲染一瞬间进行临时前端切段+缩进，完美视觉呈现
                         display_view = novel_text_formatter(full_story_response)
                         with response_placeholder.container():
                             st.markdown(display_view)
 
-                # 🚀 封闭剧场追发：计算最新生理快感指标（仅看上一轮生理反应+这一轮详细对话）
+                # 🚀 封闭剧场追发：计算最新生理快感指标
                 with st.spinner("⚡ 顺承叙事流：正在深度刻录她此时此刻的隐秘身体档案..."):
                     try:
                         old_status_base = role_data.get('character_status', f"[{target_girl}]\n阴道：常态。\n乳头：常态。\n大腿内侧：常态。")
@@ -1306,7 +1305,6 @@ else:
                     role_data["character_status"] = new_status_block
 
                 with response_placeholder.container():
-                    # ✨ 刷新前端最终显示（带缩进的正文+美化状态框）
                     display_view = novel_text_formatter(full_story_response)
                     st.markdown(display_view)
                     if final_html_elements:
@@ -1314,7 +1312,6 @@ else:
                         st.markdown(joined_html, unsafe_allow_html=True)
 
                 single_reply_id = f"reply_{int(time.time() * 1000)}_{random.randint(1000, 9999)}"
-                # ✨ 将干净的原始大模型吐字存入数据库，防范后续上下文污染
                 role_data["chat_history"].append({
                     "role": "assistant",
                     "content": full_story_response + "\n\n" + new_status_block,
