@@ -164,26 +164,18 @@ def novel_text_formatter(raw_text: str) -> str:
     return final_output
 
 
-# ==========================================
-# 🎯 前端专属：多轨精确生理状态渲染拦截器（兼容旧历史数据的渲染）
-# ==========================================
-# ==========================================
-# 🎯 前端专属：多轨精确生理状态渲染拦截器（完美兼容多角色与新老历史数据）
-# ==========================================
-# ==========================================
-# 🎯 前端专属：超强自适应生理状态渲染拦截器（通杀一切不听话的格式）
-# ==========================================
 def display_novel_with_bold_status(text: str):
     """
-    在前端渲染时，自适应拦截并用高级 HTML 框对文末女性角色的生理状态进行精美排版。
+    在前端渲染历史记录时，自动剥离正文与生理状态框，
+    并对纯正文应用【智能句号分段+全角双空格缩进】。
     """
     if not text:
         return
 
-    # 1. 强力拔除大模型偶尔夹带的系统开始和结束标签，防止污染小说正文
+    # 1. 强力拔除大模型偶尔夹带的系统开始和结束标签
     clean_text = re.sub(r'====\s*SIGNAL\s*(?:START|END)\s*====', '', text)
 
-    # 2. 顶级无锚点模糊匹配正则：完全不要方括号限制，只要抓到 阴道/乳头/大腿内侧 的组合就拦截
+    # 2. 正则匹配拦截文本内的生理状态块
     status_block_pattern = r'([^\n\s]+?)\s*\n*\s*(?:阴道恢复的感觉|阴道的感觉|阴道)[：:]\s*([\s\S]*?)(?:乳头恢复的感觉|乳头的感觉|乳头)[：:]\s*([\s\S]*?)(?:大腿内侧的感觉|大腿内侧)[：:]\s*([\s\S]*?)(?=\n\s*[^\n\s]+?\s*\n*\s*(?:阴道|乳头)|$)'
     matches = list(re.finditer(status_block_pattern, clean_text))
 
@@ -193,15 +185,15 @@ def display_novel_with_bold_status(text: str):
         main_story = clean_text[:first_match_start].strip()
 
         if main_story:
-            st.markdown(main_story)
+            # ✨ 核心修复：对历史记录里的纯正文也临时套用前端分段和缩进滤镜！
+            formatted_story = novel_text_formatter(main_story)
+            st.markdown(formatted_story, unsafe_allow_html=True)
 
         # 逐个渲染抓取到的生理状态框
         for match in matches:
-            # 自动提取人名，并强行规范化加上优雅的方括号
             raw_name = match.group(1).strip().strip('[').strip(']').strip('【').strip('】')
             role_name = f"[{raw_name}]"
 
-            # 提取并清洗具体的肉体知觉文字
             vagina_detail = match.group(2).strip().strip(';').strip('，').strip('。').strip()
             nipple_detail = match.group(3).strip().strip(';').strip('，').strip('。').strip()
             thigh_detail = match.group(4).strip().strip(';').strip('，').strip('。').strip()
@@ -216,8 +208,8 @@ def display_novel_with_bold_status(text: str):
             """
             st.markdown(status_html, unsafe_allow_html=True)
     else:
-        st.markdown(text)
-
+        # 如果没有生理框，判定为纯文本或玩家发言，直接走缩进排版
+        st.markdown(novel_text_formatter(text), unsafe_allow_html=True)
 
 # ==========================================
 # ⚡ 方案A核心中枢：极速无感“逐轮对等压缩器”（完全保留您原有的参数格式）
@@ -769,10 +761,11 @@ if history_len > DISPLAY_LIMIT:
             with st.chat_message(message["role"], avatar=avatar_icon):
                 p_name = message.get("agent_name", "")
                 prefix = f"💬 **【{p_name}】**：\n\n" if p_name else ""
+                # ✨ 统一拦截历史，对所有助手/用户消息重新智能排版与缩进
                 if message["role"] == "assistant":
                     display_novel_with_bold_status(prefix + message["content"])
                 else:
-                    st.markdown(prefix + message["content"])
+                    st.markdown(prefix + novel_text_formatter(message["content"]), unsafe_allow_html=True)
             render_message_controls_by_id(message["msg_id"], is_last_msg=False)
 
     for i, message in enumerate(recent_history):
@@ -788,7 +781,23 @@ if history_len > DISPLAY_LIMIT:
             if message["role"] == "assistant":
                 display_novel_with_bold_status(prefix + message["content"])
             else:
-                st.markdown(prefix + message["content"])
+                st.markdown(prefix + novel_text_formatter(message["content"]), unsafe_allow_html=True)
+        render_message_controls_by_id(message["msg_id"], is_last_msg=is_last,
+                                      agent_name_fallback=message.get("agent_name", ""))
+else:
+    for i, message in enumerate(chat_history_view):
+        if "msg_id" not in message:
+            message["msg_id"] = f"backfill_{i}_{hash(message['content'])}"
+
+        is_last = (i == history_len - 1) and (message["role"] == "assistant")
+        avatar_icon = "💋" if message["role"] == "assistant" else "😎"
+        with st.chat_message(message["role"], avatar=avatar_icon):
+            p_name = message.get("agent_name", "")
+            prefix = f"💬 **【{p_name}】**：\n\n" if p_name else ""
+            if message["role"] == "assistant":
+                display_novel_with_bold_status(prefix + message["content"])
+            else:
+                st.markdown(prefix + novel_text_formatter(message["content"]), unsafe_allow_html=True)
         render_message_controls_by_id(message["msg_id"], is_last_msg=is_last,
                                       agent_name_fallback=message.get("agent_name", ""))
 else:
