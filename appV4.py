@@ -6,6 +6,7 @@ import random
 import time  # ✨ 用于群聊历史的物理时间线排序
 import threading  # ✨ 引入线程锁，彻底防止多并发导致的数据文件归零
 import re  # ✨ 引入正则表达式
+import time
 
 # ☁️ 定义服务器本地保存数据的隐藏 JSON 文件路径
 DATA_FILE = "sandbox_private_db.json"
@@ -1001,12 +1002,25 @@ if is_group_chat:
                     model=model_name, messages=api_payload, stream=True, temperature=0.8, max_tokens=3000,
                     presence_penalty=0.2, frequency_penalty=0.1, timeout=60.0
                 )
-                for chunk in response:
-                    if chunk.choices[0].delta.content:
-                        full_response += chunk.choices[0].delta.content
-                        formatted_response = novel_text_formatter(full_response)
-                        with response_placeholder.container():
-                            st.markdown(formatted_response)
+
+        last_render_time = time.time()
+        
+        for chunk in response:
+            if chunk.choices[0].delta.content:
+                full_story_response += chunk.choices[0].delta.content
+                
+                # ✨ 降频优化：不要来一个字就用正则折腾两千字！
+                # 只有当距离上次渲染超过 0.1 秒（给浏览器喘息时间），或者是碰到了标点符号/结尾时，才执行重绘排版
+                current_time = time.time()
+                if current_time - last_render_time > 0.08 or any(p in chunk.choices[0].delta.content for p in ["。", "」", "】", "\n"]):
+                    display_view = novel_text_formatter(full_story_response)
+                    with response_placeholder.container():
+                        st.markdown(display_view)
+                    last_render_time = current_time
+        
+        # 🏁 完工保底：流式完全结束后，必须强制全量精美渲染一次，确保文字不遗漏
+        with response_placeholder.container():
+            st.markdown(novel_text_formatter(full_story_response))
 
                 formatted_response = novel_text_formatter(full_response)
 
