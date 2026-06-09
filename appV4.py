@@ -115,20 +115,48 @@ st.markdown("""
 # ==========================================
 def novel_text_formatter(raw_text: str) -> str:
     """
-    ✨ 原汁原味自然排版引擎：彻底废除强行切段，完全还原大模型自身吐出来的段落错落感，
-    只做最基础的错位空行净化，把小说的呼吸感和长短句交错完全还给AI。
+    🎬 前端智能流式小说排版引擎：
+    1. 依据句号（。）进行精确分段换行。
+    2. 若句号包含在双引号“...”内部（即角色对话中），则自动锁定不分段。
+    3. 带有双引号的对话整体自成独立大段，与其前后的旁白自动产生呼吸空行。
     """
     if not raw_text:
         return raw_text
 
-    # 1. 把文本按AI自己吐出来的换行符切开，净化每行前后的死空格
-    lines = [line.strip() for line in raw_text.split("\n")]
+    # 清洗掉原始文本中过度混乱的强行换行，合并为统一的文本流进行精细化拆解
+    clean_stream = re.sub(r'\n+', ' ', raw_text).strip()
 
-    # 2. 重新用标准的换行拼起来，如果AI自己留了空行，这里也会完美还原
-    reconstructed = "\n".join(lines)
+    # 正则表达式：匹配全角双引号包裹的对话内容，或者匹配不含引号的普通文本切片
+    # 这样可以确保文本被拆分为：["普通旁白文本...", "“对话内容...”", "普通旁白文本..."]
+    tokens = re.findall(r'“[^”]*”|[^“”]+', clean_stream)
+    
+    processed_blocks = []
 
-    # 3. 兜底清洗：防止前端因为连续多敲了3个以上的换行导致排版过稀
-    final_output = re.sub(r'\n{3,}', '\n\n', reconstructed).strip()
+    for token in tokens:
+        token = token.strip()
+        if not token:
+            continue
+        
+        if token.startswith("“") and token.endswith("”"):
+            # 🎯 命中对话规则：对话整体独立成段，内部的句号完全被保护，不进行切分
+            processed_blocks.append(f"\n\n{token}\n\n")
+        else:
+            # 🎯 命中旁白规则：普通叙事文本遇到句号（。）立刻执行前端分段换行
+            # 将句号替换为 句号+双换行，并清洗掉多余的空格，营造小说呼吸感
+            narrative_segments = token.split("。")
+            valid_segments = [seg.strip() for seg in narrative_segments if seg.strip()]
+            
+            # 重新用“句号+换行”连接
+            if valid_segments:
+                token_processed = "。\n\n".join(valid_segments)
+                # 如果原本末尾就有句号，补上最后一个句号
+                if token.endswith("。"):
+                    token_processed += "。"
+                processed_blocks.append(token_processed)
+
+    # 将所有解析完毕的区块重新熔铸，并利用正则净化掉由于拼装导致的多余空行
+    reconstructed_text = "".join(processed_blocks)
+    final_output = re.sub(r'\n{3,}', '\n\n', reconstructed_text).strip()
 
     return final_output
 
