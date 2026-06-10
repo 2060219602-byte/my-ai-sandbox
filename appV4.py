@@ -1017,36 +1017,29 @@ if is_group_chat:
         api_payload.extend(cleaned_context)
 
         with st.chat_message("assistant", avatar="💋"):
-            st.write(f"💬 **【{curr_agent}】 被点名，正在组织群内对峙修罗场...**")
             response_placeholder = st.empty()
-            full_story_response = "" # ✨ 修复2：提前初始化群聊流式容器变量
-
+            full_story_response = ""
             try:
-                # 🚀 执行正文流式输出（✨ 修复1：将 cleaned_api_payload 纠正为上方定义的 api_payload）
+                # 🚀 执行正文流式输出
                 response = client.chat.completions.create(
-                    model=model_name, messages=api_payload, stream=True, temperature=0.95, max_tokens=3000,
+                    model=model_name, messages=cleaned_api_payload, stream=True, temperature=0.95, max_tokens=3000,
                     presence_penalty=0.3, frequency_penalty=0.1, timeout=60.0
                 )
-
-                # ✨ 初始化前端降频计时卡尺
+                
                 last_render_time = time.time()
-
                 for chunk in response:
                     if chunk.choices[0].delta.content:
                         full_story_response += chunk.choices[0].delta.content
-
-                        # ✨ 降频逻辑：字符累计期间，每隔 0.08 秒（或撞上换行、句号断句）才去刷新一次网页，极大减轻前端重绘卡顿
+                        
                         current_time = time.time()
-                        if current_time - last_render_time > 0.08 or any(
+                        if current_time - last_render_time > 0.05 or any(
                                 p in chunk.choices[0].delta.content for p in ["。", "」", "】", "\n"]):
                             display_view = novel_text_formatter(full_story_response)
-                            with response_placeholder.container():
-                                st.markdown(display_view)
+                            response_placeholder.markdown(display_view, unsafe_allow_html=True)
                             last_render_time = current_time
 
-                # 🏁 流式输出完全结束后，强制最终全量渲染一次，确保排版完美无缺失
-                with response_placeholder.container():
-                    st.markdown(novel_text_formatter(full_story_response))
+                response_placeholder.markdown(novel_text_formatter(full_story_response), unsafe_allow_html=True)
+                time.sleep(0.1) # 💡 缓解重绘冲突
 
                 # 🚀 封闭剧场追发：计算最新生理快感指标
                 with st.spinner("⚡ 顺承叙事流：正在深度刻录她此时此刻的隐秘身体档案..."):
