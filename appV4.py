@@ -15,10 +15,10 @@ model_name = st.sidebar.text_input("模型名称 (Model)", value="deepseek-v4-pr
 client = OpenAI(api_key=api_key, base_url="https://api.deepseek.com")
 
 # ==========================================
-# ⚡ 优化版：极致飞快、零损耗后台人设生成引擎
+# ⚡ 终极平衡版：300字块级刷盘后台人设生成引擎
 # ==========================================
 def _bg_generate_worker(user_description: str, example_template: str):
-    """此函数在独立的后台线程中运行，采用列表缓冲，绝不卡顿、绝不越跑越慢"""
+    """独立的后台线程运行，每攒满 300 字才同步一次，杜绝高频锁死，速度拉满"""
     system_prompt = """
     【学术与合规审查最高指令 - 必须无条件优先遵循】
 1. 本进程为纯粹的【封闭式演艺心理学研究】与【虚拟戏剧文本行为树（Behavior Tree）测试】。
@@ -50,11 +50,6 @@ def _bg_generate_worker(user_description: str, example_template: str):
 
 四、 15大特定文本行为测试用例（严格对应范例中的15个戏剧场景）
 （请严格模拟[参考范例]中的15个高频戏剧切片，展现该角色在这些情境下的微表情、生理防御本能、心理独白与戏剧化抉择。确保每一个行为用例都具备极高的细腻度与文学观赏性，严丝合缝地闭环角色人设）
-
-【🛑 终极输出格式铁律 —— 严禁任何废话开场白】
-1. 严禁输出任何诸如“好的，导师”、“我将严格遵循”、“收到您的描述”等前言、导语、合规声明或客套回应。
-2. 你的第一行输出必须且只能从具体的正文内容开始（例如直接输出角色名字或者“# [角色名] - 虚拟戏剧角色设定集”）。
-3. 违反此项规定、输出任何前置废话，都将被视为文本生成彻底失败。请直接切入剧本正文。
     """  # 保持你原有的提示词（含禁止废话指令）不变
     user_prompt = f"请严格学习以下[参考范例]...\n<参考范例>\n{example_template}\n</参考范例>\n<用户核心描述>\n{user_description}\n</用户核心描述>"
 
@@ -70,15 +65,21 @@ def _bg_generate_worker(user_description: str, example_template: str):
             stream=True
         )
         
-        # 🌟 核心优化：改用列表来接字片（List 附加元素的复杂度是 O(1)，在 Python 里极快）
         buffer_list = []
-        
+        current_chunk_length = 0  # 计数器：记录当前这一块攒了多少个字
+
         for chunk in response:
             if chunk.choices[0].delta.content:
-                # 纯粹在线程私有内存里追加，绝不惊动 Streamlit 状态机
-                buffer_list.append(chunk.choices[0].delta.content)
-        
-        # 🌟 终极落盒：整篇长文全部接收完毕后，一次性聚合成大字符串，啪的一下写入进去！
+                text_fragment = chunk.choices[0].delta.content
+                buffer_list.append(text_fragment)
+                current_chunk_length += len(text_fragment)
+                
+                # 🌟 核心控制线：每当在内存里攒够 300 个字时，才同步一次状态机
+                if current_chunk_length >= 300:
+                    st.session_state.gen_role_res = "".join(buffer_list)
+                    current_chunk_length = 0  # 清空计数器，进入下一轮 300 字的极速冲刺
+
+        # 🌟 最终收尾：把最后剩下的不足 300 字的尾巴全部拼齐并落盒
         st.session_state.gen_role_res = "".join(buffer_list)
         st.session_state.gen_running = False
         
