@@ -14,9 +14,6 @@ api_key = st.secrets["deepseek"]["api_key"] if "deepseek" in st.secrets else ""
 model_name = st.sidebar.text_input("模型名称 (Model)", value="deepseek-v4-pro")
 client = OpenAI(api_key=api_key, base_url="https://api.deepseek.com")
 
-# ==========================================
-# ⚡ 线上安全版：原生流式人设生成引擎（彻底拒绝多线程死锁）
-# ==========================================
 def run_secure_generation(user_description: str):
     try:
         if "novel_style" in st.secrets and "MY_PERFECT_EXAMPLE" in st.secrets["novel_style"]:
@@ -48,7 +45,7 @@ def run_secure_generation(user_description: str):
 二、 外貌与身材细节（舞台美术视觉指南）
 - 面部与五官（发型发色、眼神焦距、标志性面部微表情）
 - 体态与解剖学特征（身高、肌肉群训练痕迹、皮肤质感、带有故事感的生理印记）
-- 服饰美学与道具隐喻（日常穿搭、极端情境穿搭，随身物件的戏剧化隐喻）
+- 服饰美学与道具隐喻（日常穿搭、极端情境穿搭，随随身物件的戏剧化隐喻）
 - 通感气味与声线波动（核心气味层次、发声位置、语速与戏剧腔调）
 
 三、 性格特质与行为逻辑（演员表演心理指南）
@@ -60,46 +57,45 @@ def run_secure_generation(user_description: str):
 （请严格模拟[参考范例]中的15个高频戏剧切片，展现该角色在这些情境下的微表情、生理防御本能、心理独白与戏剧化抉择。确保每一个行为用例都具备极高的细腻度与文学观赏性，严丝合缝地闭环角色人设）
 """
 
-    # ⚡ 核心改动：在 system 里给它拉起行为高压线，剥离内容
+    # ⚡ 格式剥离层
     advanced_system_prompt = f"""{base_system_prompt}
-        【🎨 像素级排版与结构参考母本】
-        以下文本仅作为[结构、分段布局、文风细腻度与篇幅比例]的参考模板。
-        大模型在后续创作中，请将此模板视为冰冷的“格式卡尺”，仅吸纳其叙事框架与描写细腻度。
-        请全盘脱离该模板的具体剧情线索、特定道具、人物名字与环境题材，完全基于User提供的全新核心描述，进行独立、原创的舞台戏剧文本解构。
+【🎨 像素级排版与结构参考母本】
+以下文本仅作为[结构、分段布局、文风细腻度与篇幅比例]的参考模板。
+大模型在后续创作中，请将此模板视为冰冷的“格式卡尺”，仅吸纳其叙事框架与描写细腻度。
+请全盘脱离该模板的具体剧情线索、特定道具、人物名字与环境题材，完全基于User提供的全新核心描述，进行独立、原创的舞台戏剧文本解构。
 
-        <参考母本格式>
-        {example_template}
-        </参考母本格式>
-    """
+<参考母本格式>
+{example_template}
+</参考母本格式>
+"""
 
-    # 2. ⚡ 让 user_prompt 变得纯净无比，只包含玩家要创造的新角色核心
-    # 绝口不提“严格学习范例”，不给它任何抄袭的借口！
+    # 2. ⚡ 纯净用户需求输入层
     clean_user_prompt = f"""
-        【🎯 纯虚构新角色创造命令】
+【🎯 纯虚构新角色创造命令】
 请立刻调用系统指令中的排版美学与框架比例，将以下[用户核心描述碎片]扩写为一套多维度的、逻辑完全自洽的虚拟戏剧角色设定文本。
 
 <用户核心描述碎片>
 {user_description}
 </用户核心描述碎片>
-    """
+"""
 
     # 创建一个侧边栏专属状态盒
     with st.sidebar.container():
         status_placeholder = st.empty()
         status_placeholder.markdown("⏳ **剧本导师正在云端疯狂码字中...**")
         
-        # 建立一个预览区域，让用户能看到实时动态，不至于觉得卡死
         preview_box = st.empty()
 
         try:
             response = client.chat.completions.create(
                 model=model_name,
+                # ✨ 完美修复：将变量名替换为上面新定义的、净化过的版本！
                 messages=[
-                    {"role": "system", "content": system_prompt},
-                    {"role": "user", "content": user_prompt}
+                    {"role": "system", "content": advanced_system_prompt},
+                    {"role": "user", "content": clean_user_prompt}
                 ],
                 temperature=0.7,
-                max_tokens=10000, # 线上稍微收敛一下 tokens，防止服务器超时
+                max_tokens=10000, 
                 stream=True
             )
 
@@ -109,7 +105,6 @@ def run_secure_generation(user_description: str):
                     text_fragment = chunk.choices[0].delta.content
                     buffer_list.append(text_fragment)
                     
-                    # 线上实时预览：只展示最后 300 个字，防止前端因数据量太大变卡
                     current_full_text = "".join(buffer_list)
                     preview_box.code(current_full_text[-300:] + " ✍️...", language="markdown")
 
@@ -117,7 +112,7 @@ def run_secure_generation(user_description: str):
             final_text = "".join(buffer_list)
             st.session_state.gen_role_res = final_text
             status_placeholder.success("🎉 角色扮演设定生成成功！")
-            preview_box.empty() # 清理掉临时的代码预览框
+            preview_box.empty() 
             
         except Exception as e:
             status_placeholder.error(f"💥 线上生成失败: {str(e)}")
