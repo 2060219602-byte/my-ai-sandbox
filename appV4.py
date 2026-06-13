@@ -74,7 +74,7 @@ def generate_pro_rp_character_stream(user_description: str, placeholder_element)
                 {"role": "user", "content": user_prompt}
             ],
             temperature=0.7,
-            max_tokens=4000,
+            max_tokens=10000,
             stream=True
         )
         for chunk in response:
