@@ -672,21 +672,20 @@ if not is_group_chat:
 st.sidebar.write("---")
 st.sidebar.header("🪄 一键 AI 智能人设生成")
 
-# 初始化防死锁状态
+# 初始化状态
 if "gen_running" not in st.session_state: st.session_state.gen_running = False
 if "gen_role_res" not in st.session_state: st.session_state.gen_role_res = ""
 if "gen_role_desc" not in st.session_state: st.session_state.gen_role_desc = ""
 
-# 1. 动态输入框
+# 1. 动态描述输入框
 tmp_desc = st.sidebar.text_area("输入核心描述碎片（如：傲娇大小姐）：", value=st.session_state.gen_role_desc)
 
 col_g1, col_g2 = st.sidebar.columns(2)
 with col_g1:
-    # 如果后台正在生成，按钮自动变成禁用状态，防止重复点击
     btn_disabled = st.session_state.gen_running
     if st.button("🔮 依据范例生成", use_container_width=True, disabled=btn_disabled) and tmp_desc.strip():
         st.session_state.gen_role_desc = tmp_desc
-        # 丢进后台线程开始跑，立刻释放前端
+        # 🚀 丢进后台线程开始跑，立刻释放前端，绝不卡顿
         start_background_generation(tmp_desc)
         st.rerun()
 
@@ -697,19 +696,15 @@ with col_g2:
         st.session_state.gen_running = False
         st.rerun()
 
-# ✨ 核心：如果后台线程正在拼命跑，在侧边栏挂载一个转圈圈，提示它在工作，同时不阻碍你玩游戏
-# ✨ 核心：如果后台线程正在拼命跑，在侧边栏挂载一个转圈圈
+# 2. 状态提示区（彻底去掉了 time.sleep 和 st.rerun 的死循环！）
 if st.session_state.gen_running:
     st.sidebar.markdown(
-        '<div style="color: #ff4d6d; font-weight: bold; font-size: 15px;">🧙‍♂️ 剧本导师在暗中解构并补全高级行为树...</div>', 
+        '<div style="color: #ff4d6d; font-weight: bold; font-size: 14px; margin-bottom: 5px;">⏳ 剧本导师正在后台生成中（不影响当前游戏）...</div>', 
         unsafe_allow_html=True
     )
-    st.sidebar.spinner("") 
-    
-    # 🌟 核心修复：引入 1.5 秒的前端主动探针
-    import time
-    time.sleep(1.5) # 每 1.5 秒让前端呼吸一次，在这个期间你可以正常发消息，绝不卡顿主界面
-    st.rerun() # 自动重绘网页，检查后台有没有生成完。一旦跑完，框里立刻就会有字！
+    # 提供一个手动同步刷新按钮，你想看结果的时候点一下就行，平时绝不打扰你
+    if st.sidebar.button("🔄 检查并同步结果", use_container_width=True):
+        st.rerun()
 
 st.sidebar.write("---")
 st.sidebar.subheader("➕ 确认添加单聊AI角色联系人")
@@ -717,7 +712,7 @@ st.sidebar.subheader("➕ 确认添加单聊AI角色联系人")
 with st.sidebar.container():
     new_role_name = st.text_input("输入新角色名字：", value="")
     
-    # 🔥 核心体验：在没有跑完之前，框里是空的；一旦后台执行完毕，刷新后人设会自动平铺在框里
+    # 动态回填：要么你手动点同步，要么你在主界面正常玩游戏发消息，只要页面产生交互，结果就会悄悄落盒在这里
     init_sys = st.text_area(
         "赋予她的基本人设：", 
         value=st.session_state.gen_role_res if st.session_state.gen_role_res else "", 
