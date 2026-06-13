@@ -1384,7 +1384,7 @@ else:
             cleaned_api_payload.append({"role": "user", "content": chronicle_content})
             cleaned_api_payload.append({
                 "role": "assistant",
-                "content": f"（长吸一口气，全盘继承过往所有既定事实，眼神暗沉下来）……过往的所有细节早已深植于我的本能。我已经回到了当下的这一轮。我会直接面对他。"
+                "content": f"（已接收前情回顾，直接承接当前最新时间线的剧情）"
             })
 
         # 3. 注入永久核心记忆
