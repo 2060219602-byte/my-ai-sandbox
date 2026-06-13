@@ -698,13 +698,18 @@ with col_g2:
         st.rerun()
 
 # ✨ 核心：如果后台线程正在拼命跑，在侧边栏挂载一个转圈圈，提示它在工作，同时不阻碍你玩游戏
+# ✨ 核心：如果后台线程正在拼命跑，在侧边栏挂载一个转圈圈
 if st.session_state.gen_running:
     st.sidebar.markdown(
         '<div style="color: #ff4d6d; font-weight: bold; font-size: 15px;">🧙‍♂️ 剧本导师在暗中解构并补全高级行为树...</div>', 
         unsafe_allow_html=True
     )
-    # 局部视觉小菊花转圈
     st.sidebar.spinner("") 
+    
+    # 🌟 核心修复：引入 1.5 秒的前端主动探针
+    import time
+    time.sleep(1.5) # 每 1.5 秒让前端呼吸一次，在这个期间你可以正常发消息，绝不卡顿主界面
+    st.rerun() # 自动重绘网页，检查后台有没有生成完。一旦跑完，框里立刻就会有字！
 
 st.sidebar.write("---")
 st.sidebar.subheader("➕ 确认添加单聊AI角色联系人")
