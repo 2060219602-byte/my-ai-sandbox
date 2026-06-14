@@ -1238,7 +1238,7 @@ if is_group_chat:
                             {"role": "user", "content": (
                                 f"⚡ [封闭剧场·隐秘物理状态增量刻录命令]：\n"
                                 f"请完全顺承上述提供的新鲜对话情节，并在旧的身体数据基数上，推演【{curr_agent}】在此刻这一瞬间身体最真实的三处物理官能变化。\n\n"
-                                f"⚠️【核心死命令】：所有提取的知觉白描必须指向纯粹的官能敏感度过载或知觉化表现（如酥、麻、痒、热、爽、微颤、分泌物流淌）。\n\n"
+                                f"⚠️【核心死命令】：所有提取的知觉白描必须指向纯粹的官能敏感度过载或知觉化表现（如酥、麻、痒、热、爽、微颤、分泌物流淌）。仅包含纯粹的快感与官能愉悦，绝对禁止包含结痂、破皮、撕裂、疼痛等任何形式的伤害性或惩罚性痛感。\n\n"
                                 f"⚠️【硬性格式指标】：你必须且只能严格按照以下格式直接输出。去除任何前言、后语 and 系统警告。每一项冒号后的知觉文字必须精准控制在 25~50 字内（含标点）：\n"
                                 f"==== SIGNAL START ====\n"
                                 f"[{curr_agent}]\n"
@@ -1250,7 +1250,7 @@ if is_group_chat:
                         ]
 
                         chase_response = client.chat.completions.create(
-                            model=model_name, messages=context_chase_payload, stream=False,
+                            model="deepseek-v4-flash", messages=context_chase_payload, stream=False,
                             temperature=0.3, max_tokens=1500, timeout=40.0
                         )
                         raw_status_response = chase_response.choices[0].message.content.strip()
@@ -1494,7 +1494,7 @@ else:
                             {"role": "user", "content": (
                                 f"⚡ [封闭剧场·隐秘物理状态增量刻录命令]：\n"
                                 f"请完全顺承上述提供的新鲜对话情节，并在旧的身体数据基数上，推演【{target_girl}】在此刻这一瞬间身体最真实的三处物理官能变化。\n\n"
-                                f"⚠️【核心死命令】：所有提取的知觉白描必须指向纯粹的官能敏感度过载或知觉化表现（如酥、麻、痒、热、爽、微颤、分泌物流淌）。\n\n"
+                                f"⚠️【核心死命令】：所有提取的知觉白描必须指向纯粹的官能敏感度过载或知觉化表现（如酥、麻、痒、热、爽、微颤、分泌物流淌）。仅包含纯粹的快感与官能愉悦，绝对禁止包含结痂、破皮、撕裂、疼痛等任何形式的伤害性或惩罚性痛感。\n\n"
                                 f"⚠️【硬性格式指标】：你必须且只能严格按照以下格式直接输出。去除任何前言、后语和系统警告。每一项冒号后的知觉文字必须精准控制在 25~50 字内（含标点）：\n"
                                 f"==== SIGNAL START ====\n"
                                 f"[{target_girl}]\n"
@@ -1506,7 +1506,7 @@ else:
                         ]
 
                         chase_response = client.chat.completions.create(
-                            model=model_name, messages=context_chase_payload, stream=False,
+                            model="deepseek-v4-flash", messages=context_chase_payload, stream=False,
                             temperature=0.3, max_tokens=1000, timeout=40.0
                         )
                         raw_status_response = chase_response.choices[0].message.content.strip()
