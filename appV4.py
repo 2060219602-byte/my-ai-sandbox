@@ -1372,6 +1372,10 @@ else:
 
         st.session_state.regenerate_trigger = False
 
+        # ========================================================
+        # ⚡ 黄金重构：引入滚动实时对话窗口，完美修复复读与强调Bug
+        # ========================================================
+        
         # 1. 初始化并注入全局 System 提示词
         dynamic_system_prompt = f"{jailbreak_prompt}\n\n"
         dynamic_system_prompt += (
@@ -1382,76 +1386,54 @@ else:
 
         cleaned_api_payload = [{"role": "system", "content": dynamic_system_prompt}]
 
-        # 2. 注入历史事实编年史大纲
-        historical_summaries = role_data.get("summarized_history", [])[-200:]
-        if historical_summaries:
-            formatted_lines = []
-            for idx, line in enumerate(historical_summaries):
-                formatted_lines.append(f"🎬 [剧情回顾 · 第 {idx + 1} 幕纠缠档案]:\n{line}")
-
-            chronicle_content = (
-                "💡【剧情前情回顾 · 已落幕历史档案】\n"
-                "以下为前几轮已经发生并定格的既定事实大纲。这些情节在戏剧时间线上已经完全翻篇。\n"
-                "本轮输出请完全聚焦于最新的对话切片。请勿将此大纲中的旧有对白与已完成动作带入当下的台词组织中，确保剧情承接前文并向后演进。\n\n" +
-                "\n\n-------------------- \n\n".join(formatted_lines)
-            )
-            
-            cleaned_api_payload.append({"role": "user", "content": chronicle_content})
-            cleaned_api_payload.append({
-                "role": "assistant",
-                "content": f"（已接收前情回顾，直接承接当前最新时间线的剧情）"
-            })
-
-        # 3. 注入永久核心记忆
-        if role_data.get("memory_events"):
-            memory_ledger_prompt = "📌【绝对核心个人记忆备忘录 —— 这是你铭刻于灵魂的永久既定事实线索】：\n"
-            for idx, event in enumerate(role_data["memory_events"]):
-                memory_ledger_prompt += f"{idx + 1}. {event}\n"
-            
-            cleaned_api_payload.append({"role": "user", "content": memory_ledger_prompt})
-            cleaned_api_payload.append({
-                "role": "assistant",
-                "content": f"（眼神微微闪烁，这些刻骨铭心的核心记忆备忘浮上心头）……我明白了，这些是影响我和他之间纠缠的永恒事实，我已经死死记在心底。接下来的回应我会完美契合这些羁绊事实。"
-            })
-
-        # ========================================================
-        # 4 & 5 强力瘦身版：完美继承1-3段正文 + 生理状态动态融入
-        # ========================================================
-        all_past_history = role_data["chat_history"][:-1] if (user_input or is_continue_mode) else role_data["chat_history"]
-        last_ai_reply = [m for m in all_past_history if m["role"] == "assistant" and m.get("content")]
-
-        last_context_block = ""
-        if last_ai_reply:
-            raw_last_content = str(last_ai_reply[-1]["content"]).strip()
-            
-            # ✨ 聪明过滤：如果上一轮文本末尾挂载了后台生理词块（通常被包裹在特异标签或尾部），进行切分
-            # 如果没有明显的分割线，就全盘保留作为正文，绝对不再用单个词去盲目过滤，防止误杀 1️⃣ 和 2️⃣
-            if "📌【物理现场既定事实" in raw_last_content:
-                last_context_block = raw_last_content.split("📌【物理现场既定事实")[0].strip()
-            elif "SIGNAL" in raw_last_content:
-                last_context_block = raw_last_content.split("SIGNAL")[0].strip()
-            else:
-                last_context_block = raw_last_content
-
-        # 🚀 按照你的标准逻辑：将“完整正文”与“最新生理状态”无缝合并为一个包裹发给 AI
-        if last_context_block:
-            unified_context_prompt = (
-                f"⚠️【时间线剧情完美继承锚点 —— 上一轮详细回复正文】：\n"
-                f"\"\"\"\n{last_context_block}\n\"\"\"\n\n"
-                f"📌【物理现场既定事实刻录 —— 这一轮动作前你（{target_girl}）最新的隐秘生理肉体状态】：\n"
-                f"\"\"\"\n{role_data.get('character_status', '')}\n\"\"\"\n\n"
-                f"💡【小说演化令】：请全盘承接上述的小说剧情细节与此刻体内的真实感官底色，丝滑地展开全新一轮的博弈推演。"
-            )
-            cleaned_api_payload.append({"role": "user", "content": unified_context_prompt})
-            
-            # ✨ 彻底砍掉原本冗余的、强制塞嘴给 assistant 的大段废话，只给一句极简的心理聚焦，防止带偏AI
-            cleaned_api_payload.append({
-                "role": "assistant",
-                "content": "（将上一轮的戏剧交锋、以及此刻体内翻涌的真实知觉悉数沉淀于本能中）……呼，我全部明白了。直接面对眼前的博弈。”"
-            })
+        # 2. 【条件触发式逻辑】持久大纲与核心记忆（转为后台潜意识，防止主动翻炒旧剧情）
+        historical_summaries = role_data.get("summarized_history", [])[-30:] # 精简窗口，防止注意力污染
+        background_knowledge = ""
         
-        # 6. 合并最新的用户输入与小说格式死命令
-        # ✨ 优化：动态判断引导词，如果 active_user_text 包含“继续推演”或“重算”，使用【大导演剧情演进令】，否则使用【玩家即时行动令】
+        if historical_summaries:
+            background_knowledge += "💡【剧情前情回顾 · 历史既定事实背景库】\n"
+            for idx, line in enumerate(historical_summaries):
+                background_knowledge += f"- [历史节点 {idx + 1}]: {line}\n"
+            background_knowledge += (
+                "⚠️【冷记忆调用协议】:\n"
+                "1. 以上历史事实和对白在戏剧时间线上已经彻底完成并翻篇。\n"
+                "2. 除非玩家在当轮的实时行动/台词中主动提起、翻旧账或涉及其中的某个人物/道具，否则你绝不要在你的台词和心理中主动、突兀地反复强调或原地复述这些已经过去的剧情大纲。\n"
+                "3. 请将其视为你的潜意识背景，把当下的注意力全部集中在推动实时剧情发展上。\n\n"
+            )
+
+        if role_data.get("memory_events"):
+            background_knowledge += "📌【永久核心记忆备忘录 —— 羁绊事实】:\n"
+            for idx, event in enumerate(role_data["memory_events"]):
+                background_knowledge += f"- {event}\n"
+                
+        if background_knowledge:
+            cleaned_api_payload.append({"role": "user", "content": background_knowledge})
+            cleaned_api_payload.append({"role": "assistant", "content": "（已将历史事实大纲内化为潜意识。我会将注意力集中在眼前的实时博弈中，除非对方主动提起，否则我不会在台词和心理中主动翻炒、强调已经发生过的旧剧情。）"})
+
+        # 3. 【核心修复 🛠️】动态滚动装载最近 4 轮（8条）真实的“长文详细对话历史”
+        # 这一步能让大模型看清互相之间刚说了什么话，从而明白某件事“已经讨论过了”
+        live_history_window = role_data["chat_history"][:-1] if (user_input or is_continue_mode) else role_data["chat_history"]
+        recent_live_context = live_history_window[-8:] 
+        
+        if recent_live_context:
+            for msg in recent_live_context:
+                # 智能剥离附加在文本尾部的后台生理词块，保持对话流高度纯净
+                pure_content = msg["content"].split("📌【物理现场既定事实")[0].split("SIGNAL")[0].strip()
+                cleaned_api_payload.append({
+                    "role": msg["role"],
+                    "content": pure_content
+                })
+
+        # 4. 注入【当轮】最新的隐秘肉体官能底色（作为此刻即将发生动作的即时物理现实）
+        physical_status_patch = (
+            f"📌【物理现场既定事实刻录 —— 这一轮动作前你（{target_girl}）最新的隐秘生理肉体状态】：\n"
+            f"{role_data.get('character_status', '')}\n"
+            f"💡【状态融入令】：请全盘承接并无缝继承上述身体当前的真实官能异动，自然无痕地将其融化到你接下来的第 0️⃣ 幕心理和动作反馈中。"
+        )
+        cleaned_api_payload.append({"role": "user", "content": physical_status_patch})
+        cleaned_api_payload.append({"role": "assistant", "content": "（敏感地感知到了自己身体此一瞬间的隐秘异动，耳根滚烫，会将这股真实官能融入当下的生理反馈中。）"})
+
+        # 5. 合并最新的用户输入与小说格式死命令
         if "继续推演" in active_user_text or "重算" in active_user_text:
             narrative_anchor = f"🎬 【当前大导演剧情演进令 —— 物理时间流逝背景】：\n{active_user_text}\n\n"
         else:
