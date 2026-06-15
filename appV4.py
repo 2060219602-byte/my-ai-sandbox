@@ -50,7 +50,7 @@ def run_secure_generation(user_description: str):
 
 <参考母本格式>
 {example_template}
-</参考母本格式}
+</参考母本格式>
 """
 
     # 阶段一的用户指令：只生成前三部分
