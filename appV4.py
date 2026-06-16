@@ -1467,7 +1467,7 @@ else:
         cleaned_api_payload.append({
             "role": "assistant",
             "content": "（敏感地察觉到体内翻涌的最新知觉与生理变化，强行将其沉淀于感官暗流中）……呼，我全部明白了。我会将最新的身体异样无痕融入接下来的反应之中。”"
-        )
+        })
 
         # 4. 注入永久核心记忆（作为不可动摇的底层逻辑）
         if role_data.get("memory_events"):
