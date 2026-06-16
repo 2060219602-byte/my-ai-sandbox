@@ -1404,9 +1404,6 @@ if is_group_chat:
                 st.session_state.group_active_queue = []
                 st.error(f"📡 拓扑折断：{str(e)}")
 
-# ==========================================
-# 6. 单聊会话调用执行中枢 (⚡ 严格排序版：历史概述 ➔ 生理状态 ➔ 核心记忆 ➔ 最新对话)
-# ==========================================
 else:
     if user_input or st.session_state.regenerate_trigger or is_continue_mode:
         if not api_key:
@@ -1450,27 +1447,30 @@ else:
 
         cleaned_api_payload = [{"role": "system", "content": dynamic_system_prompt}]
 
-        # 2. 📢 优先注入：历史事实编年史大纲（严格截取最近 50 轮）
-        historical_summaries = role_data.get("summarized_history", [])[-50:]
-        if historical_summaries:
+        # 2. 📢 核心分离：将历史大纲数组切分为“深层历史”与“最后一轮即时锚点”
+        all_summaries = role_data.get("summarized_history", [])
+        older_summaries = all_summaries[-50:-1] if len(all_summaries) > 1 else []
+        latest_summary = all_summaries[-1] if all_summaries else None
+
+        # A. 注入：前情深层记忆大纲（不含最后一轮）
+        if older_summaries:
             formatted_lines = []
-            for idx, line in enumerate(historical_summaries):
-                formatted_lines.append(f"🎬 [剧情回顾 · 第 {idx + 1} 幕纠缠档案]:\n{line}")
+            for idx, line in enumerate(older_summaries):
+                formatted_lines.append(f"🎬 [过往戏剧回顾 · 第 {idx + 1} 幕档案]:\n{line}")
 
             chronicle_content = (
-                "💡【剧情前情回顾 · 已落幕历史档案】\n"
-                "以下为前几轮已经发生并定格的既定事实大纲。这些情节在戏剧时间线上已经完全翻篇。\n"
-                "本轮输出请完全聚焦于最新的对话切片。除非玩家专门强调, 请勿将此大纲中的重复出现的专有名词主动再次提及，确保剧情承接前文并向后演进。\n\n" +
+                "💡【剧情前情回顾 · 历史深层记忆总览】\n"
+                "以下情节在戏剧时间线上均已完全落幕并封存，已化为你本能的潜意识背景，无需在后续回复中复述它们：\n\n" +
                 "\n\n-------------------- \n\n".join(formatted_lines)
             )
 
             cleaned_api_payload.append({"role": "user", "content": chronicle_content})
             cleaned_api_payload.append({
                 "role": "assistant",
-                "content": "（垂下眼眸，那些深埋的历史走走马灯般在脑海中闪过，随后深深吸了一口气）……这些历史早已深植我的本能，我已经准备好继续面对他了。"
+                "content": "（垂下眼眸，那些曾经纠缠的既定事实走马灯般在脑海中闪过，随后深深吸了一口气）……这些久远的历史事实早已沉淀为我的行事本能。我不会遗忘，但我需要更专注于眼前的现实。"
             })
 
-        # 3. ✨ 位置修正：紧随在概述历史之后，注入当前这一轮最新的隐秘生理肉体状态
+        # 3. 位置修正：注入当前这一轮最新的隐秘生理肉体状态
         unified_context_prompt = (
             f"📌【物理现场既定事实刻录 —— 这一轮动作前你（{target_girl}）最新的隐秘生理肉体状态】：\n"
             f"\"\"\"\n{role_data.get('character_status', '')}\n\"\"\"\n\n"
@@ -1480,7 +1480,7 @@ else:
         cleaned_api_payload.append({
             "role": "assistant",
             "content": "（敏感地察觉到体内翻涌的最新知觉与生理变化，强行将其沉淀于感官暗流中）……呼，我全部明白了。我会将最新的身体异样无痕融入接下来的反应之中。”"
-        })
+        )
 
         # 4. 注入永久核心记忆（作为不可动摇的底层逻辑）
         if role_data.get("memory_events"):
@@ -1492,6 +1492,20 @@ else:
             cleaned_api_payload.append({
                 "role": "assistant",
                 "content": f"（调取灵魂深处永不磨灭的核心羁绊，将其作为不可动摇的行为逻辑基底）……这些核心线索我绝不会忘。我会严格遵循这些人设基调进行回应。"
+            })
+
+        # 4.5 ✨ 强力重锚注入：将拆分出的最新一轮核心事实单独包装，作为舞台演出的直接引线
+        if latest_summary:
+            latest_summary_prompt = (
+                f"🎬【📢 当前舞台核心爆发点 · 上一秒剧情即时锚点】\n"
+                f"请注意！这是你（{target_girl}）与玩家在【上一瞬间】刚刚发生的绝对硬核物理事实，是当前对线火药味的直接来源：\n"
+                f"\"\"\"\n{latest_summary}\n\"\"\"\n\n"
+                f"💡【即时接戏演出令】：大模型请注意，上面的概述就是你当下的‘上一秒画面’！严禁复读或概述它，请直接无缝顺承这个最新事实，针对玩家接下来的输入展开高密度的肢体与对白演艺！"
+            )
+            cleaned_api_payload.append({"role": "user", "content": latest_summary_prompt})
+            cleaned_api_payload.append({
+                "role": "assistant",
+                "content": f"（身心剧烈一震，上一秒刚刚发生的荒唐拉扯与对峙在心中定格，眼神瞬间死死锁定眼前的玩家）……上一瞬间发生的所有事实我已完全接纳。戏不停，我直接顺着这个爆发点给出我最直球、最失控的现场第一反应！"
             })
 
         # 5. 合并最新的用户输入与小说格式死命令
