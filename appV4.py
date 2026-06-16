@@ -221,10 +221,10 @@ st.markdown("""
 
 def novel_text_formatter(raw_text: str) -> str:
     """
-    🎬 智能流式小说排版引擎 (特定边界拦截+数字符号分段+对话独立成段+拟声词行内优化纯净版)：
+    🎬 智能流式小说排版引擎 (字数阈值拦截+数字符号分段版)：
     1. 依据纯文本区间的句号（。）进行精确分段换行。
-    2. 【拟声词智能拦截】：遇到纯拟声词/感官语气助词（如“呜呜”、“唔……嗯”）时，强行保持行内粘连，不拆分。
-    3. 遇到真正的实质剧情对白（左引号“），强制终结前文独立成段；遇到闭引号”，强制带着引号收尾并分段。
+    2. 💡【字数流智能拦截】：只要双引号内部的内容字数少于等于 14 个字，直接判定为拟声词或短状态，强制保持行内粘连，绝不换行！
+    3. 遇到真正的长剧情对白（字数 > 14），强制终结前文独立成段；遇到闭引号”，强制带着引号收尾并分段。
     4. 自动检测闭合容器：若句号包含在 ( ) 或 （ ） 内部，强制锁死不进行分段。
     5. 遇到 1️⃣、2️⃣、3️⃣ 标识符，强制在其前方切断，使其独立作为新幕起点。
     """
@@ -269,27 +269,22 @@ def novel_text_formatter(raw_text: str) -> str:
 
         char = clean_stream[i]
 
-        # 🎭 【拟声词与普通对白双轨拦截核心】
+        # 🎭 【字数流对话/拟声词拦截核心】
         if char == "“":
             # 1. 动态前瞻：寻找距离最近的闭引号
             closing_idx = clean_stream.find("”", i)
             if closing_idx != -1:
                 quote_content = clean_stream[i+1:closing_idx]
                 
-                # 2. 🌟 终极修复：去掉了末尾坑爹的反斜杠，确保字符集完美闭合
-                is_onomatopoeia = (
-                    len(quote_content) <= 12 and 
-                    re.match(r'^[呜哇啊哦呀唔嗯呃哼哈喔唏呼哒呸、\.。…！!？\?~～\s]+$', quote_content) is not None
-                )
-                
-                if is_onomatopoeia:
-                    # ⭕ 命中拟声词结界！直接整块吞噬当成普通文本，不换行
+                # 2. 🌟 纯字数流判定：括号内字数 <= 14 个字（包含标点），直接当成行内文本吞掉
+                # 这样 “滋——”（3字）、“咕叽咕叽”（4字）、“呕呕...咯咯...呜...”（13字）全都会完美留在行内！
+                if len(quote_content) <= 14:
                     full_voice_block = clean_stream[i:closing_idx+1]
                     current_segment.append(full_voice_block)
-                    i = closing_idx + 1  # 游标直接跳过右引号
+                    i = closing_idx + 1  # 游标跳过右引号
                     continue
 
-            # 3. 如果没命中拟声词，说明是正式剧情台词（执行原本的独立换行逻辑）
+            # 3. 如果字数 > 14，说明是正经的长剧情对白，执行原本的独立换行分段逻辑
             if current_segment:
                 seg_str = "".join(current_segment).strip()
                 if seg_str:
