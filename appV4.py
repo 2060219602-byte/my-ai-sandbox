@@ -83,31 +83,71 @@ def run_secure_generation(user_description: str):
 </用户核心描述碎片>
 """
 
-    # 2. 单次流式生成逻辑
+    # 2. 自动循环/流式续写生成逻辑
     with st.sidebar.container():
         status_placeholder = st.empty()
         status_placeholder.markdown("⏳ **剧本导师正在为您精雕细琢核心人设...**")
         preview_box = st.empty()
 
         try:
-            response = client.chat.completions.create(
-                model=model_name,
-                messages=[
-                    {"role": "system", "content": advanced_system_prompt},
-                    {"role": "user", "content": clean_user_prompt}
-                ],
-                temperature=0.7,
-                max_tokens=8192, # 砍掉用例后，4000 token 足够单次吐出质量极高、完全不截断的纯粹人设
-                stream=True
-            )
+            # 初始化对话上下文
+            messages = [
+                {"role": "system", "content": advanced_system_prompt},
+                {"role": "user", "content": clean_user_prompt}
+            ]
+            
+            buffer_list = []   # 存储最终合并的完整文本碎片
+            max_loops = 4      # 最大允许自动续写次数，防止异常死循环
+            loop_count = 0
+            
+            while loop_count < max_loops:
+                loop_count += 1
+                
+                response = client.chat.completions.create(
+                    model=model_name,
+                    messages=messages,
+                    temperature=0.7,
+                    max_tokens=8192,
+                    stream=True
+                )
 
-            buffer_list = []
-            for chunk in response:
-                if chunk.choices[0].delta.content:
-                    text_fragment = chunk.choices[0].delta.content
-                    buffer_list.append(text_fragment)
-                    current_full_text = "".join(buffer_list)
-                    preview_box.code(current_full_text[-300:] + " ✍️...", language="markdown")
+                finish_reason = None
+                loop_buffer = []  # 仅记录当前这一个轮次生成的文本
+                
+                for chunk in response:
+                    if chunk.choices:
+                        choice = chunk.choices[0]
+                        if choice.delta.content:
+                            text_fragment = choice.delta.content
+                            loop_buffer.append(text_fragment)
+                            buffer_list.append(text_fragment)
+                            
+                            # 实时更新 Streamlit 预览窗口（展示最后300个字保持滚动感）
+                            current_full_text = "".join(buffer_list)
+                            preview_box.code(current_full_text[-300:] + " ✍️...", language="markdown")
+                        
+                        # 捕捉结束标识
+                        if choice.finish_reason is not None:
+                            finish_reason = choice.finish_reason
+
+                # 核心逻辑：判断是否因单次 Token 到达上限而被强行截断
+                if finish_reason == "length":
+                    loop_text = "".join(loop_buffer)
+                    
+                    # 1. 将本轮吐出的不完整文本作为 assistant 的回复送入历史上下文
+                    messages.append({"role": "assistant", "content": loop_text})
+                    
+                    # 2. 追加无缝续写的系统提示指令
+                    messages.append({
+                        "role": "user", 
+                        "content": "【系统提示：因单次篇幅限制内容被截断，请紧接上文的最后一个字，继续无缝输出后续的精细化设定。注意：绝对不要重复前面的大标题、已有内容或开场白，直接往下续写。】"
+                    })
+                    
+                    # 3. 提示用户正在进行续写
+                    status_placeholder.markdown(f"⏳ **内容触及单次长度上限，剧本导师正在为您进行第 {loop_count} 次自动续写...**")
+                else:
+                    # 如果 finish_reason 是 'stop' 或其他正常状态，代表整体内容已全部写完，跳出循环
+                    break
 
             # 成功落盒
             final_text = "".join(buffer_list)
