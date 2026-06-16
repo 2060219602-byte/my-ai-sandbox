@@ -221,17 +221,18 @@ st.markdown("""
 
 def novel_text_formatter(raw_text: str) -> str:
     """
-    🎬 智能流式小说排版引擎 (特定边界拦截+数字符号分段版)：
+    🎬 智能流式小说排版引擎 (特定边界拦截+数字符号分段+对话独立成段版)：
     1. 依据纯文本区间的句号（。）进行精确分段换行。
-    2. 自动检测闭合容器：若句号包含在 “ ”、( )、或 （ ） 内部，强制锁死不进行分段。
-    3. ✨新增逻辑：如果遇到 1️⃣、2️⃣、3️⃣ 标识符，强制在其前方切断，使其独立作为新幕起点。
-    4. 全端应用 &emsp;&emsp; 强制首行无损缩进。
+    2. 💡【新核心】：遇到开引号“ 强制终结前文独立成段；遇到闭引号” 强制带着引号收尾并把后续内容分段。
+    3. 自动检测闭合容器：若句号包含在 ( ) 或 （ ） 内部，强制锁死不进行分段。
+    4. 遇到 1️⃣、2️⃣、3️⃣ 标识符，强制在其前方切断，使其独立作为新幕起点。
+    5. 全端应用 &emsp;&emsp; 强制首行无损缩进。
+    6. 修复了流式传输中句尾残留或连续空行的排版错乱。
     """
     if not raw_text:
         return raw_text
 
     # 1. 规范化基础文本：先去掉换行，同时给 1️⃣ 2️⃣ 3️⃣ 前后强制垫上辅助标记，方便后续状态机平滑切分
-    # 这样可以防止数字符号粘连在句尾导致排版错乱
     clean_stream = re.sub(r'\n+', ' ', raw_text).strip()
     clean_stream = re.sub(r'(1️⃣|2️⃣|3️⃣)', r' \1 ', clean_stream)
     clean_stream = re.sub(r'\s+', ' ', clean_stream).strip()
@@ -239,19 +240,18 @@ def novel_text_formatter(raw_text: str) -> str:
     segments = []
     current_segment = []
 
-    in_quote = False  # 双引号 “ ” 内部
-    paren_depth = 0  # 英文括号 ( ) 嵌套层级
-    zh_paren_depth = 0  # 中文括号 （ ） 嵌套层级
+    in_quote = False     # 双引号 “ ” 内部状态
+    paren_depth = 0      # 英文括号 ( ) 嵌套层级
+    zh_paren_depth = 0   # 中文括号 （ ） 嵌套层级
 
-    # 提前准备好需要拦截的特定数字字符组（Emoji 占多字节，用列表精确匹配）
     target_markers = ["1️⃣", "2️⃣", "3️⃣"]
 
-    # 2. 改进版状态机扫描
+    # 2. 高级状态机扫描
     i = 0
     stream_len = len(clean_stream)
 
     while i < stream_len:
-        # ⚡ 核心增量：前瞻扫描是否撞上了三幕数字标识符
+        # ⚡ 核心前瞻：扫描是否撞上了三幕数字标识符
         matched_marker = None
         for marker in target_markers:
             if clean_stream.startswith(marker, i):
@@ -260,25 +260,46 @@ def novel_text_formatter(raw_text: str) -> str:
 
         # 🎯 命中 1️⃣、2️⃣、3️⃣ 的切段逻辑
         if matched_marker:
-            # 如果当前缓冲区里有文本，先把前面的文本作为一个独立段落切分出去
             if current_segment:
                 seg_str = "".join(current_segment).strip()
                 if seg_str:
                     segments.append(seg_str)
                 current_segment = []
 
-            # 把当前这个大数字符直接塞进历史段落区，让其单独成大段，并跳过它的索引长度
             segments.append(matched_marker)
             i += len(matched_marker)
             continue
 
-        # 容器状态标记更新
         char = clean_stream[i]
+
+        # 🎭 【✨ 核心新增】：对话引号全闭环切割控制
         if char == "“":
+            # ➡️ 动作1：遇到左引号，如果缓冲区里有前置文本（如“他冷笑了一声：”），立刻切断送走
+            if current_segment:
+                seg_str = "".join(current_segment).strip()
+                if seg_str:
+                    segments.append(seg_str)
+                current_segment = []
+            
             in_quote = True
+            current_segment.append(char)  # 左引号作为新对话段落的起点
+            i += 1
+            continue
+
         elif char == "”":
             in_quote = False
-        elif char == "(":
+            current_segment.append(char)  # 右引号完美归属于当前对话的结尾
+            
+            # ➡️ 动作2：遇到右引号，说明说话结束，立刻强行把这一整段对话切碎送走，逼迫后面内容独立
+            seg_str = "".join(current_segment).strip()
+            if seg_str:
+                segments.append(seg_str)
+            current_segment = []
+            i += 1
+            continue
+
+        # 其它容器状态标记更新（双引号已经提前拦截，此处仅保留常规括号）
+        if char == "(":
             paren_depth += 1
         elif char == ")":
             paren_depth = max(0, paren_depth - 1)
@@ -289,7 +310,8 @@ def novel_text_formatter(raw_text: str) -> str:
 
         current_segment.append(char)
 
-        # 🎯 命中句号（且不在任何括号或对话内）的切段逻辑
+        # 🎯 命中普通句号（且不在任何括号内，也不在对话内）的切段逻辑
+        # 💡 注：因为上面对“”进行了拦截处理，对话内部的句号现在会被天然锁死，不会导致对话内部碎掉
         if char == "。" and not in_quote and paren_depth == 0 and zh_paren_depth == 0:
             seg_str = "".join(current_segment).strip()
             if seg_str:
@@ -304,21 +326,19 @@ def novel_text_formatter(raw_text: str) -> str:
         if seg_str:
             segments.append(seg_str)
 
-    # 3. 熔铸排版：为每一段注入缩进。注意：1️⃣ 2️⃣ 3️⃣ 本身作为小标题不需要在其前方加缩进
+    # 3. 熔铸排版：为每一段注入双全角缩进
     processed_blocks = []
     for seg in segments:
         if not seg:
             continue
         if seg in target_markers:
-            # 如果是数字标识符，直接加回车成独立大标题行，不加 &emsp;
             processed_blocks.append(f"\n\n{seg}")
         else:
-            # 正常剧情文本段落，强控双全角空格缩进
+            # 无论普通旁白还是对话段落，统一应用地道小说双空格缩进
             processed_blocks.append(f"&emsp;&emsp;{seg}")
 
-    # 4. 合并输出
+    # 4. 合并输出并清洗碎回车
     final_output = "\n\n".join(processed_blocks)
-    # 深度净化可能出现的连续多余回车
     final_output = re.sub(r'\n{3,}', '\n\n', final_output).strip()
 
     return final_output
