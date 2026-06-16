@@ -221,18 +221,17 @@ st.markdown("""
 
 def novel_text_formatter(raw_text: str) -> str:
     """
-    🎬 智能流式小说排版引擎 (特定边界拦截+数字符号分段+对话独立成段版)：
+    🎬 智能流式小说排版引擎 (特定边界拦截+数字符号分段+对话独立成段+拟声词行内优化版)：
     1. 依据纯文本区间的句号（。）进行精确分段换行。
-    2. 💡【新核心】：遇到开引号“ 强制终结前文独立成段；遇到闭引号” 强制带着引号收尾并把后续内容分段。
-    3. 自动检测闭合容器：若句号包含在 ( ) 或 （ ） 内部，强制锁死不进行分段。
-    4. 遇到 1️⃣、2️⃣、3️⃣ 标识符，强制在其前方切断，使其独立作为新幕起点。
-    5. 全端应用 &emsp;&emsp; 强制首行无损缩进。
-    6. 修复了流式传输中句尾残留或连续空行的排版错乱。
+    2. 💡【拟声词智能拦截】：遇到纯拟声词/感官语气助词（如“呜呜”、“唔……嗯”）时，强行保持行内粘连，不拆分。
+    3. 遇到真正的实质剧情对白（左引号“），强制终结前文独立成段；遇到闭引号”，强制带着引号收尾并分段。
+    4. 自动检测闭合容器：若句号包含在 ( ) 或 （ ） 内部，强制锁死不进行分段。
+    5. 遇到 1️⃣、2️⃣、3️⃣ 标识符，强制在其前方切断，使其独立作为新幕起点。
     """
     if not raw_text:
         return raw_text
 
-    # 1. 规范化基础文本：先去掉换行，同时给 1️⃣ 2️⃣ 3️⃣ 前后强制垫上辅助标记，方便后续状态机平滑切分
+    # 1. 规范化基础文本
     clean_stream = re.sub(r'\n+', ' ', raw_text).strip()
     clean_stream = re.sub(r'(1️⃣|2️⃣|3️⃣)', r' \1 ', clean_stream)
     clean_stream = re.sub(r'\s+', ' ', clean_stream).strip()
@@ -240,9 +239,9 @@ def novel_text_formatter(raw_text: str) -> str:
     segments = []
     current_segment = []
 
-    in_quote = False     # 双引号 “ ” 内部状态
-    paren_depth = 0      # 英文括号 ( ) 嵌套层级
-    zh_paren_depth = 0   # 中文括号 （ ） 嵌套层级
+    in_quote = False     # 双引号内部状态
+    paren_depth = 0      # 英文括号嵌套层级
+    zh_paren_depth = 0   # 中文括号嵌套层级
 
     target_markers = ["1️⃣", "2️⃣", "3️⃣"]
 
@@ -251,30 +250,47 @@ def novel_text_formatter(raw_text: str) -> str:
     stream_len = len(clean_stream)
 
     while i < stream_len:
-        # ⚡ 核心前瞻：扫描是否撞上了三幕数字标识符
+        # ⚡ 前瞻扫描：是否撞上了三幕数字标识符
         matched_marker = None
         for marker in target_markers:
             if clean_stream.startswith(marker, i):
                 matched_marker = marker
                 break
 
-        # 🎯 命中 1️⃣、2️⃣、3️⃣ 的切段逻辑
         if matched_marker:
             if current_segment:
                 seg_str = "".join(current_segment).strip()
                 if seg_str:
                     segments.append(seg_str)
                 current_segment = []
-
             segments.append(matched_marker)
             i += len(matched_marker)
             continue
 
         char = clean_stream[i]
 
-        # 🎭 【✨ 核心新增】：对话引号全闭环切割控制
+        # 🎭 【✨ 拟声词与普通对白双轨拦截核心】
         if char == "“":
-            # ➡️ 动作1：遇到左引号，如果缓冲区里有前置文本（如“他冷笑了一声：”），立刻切断送走
+            # 1. 动态前瞻：寻找距离最近的闭引号
+            closing_idx = clean_stream.find("”", i)
+            if closing_idx != -1:
+                quote_content = clean_stream[i+1:closing_idx]
+                
+                # 2. 核心判定规则：字数在 12 字以内，且里面全部都是拟声字、语气词或特定的符号
+                # 包含了网文和官能小说中最常见的呼吸、娇喘、哭泣拟声字
+                is_onomatopoeia = (
+                    len(quote_content) <= 12 and 
+                    re.match(r'^[呜哇啊哦呀唔嗯呃哼哈喔唏呼哒呸、\.。…！!？\?~～\s\]+$', quote_content) is not None
+                )
+                
+                if is_onomatopoeia:
+                    # ⭕ 命中拟声词结界！直接整块吞噬，当成普通文本，不换行
+                    full_voice_block = clean_stream[i:closing_idx+1]
+                    current_segment.append(full_voice_block)
+                    i = closing_idx + 1  # 游标直接跳过右引号
+                    continue
+
+            # 3. 如果没命中拟声词，说明是正式剧情台词（执行原本的独立换行逻辑）
             if current_segment:
                 seg_str = "".join(current_segment).strip()
                 if seg_str:
@@ -282,15 +298,14 @@ def novel_text_formatter(raw_text: str) -> str:
                 current_segment = []
             
             in_quote = True
-            current_segment.append(char)  # 左引号作为新对话段落的起点
+            current_segment.append(char)
             i += 1
             continue
 
         elif char == "”":
             in_quote = False
-            current_segment.append(char)  # 右引号完美归属于当前对话的结尾
+            current_segment.append(char)
             
-            # ➡️ 动作2：遇到右引号，说明说话结束，立刻强行把这一整段对话切碎送走，逼迫后面内容独立
             seg_str = "".join(current_segment).strip()
             if seg_str:
                 segments.append(seg_str)
@@ -298,7 +313,7 @@ def novel_text_formatter(raw_text: str) -> str:
             i += 1
             continue
 
-        # 其它容器状态标记更新（双引号已经提前拦截，此处仅保留常规括号）
+        # 其它常规括号容器状态维护
         if char == "(":
             paren_depth += 1
         elif char == ")":
@@ -310,8 +325,7 @@ def novel_text_formatter(raw_text: str) -> str:
 
         current_segment.append(char)
 
-        # 🎯 命中普通句号（且不在任何括号内，也不在对话内）的切段逻辑
-        # 💡 注：因为上面对“”进行了拦截处理，对话内部的句号现在会被天然锁死，不会导致对话内部碎掉
+        # 正常句号换行切分逻辑
         if char == "。" and not in_quote and paren_depth == 0 and zh_paren_depth == 0:
             seg_str = "".join(current_segment).strip()
             if seg_str:
@@ -320,13 +334,13 @@ def novel_text_formatter(raw_text: str) -> str:
 
         i += 1
 
-    # 句尾残留文本收尾
+    # 尾部收尾
     if current_segment:
         seg_str = "".join(current_segment).strip()
         if seg_str:
             segments.append(seg_str)
 
-    # 3. 熔铸排版：为每一段注入双全角缩进
+    # 3. 熔铸排版
     processed_blocks = []
     for seg in segments:
         if not seg:
@@ -334,10 +348,9 @@ def novel_text_formatter(raw_text: str) -> str:
         if seg in target_markers:
             processed_blocks.append(f"\n\n{seg}")
         else:
-            # 无论普通旁白还是对话段落，统一应用地道小说双空格缩进
             processed_blocks.append(f"&emsp;&emsp;{seg}")
 
-    # 4. 合并输出并清洗碎回车
+    # 4. 输出净化
     final_output = "\n\n".join(processed_blocks)
     final_output = re.sub(r'\n{3,}', '\n\n', final_output).strip()
 
