@@ -1195,8 +1195,8 @@ if is_group_chat:
             try:
                 # 🚀 执行正文流式输出
                 response = client.chat.completions.create(
-                    model=model_name, messages=cleaned_api_payload, stream=True, temperature=0.95, max_tokens=3000,
-                    presence_penalty=0.3, frequency_penalty=0.1, timeout=60.0
+                    model=model_name, messages=cleaned_api_payload, stream=True, temperature=0.85, max_tokens=3000,
+                    presence_penalty=0.6, frequency_penalty=0.8, timeout=60.0
                 )
 
                 last_render_time = time.time()
