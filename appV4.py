@@ -1350,7 +1350,7 @@ if is_group_chat:
                 st.error(f"📡 拓扑折断：{str(e)}")
 
 # ==========================================
-# 6. 单聊会话调用执行中枢 (⚡ 终极瘦身：仅生理状态+最新对话+50轮概述)
+# 6. 单聊会话调用执行中枢 (⚡ 严格排序版：历史概述 ➔ 生理状态 ➔ 核心记忆 ➔ 最新对话)
 # ==========================================
 else:
     if user_input or st.session_state.regenerate_trigger or is_continue_mode:
@@ -1395,7 +1395,7 @@ else:
 
         cleaned_api_payload = [{"role": "system", "content": dynamic_system_prompt}]
 
-        # 2. 注入历史事实编年史大纲（✨ 核心改动：由 [-200:] 切片缩减为最近的 [-50:]）
+        # 2. 📢 优先注入：历史事实编年史大纲（严格截取最近 50 轮）
         historical_summaries = role_data.get("summarized_history", [])[-50:]
         if historical_summaries:
             formatted_lines = []
@@ -1412,10 +1412,22 @@ else:
             cleaned_api_payload.append({"role": "user", "content": chronicle_content})
             cleaned_api_payload.append({
                 "role": "assistant",
-                "content": "（垂下眼眸，那些深埋的历史走马灯般在脑海中闪过，随后深深吸了一口气）……这些历史早已深植我的本能，我已经准备好继续面对他了。"
+                "content": "（垂下眼眸，那些深埋的历史走走马灯般在脑海中闪过，随后深深吸了一口气）……这些历史早已深植我的本能，我已经准备好继续面对他了。"
             })
 
-        # 3. 注入永久核心记忆
+        # 3. ✨ 位置修正：紧随在概述历史之后，注入当前这一轮最新的隐秘生理肉体状态
+        unified_context_prompt = (
+            f"📌【物理现场既定事实刻录 —— 这一轮动作前你（{target_girl}）最新的隐秘生理肉体状态】：\n"
+            f"\"\"\"\n{role_data.get('character_status', '')}\n\"\"\"\n\n"
+            f"💡【小说演化令】：请全盘承接上述此刻体内的真实感官底色，丝滑地展开全新一轮的博弈推演。"
+        )
+        cleaned_api_payload.append({"role": "user", "content": unified_context_prompt})
+        cleaned_api_payload.append({
+            "role": "assistant",
+            "content": "（敏感地察觉到体内翻涌的最新知觉与生理变化，强行将其沉淀于感官暗流中）……呼，我全部明白了。我会将最新的身体异样无痕融入接下来的反应之中。”"
+        })
+
+        # 4. 注入永久核心记忆（作为不可动摇的底层逻辑）
         if role_data.get("memory_events"):
             memory_ledger_prompt = "📌【核心个人记忆备忘录 —— 这是我们之间发生的既定事实】：\n"
             for idx, event in enumerate(role_data["memory_events"]):
@@ -1424,26 +1436,10 @@ else:
             cleaned_api_payload.append({"role": "user", "content": memory_ledger_prompt})
             cleaned_api_payload.append({
                 "role": "assistant",
-                "content": f"（将这些与玩家之间的核心羁绊与记忆锁入脑海深处）……这些核心线索我绝不会忘。我会严格遵循这些人设基调进行回应。"
+                "content": f"（调取灵魂深处永不磨灭的核心羁绊，将其作为不可动摇的行为逻辑基底）……这些核心线索我绝不会忘。我会严格遵循这些人设基调进行回应。"
             })
 
-        # ========================================================
-        # 4 & 5 强力瘦身版（✨ 核心改动：彻底剔除上一轮 AI 回复正文，只给最新生理状态）
-        # ========================================================
-        unified_context_prompt = (
-            f"📌【物理现场既定事实刻录 —— 这一轮动作前你（{target_girl}）最新的隐秘生理肉体状态】：\n"
-            f"\"\"\"\n{role_data.get('character_status', '')}\n\"\"\"\n\n"
-            f"💡【小说演化令】：请全盘承接上述此刻体内的真实感官底色，丝滑地展开全新一轮的博弈推演。"
-        )
-        cleaned_api_payload.append({"role": "user", "content": unified_context_prompt})
-
-        # 给句极简的助理确认，引导 AI 锁死生理感官背景
-        cleaned_api_payload.append({
-            "role": "assistant",
-            "content": "（将此刻体内翻涌的真实知觉悉数沉淀于本能与感官暗流中）……呼，我全部明白了。直接面对眼前的博弈。”"
-        })
-
-        # 6. 合并最新的用户输入与小说格式死命令
+        # 5. 合并最新的用户输入与小说格式死命令
         if "继续推演" in active_user_text or "重算" in active_user_text:
             narrative_anchor = f"🎬 【当前大导演剧情演进令 —— 物理时间流逝背景】：\n{active_user_text}\n\n"
         else:
@@ -1494,7 +1490,7 @@ else:
                                 f"[{target_girl}]\n"
                                 f"阴道的感觉: 【{target_girl}】感觉到了[此处严格基于旧基数叠加最新剧情，专注于隐秘深处由于充血泥泞而产生的‘蚁爬微痒’、快感堆叠下的自发‘绞紧收缩’、或红肿泛滥的潮热波流，绝不使用抗拒解剖词，25~50字]\n"
                                 f"乳头的感觉: 【{target_girl}】感觉到了[此处严格基于旧基数叠加最新剧情，专注于娇嫩顶端由于布料摩擦或冷风刮蹭，而产生的‘挺立发硬’、敏感电流扩散、以及酥麻胀满的过载触觉，25~50字]\n"
-                                f"大腿内侧的感觉: 【{target_girl}】感觉到了[此处严格基于旧基s叠加最新剧情，专注于紧致肌肤间的皮温骤升、汗湿黏腻、以及欲望越界引发的神经末梢‘软绵颤抖’或本能并拢夹紧，25~50字]\n"
+                                f"大腿内侧的感觉: 【{target_girl}】感觉到了[此处严格基于旧基数叠加最新剧情，专注于紧致肌肤间的皮温骤升、汗湿黏腻、以及欲望越界引发的神经末梢‘软绵颤抖’或本能并拢夹紧，25~50字]\n"
                                 f"==== SIGNAL END ===="
                             )}
                         ]
