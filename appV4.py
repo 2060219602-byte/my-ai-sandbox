@@ -397,110 +397,6 @@ def novel_text_formatter(raw_text: str) -> str:
 
 def display_novel_with_bold_status(text: str):
     """
-    🎬 升级版历史渲染器：在前端刷新时，完美兼容并解构新版多轨生理指标面板
-    """
-    if not text:
-        return
-
-    clean_text = re.sub(r'====\s*SIGNAL\s*(?:START|END)\s*====', '', text)
-
-    # 1. 解析历史中附带的【时空快照】
-    s_time, s_place, s_clothes = "", "", ""
-    if "【时空快照】" in clean_text:
-        parts = clean_text.split("【时空快照】")
-        clean_text = parts[0].strip()
-        snapshot = parts[1]
-        t_m = re.search(r'时间[：:](.*?)(?=\n|$)', snapshot)
-        p_m = re.search(r'地点[：:](.*?)(?=\n|$)', snapshot)
-        c_m = re.search(r'(?:着装|角色着装)[：:](.*?)(?=\n|$)', snapshot)
-        if t_m: s_time = t_m.group(1).strip()
-        if p_m: s_place = p_m.group(1).strip()
-        if c_m: s_clothes = c_m.group(1).strip()
-
-    # 2. 提取角色名与多轨身体数据（支持新版多轨字段，同时兼容旧版关键字）
-    has_status_block = False
-    pos_v, breast_v, secret_v, ass_v, mouth_v, leg_v = "", "", "", "", "", ""
-    
-    # 智能按行扫描历史文本中的隐秘知觉
-    lines = clean_text.split('\n')
-    main_story_lines = []
-    
-    # 提取角色标签
-    role_name_search = re.search(r'\[([^\]]+)\]', clean_text)
-    captured_role_name = f"[{role_name_search.group(1)}]" if role_name_search else "角色"
-
-    for line in lines:
-        line_str = line.strip()
-        if "姿势" in line_str:
-            pos_v = re.sub(r'^.*?[：:]', '', line_str).strip()
-            has_status_block = True
-        elif "双乳" in line_str:
-            breast_v = re.sub(r'^.*?[：:]', '', line_str).strip()
-            has_status_block = True
-        elif "秘处" in line_str or "阴道" in line_str:
-            secret_v = re.sub(r'^.*?[：:]', '', line_str).strip()
-            has_status_block = True
-        elif "臀部与后庭" in line_str or "臀部" in line_str:
-            ass_v = re.sub(r'^.*?[：:]', '', line_str).strip()
-            has_status_block = True
-        elif "口腔" in line_str:
-            mouth_v = re.sub(r'^.*?[：:]', '', line_str).strip()
-            has_status_block = True
-        elif "双腿" in line_str or "大腿内侧" in line_str:
-            leg_v = re.sub(r'^.*?[：:]', '', line_str).strip()
-            has_status_block = True
-        elif "【欲海场景】" in line_str or "【时空快照】" in line_str:
-            break
-        elif not line_str.startswith('[') and not line_str.endswith(']'):
-            # 如果不是标签行也不是指标行，说明是小说正文
-            if has_status_block == False:
-                main_story_lines.append(line)
-
-    # 3. 渲染小说正文
-    main_story = "\n".join(main_story_lines).strip()
-    # 清洗可能夹带在正文末尾的残留欲海场景标签
-    main_story = re.split(r'【欲海场景】|\[欲海浮沉\]', main_story)[0].strip()
-    
-    if main_story:
-        st.markdown(novel_text_formatter(main_story), unsafe_allow_html=True)
-
-    # 4. 渲染【蓝色时空服饰面板】
-    if s_time:
-        s_time = re.sub(r'(?:\[|【|建议|剧情|0️⃣|1️⃣|2️⃣|3️⃣)[\s\S]*$', '', s_time).strip()
-        s_place = re.sub(r'(?:\[|【|建议|剧情|0️⃣|1️⃣|2️⃣|3️⃣)[\s\S]*$', '', s_place).strip()
-        s_clothes = re.sub(r'(?:\[|【|建议|剧情|0️⃣|1️⃣|2️⃣|3️⃣)[\s\S]*$', '', s_clothes).strip()
-        st.markdown(f"""
-        <div class="role-status-block" style="border-left: 5px solid #00b4d8 !important; background: linear-gradient(135deg, rgba(0,180,216,0.06) 0%, rgba(255,255,255,0) 100%) !important; margin-top:0.5rem !important;">
-            <div class="role-status-name" style="color: #00b4d8 !important;">🌐 物理演变时空与服饰现状</div>
-            <span class="role-status-row"><span style="color: #00b4d8 !important; font-weight: 900;">⏱️ 剧情时间：</span>{s_time}</span>
-            <span class="role-status-row"><span style="color: #00b4d8 !important; font-weight: 900;">📍 微观地点：</span>{s_place}</span>
-            <span class="role-status-row"><span style="color: #00b4d8 !important; font-weight: 900;">👗 角色着装：</span>{s_clothes}</span>
-        </div>
-        """, unsafe_allow_html=True)
-
-    # 5. 渲染新版【粉色生理状态面板】
-    if has_status_block:
-        # 给未抓取到的指标提供自适应文本，防止刷新后留白
-        if not pos_v: pos_v = "物理体位紧密纠缠定格"
-        if not breast_v: breast_v = "顶端在布料摩擦下持续坚硬应激"
-        if not secret_v: secret_v = "隐秘深处极度充血潮热"
-        if not ass_v: ass_v = "滚烫美臀紧绷，承受着物理压迫"
-        if not mouth_v: mouth_v = "吞咽急促，吐息间散发着炽热呼吸"
-        if not leg_v: leg_v = "双腿因敏感而呈现轻微的应激颤抖"
-
-        status_html = f"""
-        <div class="role-status-block">
-            <div class="role-status-name">{captured_role_name} 实时多轨官能知觉</div>
-            <span class="role-status-row"><span class="role-status-label">🎬 当前姿势：</span>{pos_v}</span>
-            <span class="role-status-row"><span class="role-status-label">🍒 双乳知觉：</span>{breast_v}</span>
-            <span class="role-status-row"><span class="role-status-label">💧 秘处状态：</span>{secret_v}</span>
-            <span class="role-status-row"><span class="role-status-label">🍑 臀部后庭：</span>{ass_v}</span>
-            <span class="role-status-row"><span class="role-status-label">👄 口腔呼吸：</span>{mouth_v}</span>
-            <span class="role-status-row"><span class="role-status-label">🦵 双腿应激：</span>{leg_v}</span>
-        </div>
-        """
-        st.markdown(status_html, unsafe_allow_html=True)def display_novel_with_bold_status(text: str):
-    """
     🎬 隔离版历史渲染器：通过私有物理印记切分，绝对保护小说正文不被误杀消失
     """
     if not text:
@@ -577,9 +473,6 @@ def display_novel_with_bold_status(text: str):
             </div>
             """
             st.markdown(status_html, unsafe_allow_html=True)
-        else:
-            st.markdown(novel_text_formatter(text), unsafe_allow_html=True)
-
 
 # ==========================================
 # ⚡ 方案A核心中枢：极速无感“逐轮对等压缩器”（完全保留您原有的参数格式）
