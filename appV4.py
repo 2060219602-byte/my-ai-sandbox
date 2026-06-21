@@ -1859,6 +1859,7 @@ else:
                 role_data["character_status"] = new_status_block
 
                 # 💡 前端双面板同时显性渲染
+                # 💡 前端双面板同时显性渲染
                 final_html_elements = [
                     f"""
                     <div class="role-status-block" style="border-left: 5px solid #00b4d8 !important; background: linear-gradient(135deg, rgba(0,180,216,0.06) 0%, rgba(255,255,255,0) 100%) !important;">
