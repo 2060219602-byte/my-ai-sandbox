@@ -397,6 +397,7 @@ def novel_text_formatter(raw_text: str) -> str:
 def display_novel_with_bold_status(text: str):
     """
     在前端渲染历史记录时，自动剥离正文、时空面板与生理状态框
+    并强力清洗旧历史记录中残留的标签碎屑
     """
     if not text:
         return
@@ -430,6 +431,10 @@ def display_novel_with_bold_status(text: str):
 
         # 渲染历史里的【蓝色时空服饰面板】
         if s_time:
+            # 同样对历史里导出的时空元素进行去尾碎屑净化
+            s_time = re.sub(r'(?:\[|【|建议|剧情|0️⃣|1️⃣|2️⃣|3️⃣)[\s\S]*$', '', s_time).strip()
+            s_place = re.sub(r'(?:\[|【|建议|剧情|0️⃣|1️⃣|2️⃣|3️⃣)[\s\S]*$', '', s_place).strip()
+            s_clothes = re.sub(r'(?:\[|【|建议|剧情|0️⃣|1️⃣|2️⃣|3️⃣)[\s\S]*$', '', s_clothes).strip()
             st.markdown(f"""
             <div class="role-status-block" style="border-left: 5px solid #00b4d8 !important; background: linear-gradient(135deg, rgba(0,180,216,0.06) 0%, rgba(255,255,255,0) 100%) !important; margin-top:0.5rem !important;">
                 <div class="role-status-name" style="color: #00b4d8 !important;">🌐 物理演变时空与服饰现状</div>
@@ -443,9 +448,14 @@ def display_novel_with_bold_status(text: str):
         for match in matches:
             raw_name = match.group(1).strip().strip('[').strip(']').strip('【').strip('】')
             role_name = f"[{raw_name}]"
-            vagina_detail = match.group(2).strip().strip(';').strip('，').strip('。').strip()
-            nipple_detail = match.group(3).strip().strip(';').strip('，').strip('。').strip()
-            thigh_detail = match.group(4).strip().strip(';').strip('，').strip('。').strip()
+            vagina_detail = match.group(2).strip()
+            nipple_detail = match.group(3).strip()
+            thigh_detail = match.group(4).strip()
+
+            # 🚀 历史数据显性去碎屑终极清洗
+            vagina_detail = re.sub(r'(?:\[|【|建议|剧情|0️⃣|1️⃣|2️⃣|3️⃣)[\s\S]*$', '', vagina_detail).strip('。').strip('，').strip(';').strip(']').strip('】').strip()
+            nipple_detail = re.sub(r'(?:\[|【|建议|剧情|0️⃣|1️⃣|2️⃣|3️⃣)[\s\S]*$', '', nipple_detail).strip('。').strip('，').strip(';').strip(']').strip('】').strip()
+            thigh_detail = re.sub(r'(?:\[|【|建议|剧情|0️⃣|1️⃣|2️⃣|3️⃣)[\s\S]*$', '', thigh_detail).strip('。').strip('，').strip(';').strip(']').strip('】').strip()
 
             status_html = f"""
             <div class="role-status-block">
