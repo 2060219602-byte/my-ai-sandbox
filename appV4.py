@@ -1689,17 +1689,40 @@ else:
                         raw_status_response = ""
 
                 # =======================================================
-                # 🛠️ 纯文本解析机制（环境、着装、知觉、建议多轨剥离）
+                # 🛠️ 强力容错版纯文本解析机制（彻底解决标点空格导致的提取失败）
                 # =======================================================
                 clean_raw_response = re.sub(r'====\s*SIGNAL\s*(?:START|END)\s*====', '', raw_status_response).strip()
 
-                # 1. 提取并同步环境与着装
-                time_match = re.search(r'时间[：:]\s*([\s\S]*?)(?=\n|地点|$)', clean_raw_response)
-                place_match = re.search(r'地点[：:]\s*([\s\S]*?)(?=\n|角色着装|$)', clean_raw_response)
-                clothes_match = re.search(r'角色着装[：:]\s*([\s\S]*?)(?=\n\n|\n\[|$)', clean_raw_response)
+                # 🚀 升级 A：使用软匹配，彻底无视冒号中英文、空格以及换行干扰
+                time_match = re.search(r'时间\s*[：:]\s*([\s\S]*?)(?=\n\s*地点|\n\s*\[|地点|$)', clean_raw_response)
+                place_match = re.search(r'地点\s*[：:]\s*([\s\S]*?)(?=\n\s*角色着装|\n\s*着装|\n\s*\[|角色着装|$)', clean_raw_response)
+                
+                # 兼容“角色着装”和简写“着装”两种可能
+                clothes_match = re.search(r'(?:角色着装|着装)\s*[：:]\s*([\s\S]*?)(?=\n\n|\n\s*\[|\n\s*建议选项|$)', clean_raw_response)
 
-                if time_match and place_match:
-                    new_bg_story = f"时间：{time_match.group(1).strip()}\n地点：{place_match.group(1).strip()}\n氛围：空气中弥漫着激荡过后的黏腻与羞耻。衣服状况：{clothes_match.group(1).strip() if clothes_match else '常态'}"
+                # 🚀 升级 B：如果软匹配依然被极特殊格式干扰，采用“按行强行切片”的终极兜底策略
+                str_time = time_match.group(1).strip() if time_match else ""
+                str_place = place_match.group(1).strip() if place_match else ""
+                str_clothes = clothes_match.group(1).strip() if clothes_match else ""
+
+                # 终极兜底扫描
+                if not str_time or not str_place or not str_clothes:
+                    for line in clean_raw_response.split('\n'):
+                        line_clean = line.strip()
+                        if line_clean.startswith("时间") and not str_time:
+                            str_time = re.sub(r'^时间\s*[：:]\s*', '', line_clean)
+                        elif line_clean.startswith("地点") and not str_place:
+                            str_place = re.sub(r'^地点\s*[：:]\s*', '', line_clean)
+                        elif (line_clean.startswith("角色着装") or line_clean.startswith("着装")) and not str_clothes:
+                            str_clothes = re.sub(r'^(?:角色着装|着装)\s*[：:]\s*', '', line_clean)
+
+                # 🚀 升级 C：只要能抓取到任何有价值的环境事实，立刻强行覆写落盒
+                if str_time or str_place or str_clothes:
+                    final_time = str_time if str_time else "保持现状"
+                    final_place = str_place if str_place else "保持现状"
+                    final_clothes = str_clothes if str_clothes else "保持现状"
+                    
+                    new_bg_story = f"时间：{final_time}\n地点：{final_place}\n氛围：空气中弥漫着激荡过后的黏腻与羞耻。衣服状况：{final_clothes}"
                     role_data["background_story"] = new_bg_story
 
                 # 2. 提取隐秘知觉数据块
