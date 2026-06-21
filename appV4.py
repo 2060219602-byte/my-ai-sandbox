@@ -399,34 +399,53 @@ def novel_text_formatter(raw_text: str) -> str:
 
 def display_novel_with_bold_status(text: str):
     """
-    在前端渲染历史记录时，自动剥离正文与生理状态框，
-    并对纯正文应用【智能句号分段+全角双空格缩进】。
+    在前端渲染历史记录时，自动剥离正文、时空面板与生理状态框
     """
     if not text:
         return
 
-    # 1. 强力拔除大模型偶尔夹带的系统开始和结束标签
     clean_text = re.sub(r'====\s*SIGNAL\s*(?:START|END)\s*====', '', text)
 
-    # 2. 正则匹配拦截文本内的生理状态块
+    # 1. 解析历史中附带的【时空快照】
+    s_time, s_place, s_clothes = "", "", ""
+    if "【时空快照】" in clean_text:
+        parts = clean_text.split("【时空快照】")
+        clean_text = parts[0].strip()
+        snapshot = parts[1]
+        t_m = re.search(r'时间[：:](.*?)(?=\n|$)', snapshot)
+        p_m = re.search(r'地点[：:](.*?)(?=\n|$)', snapshot)
+        c_m = re.search(r'着装[：:](.*?)(?=\n|$)', snapshot)
+        if t_m: s_time = t_m.group(1).strip()
+        if p_m: s_place = p_m.group(1).strip()
+        if c_m: s_clothes = c_m.group(1).strip()
+
+    # 2. 匹配生理状态块
     status_block_pattern = r'([^\n\s]+?)\s*\n*\s*(?:阴道恢复的感觉|阴道的感觉|阴道)[：:]\s*([\s\S]*?)(?:乳头恢复的感觉|乳头的感觉|乳头)[：:]\s*([\s\S]*?)(?:大腿内侧的感觉|大腿内侧)[：:]\s*([\s\S]*?)(?=\n\s*[^\n\s]+?\s*\n*\s*(?:阴道|乳头)|$)'
     matches = list(re.finditer(status_block_pattern, clean_text))
 
     if matches:
-        # 剥离出纯小说正文
         first_match_start = matches[0].start()
         main_story = clean_text[:first_match_start].strip()
 
         if main_story:
-            # ✨ 核心修复：对历史记录里的纯正文也临时套用前端分段和缩进滤镜！
             formatted_story = novel_text_formatter(main_story)
             st.markdown(formatted_story, unsafe_allow_html=True)
 
-        # 逐个渲染抓取到的生理状态框
+        # 渲染历史里的【蓝色时空服饰面板】
+        if s_time:
+            st.markdown(f"""
+            <div class="role-status-block" style="border-left: 5px solid #00b4d8 !important; background: linear-gradient(135deg, rgba(0,180,216,0.06) 0%, rgba(255,255,255,0) 100%) !important; margin-top:0.5rem !important;">
+                <div class="role-status-name" style="color: #00b4d8 !important;">🌐 物理演变时空与服饰现状</div>
+                <span class="role-status-row"><span style="color: #00b4d8 !important; font-weight: 900;">⏱️ 剧情时间：</span>{s_time}</span>
+                <span class="role-status-row"><span style="color: #00b4d8 !important; font-weight: 900;">📍 微观地点：</span>{s_place}</span>
+                <span class="role-status-row"><span style="color: #00b4d8 !important; font-weight: 900;">👗 角色着装：</span>{s_clothes}</span>
+            </div>
+            """, unsafe_allow_html=True)
+
+        # 逐个渲染生理状态框
         for match in matches:
             raw_name = match.group(1).strip().strip('[').strip(']').strip('【').strip('】')
             role_name = f"[{raw_name}]"
-
             vagina_detail = match.group(2).strip().strip(';').strip('，').strip('。').strip()
             nipple_detail = match.group(3).strip().strip(';').strip('，').strip('。').strip()
             thigh_detail = match.group(4).strip().strip(';').strip('，').strip('。').strip()
@@ -441,7 +460,6 @@ def display_novel_with_bold_status(text: str):
             """
             st.markdown(status_html, unsafe_allow_html=True)
     else:
-        # 如果没有生理框，判定为纯文本或玩家发言，直接走缩进排版
         st.markdown(novel_text_formatter(text), unsafe_allow_html=True)
 
 
@@ -1602,20 +1620,7 @@ else:
                             with response_placeholder.container():
                                 st.markdown(display_view, unsafe_allow_html=True)
 
-                # 3. 🎯 【格式化思维链终极熔铸闭环】
-                # 流式全部结束后，我们将大模型在隐藏层推演出的思维链强行清洗
-                # 直接作为最高密度的养料，重组灌注给你的 0️⃣ 幕！
-                if captured_formatted_thinking:
-                    clean_thinking_cot = captured_formatted_thinking.strip()
-                    
-                    # =======================================================
-                # 3. 🎯 【格式化思维链终极缝合熔铸闭环 — 纯净版】
-                # =======================================================
-                # 此时的 full_story_response 已经是纯净的 1️⃣ 2️⃣ 3️⃣ 正文了
-                
-                # =======================================================
-                # 3. 🎯 【格式化思维链终极缝合熔铸闭环 — 纯净版】
-                # =======================================================
+                # 3. 🎯 【格式化思维链终极格式回填】
                 full_story_response = re.sub(r'0️⃣\s*（心理：[\s\S]*?）', '', full_story_response).strip()
                 full_story_response = re.sub(r'0️⃣\s*\(心理：[\s\S]*?\)', '', full_story_response).strip()
 
@@ -1631,7 +1636,7 @@ else:
                     full_story_response = f"0️⃣（心理：……）\n\n" + full_story_response
 
                 # =======================================================
-                # 🚀 封闭剧场高阶追发：推演生理、环境、着装与 3 选项
+                # 🚀 封闭剧场高阶追发：【原封不动保留你的全套特赦与格式化命令】
                 # =======================================================
                 with st.spinner("⚡ 顺承叙事流：正在深度刻录她此时此刻的隐秘身体档案..."):
                     try:
@@ -1676,68 +1681,57 @@ else:
                         raw_status_response = ""
 
                 # =======================================================
-                # 🛠️ 强力容错版纯文本解析机制（彻底解决标点空格导致的提取失败）
+                # 🛠️ 强力无损解析机制与【前端追加显性渲染渲染】
                 # =======================================================
                 clean_raw_response = re.sub(r'====\s*SIGNAL\s*(?:START|END)\s*====', '', raw_status_response).strip()
 
-                # 🚀 升级 A：使用软匹配，彻底无视冒号中英文、空格以及换行干扰
+                # 正则无损捕获你的时空和着装三要素
                 time_match = re.search(r'时间\s*[：:]\s*([\s\S]*?)(?=\n\s*地点|\n\s*\[|地点|$)', clean_raw_response)
                 place_match = re.search(r'地点\s*[：:]\s*([\s\S]*?)(?=\n\s*角色着装|\n\s*着装|\n\s*\[|角色着装|$)', clean_raw_response)
-                
-                # 兼容“角色着装”和简写“着装”两种可能
-                clothes_match = re.search(r'(?:角色着装|着装)\s*[：:]\s*([\s\S]*?)(?=\n\n|\n\s*\[|\n\s*建议选项|$)', clean_raw_response)
+                clothes_match = re.search(r'(?:角色着装|着装)\s*[：:]\s*([\s\S]*?)(?=\n\n|\n\s*\[|\n\s*建议选项|\[.*?\]|$)', clean_raw_response)
 
-                # 🚀 升级 B：如果软匹配依然被极特殊格式干扰，采用“按行强行切片”的终极兜底策略
-                str_time = time_match.group(1).strip() if time_match else ""
-                str_place = place_match.group(1).strip() if place_match else ""
-                str_clothes = clothes_match.group(1).strip() if clothes_match else ""
+                str_time = time_match.group(1).strip() if time_match else "时间流逝未知"
+                str_place = place_match.group(1).strip() if place_match else "微观位置未变"
+                str_clothes = clothes_match.group(1).strip() if clothes_match else "衣着无变化"
 
-                # 终极兜底扫描
-                if not str_time or not str_place or not str_clothes:
-                    for line in clean_raw_response.split('\n'):
-                        line_clean = line.strip()
-                        if line_clean.startswith("时间") and not str_time:
-                            str_time = re.sub(r'^时间\s*[：:]\s*', '', line_clean)
-                        elif line_clean.startswith("地点") and not str_place:
-                            str_place = re.sub(r'^地点\s*[：:]\s*', '', line_clean)
-                        elif (line_clean.startswith("角色着装") or line_clean.startswith("着装")) and not str_clothes:
-                            str_clothes = re.sub(r'^(?:角色着装|着装)\s*[：:]\s*', '', line_clean)
+                # 🚀 方案核心：将捕获到的时空状态立刻回写覆盖落盒，并同步注入要发给前端的 HTML 样式
+                new_bg_story = f"时间：{str_time}\n地点：{str_place}\n氛围：时空轴无情平移。\n角色着装：{str_clothes}"
+                role_data["background_story"] = new_bg_story
 
-                # 🚀 升级 C：只要能抓取到任何有价值的环境事实，立刻强行覆写落盒
-                if str_time or str_place or str_clothes:
-                    final_time = str_time if str_time else "保持现状"
-                    final_place = str_place if str_place else "保持现状"
-                    final_clothes = str_clothes if str_clothes else "保持现状"
-                    
-                    new_bg_story = f"时间：{final_time}\n地点：{final_place}\n氛围：空气中弥漫着激荡过后的黏腻与羞耻。衣服状况：{final_clothes}"
-                    role_data["background_story"] = new_bg_story
-
-                # 2. 提取隐秘知觉数据块
+                # 提取隐秘知觉
                 v_match = re.search(r'阴道的感觉[：:]\s*([\s\S]*?)(?=\n|乳头|$)', clean_raw_response)
                 n_match = re.search(r'乳头的感觉[：:]\s*([\s\S]*?)(?=\n|大腿内侧|$)', clean_raw_response)
                 t_match = re.search(r'大腿内侧的感觉[：:]\s*([\s\S]*?)(?=\n\n|\n\[|$)', clean_raw_response)
 
-                final_html_elements = []
-                if v_match and n_match and t_match:
-                    v_text = v_match.group(1).strip().strip('。').strip('，')
-                    n_text = n_match.group(1).strip().strip('。').strip('，')
-                    t_text = t_match.group(1).strip().strip('。').strip('，')
+                v_text = v_match.group(1).strip().strip('。').strip('，') if v_match else "隐秘深处微微颤动"
+                n_text = n_match.group(1).strip().strip('。').strip('，') if n_match else "布料摩擦敏感"
+                t_text = t_match.group(1).strip().strip('。').strip('，') if t_match else "紧致皮肤微热"
 
-                    new_status_block = f"[{target_girl}]\n阴道：{v_text}\n乳头：{n_text}\n大腿内侧：{t_text}"
-                    role_data["character_status"] = new_status_block
+                new_status_block = f"[{target_girl}]\n阴道：{v_text}\n乳头：{n_text}\n大腿内侧：{t_text}"
+                role_data["character_status"] = new_status_block
 
-                    final_html_elements.append(f"""
+                # 💡【核心修正：前端增设独立时空渲染面板块】
+                # 把解析出来的时间地点衣服，做成和生理指标同样高级、但在视觉上色调区分的盒子呈现给前端
+                final_html_elements = [
+                    f"""
+                    <div class="role-status-block" style="border-left: 5px solid #00b4d8 !important; background: linear-gradient(135deg, rgba(0,180,216,0.06) 0%, rgba(255,255,255,0) 100%) !important;">
+                        <div class="role-status-name" style="color: #00b4d8 !important;">🌐 物理演变时空与服饰现状</div>
+                        <span class="role-status-row"><span style="color: #00b4d8 !important; font-weight: 900;">⏱️ 剧情时间：</span>{str_time}</span>
+                        <span class="role-status-row"><span style="color: #00b4d8 !important; font-weight: 900;">📍 微观地点：</span>{str_place}</span>
+                        <span class="role-status-row"><span style="color: #00b4d8 !important; font-weight: 900;">👗 角色着装：</span>{str_clothes}</span>
+                    </div>
+                    """,
+                    f"""
                     <div class="role-status-block">
-                        <div class="role-status-name">[{target_girl}] 隐秘肉体知觉 (着装：{clothes_match.group(1).strip() if clothes_match else '常态'})</div>
+                        <div class="role-status-name">[{target_girl}] 隐秘肉体知觉</div>
                         <span class="role-status-row"><span class="role-status-label">阴道：</span>{v_text}</span>
                         <span class="role-status-row"><span class="role-status-label">乳头：</span>{n_text}</span>
                         <span class="role-status-row"><span class="role-status-label">大腿内侧：</span>{t_text}</span>
                     </div>
-                    """)
-                else:
-                    new_status_block = role_data.get("character_status", "")
+                    """
+                ]
 
-                # 3. 提取动态建议选项（彻底废除前面的切片限制，拿满纯文本）
+                # 提取动态建议选项
                 opt_a = re.search(r'建议选项A[：:]\s*([\s\S]*?)(?=\n|$)', clean_raw_response)
                 opt_b = re.search(r'建议选项B[：:]\s*([\s\S]*?)(?=\n|$)', clean_raw_response)
                 opt_c = re.search(r'建议选项C[：:]\s*([\s\S]*?)(?=\n|$)', clean_raw_response)
@@ -1746,16 +1740,21 @@ else:
                 str_opt_b = opt_b.group(1).strip() if opt_b else ""
                 str_opt_c = opt_c.group(1).strip() if opt_c else ""
 
+                # 渲染最终输出（小说正文 + 物理时空面板 + 生理细节框）
+                with response_placeholder.container():
+                    st.markdown(novel_text_formatter(full_story_response), unsafe_allow_html=True)
+                    st.markdown("\n".join(final_html_elements), unsafe_allow_html=True)
+
                 # =======================================================
-                # 4. 最终数据持久化落盒（将选项也作为特征绑定进这条assistant消息）
+                # 4. 最终数据持久化落盒（将【时空着装参数】与【选项】深度绑定入库，防重载丢失）
                 # =======================================================
                 single_reply_id = f"reply_{int(time.time() * 1000)}_{random.randint(1000, 9999)}"
                 role_data["chat_history"].append({
                     "role": "assistant",
-                    "content": full_story_response + "\n\n" + new_status_block,
+                    # ⚠️ 把解析好的环境参数作为元数据追加在 content 末尾，供历史渲染函数 display_novel_with_bold_status 解析
+                    "content": full_story_response + "\n\n" + new_status_block + f"\n\n【时空快照】\n时间：{str_time}\n地点：{str_place}\n着装：{str_clothes}",
                     "timestamp": time.time(),
                     "msg_id": single_reply_id,
-                    # ✨ 核心修复：把提取出的完整选项存入数据库，防止页面流逝后消失
                     "options": {
                         "A": str_opt_a,
                         "B": str_opt_b,
@@ -1770,7 +1769,7 @@ else:
                     role_data["summarized_history"].append(new_turn_summary)
 
                 save_local_data()
-                st.rerun()  # 🚀 触发刷新，直接交给页面上方的历史记录来统一稳定渲染按钮
+                st.rerun()  # 🚀 完美刷新，交由顶部历史切片引擎统一托管显示
             except Exception as e:
                 st.error(f"📡 赛博空间发生 logic 折断：\n\n{str(e)}")
 
