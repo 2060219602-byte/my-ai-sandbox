@@ -1704,6 +1704,9 @@ else:
                 # =======================================================
                 # 🛠️ 强力无损解析机制与【前端追加显性渲染渲染】
                 # =======================================================
+                # =======================================================
+                # 🛠️ 强力无损解析机制与【前端追加显性渲染渲染】（高精去碎屑版）
+                # =======================================================
                 clean_raw_response = re.sub(r'====\s*SIGNAL\s*(?:START|END)\s*====', '', raw_status_response).strip()
 
                 # 正则无损捕获你的时空和着装三要素
@@ -1715,24 +1718,42 @@ else:
                 str_place = place_match.group(1).strip() if place_match else "微观位置未变"
                 str_clothes = clothes_match.group(1).strip() if clothes_match else "衣着无变化"
 
-                # 🚀 方案核心：将捕获到的时空状态立刻回写覆盖落盒，并同步注入要发给前端的 HTML 样式
+                # 净化环境碎屑（防止大模型把后面的标记顺手带上）
+                str_time = re.sub(r'\n.*$', '', str_time).strip()
+                str_place = re.sub(r'\n.*$', '', str_place).strip()
+                str_clothes = re.sub(r'\n.*$', '', str_clothes).strip()
+
+                # 🚀 方案核心：将捕获到的时空状态立刻回写覆盖落盒
                 new_bg_story = f"时间：{str_time}\n地点：{str_place}\n氛围：时空轴无情平移。\n角色着装：{str_clothes}"
                 role_data["background_story"] = new_bg_story
 
-                # 提取隐秘知觉
-                v_match = re.search(r'阴道的感觉[：:]\s*([\s\S]*?)(?=\n|乳头|$)', clean_raw_response)
-                n_match = re.search(r'乳头的感觉[：:]\s*([\s\S]*?)(?=\n|大腿内侧|$)', clean_raw_response)
-                t_match = re.search(r'大腿内侧的感觉[：:]\s*([\s\S]*?)(?=\n\n|\n\[|$)', clean_raw_response)
+                # 针对性强化：精准捕捉隐秘知觉，彻底拦截任何 [ 或 建议选项 碎屑
+                v_match = re.search(r'阴道的感觉[：:]\s*([\s\S]*?)(?=\n\s*乳头的感觉|\n\s*\[|$)', clean_raw_response)
+                n_match = re.search(r'乳头的感觉[：:]\s*([\s\S]*?)(?=\n\s*大腿内侧的感觉|\n\s*\[|$)', clean_raw_response)
+                # 🛠️ 核心修复点：将结束边界强制卡死在 [剧情演进] 或 建议选项 之前，彻底解决 [女儿 残留问题
+                t_match = re.search(r'大腿内侧的感觉[：:]\s*([\s\S]*?)(?=\n\s*\[剧情演进|\n\s*建议选项|\n\s*\[|$)', clean_raw_response)
 
-                v_text = v_match.group(1).strip().strip('。').strip('，') if v_match else "隐秘深处微微颤动"
-                n_text = n_match.group(1).strip().strip('。').strip('，') if n_match else "布料摩擦敏感"
-                t_text = t_match.group(1).strip().strip('。').strip('，') if t_match else "紧致皮肤微热"
+                v_text = v_match.group(1).strip() if v_match else "隐秘深处微微颤动"
+                n_text = n_match.group(1).strip() if n_match else "布料摩擦敏感"
+                t_text = t_match.group(1).strip() if t_match else "紧致皮肤微热"
+
+                # ✨ 后置多重安全净化：强力拔除残留的任何括号或中括号碎屑
+                for flag in ["【", "】", "[", "]", "建议", "剧情"]:
+                    if flag in t_text:
+                        t_text = t_text.split(flag)[0].strip()
+                    if flag in v_text:
+                        v_text = v_text.split(flag)[0].strip()
+                    if flag in n_text:
+                        n_text = n_text.split(flag)[0].strip()
+
+                v_text = v_text.strip('。').strip('，').strip()
+                n_text = n_text.strip('。').strip('，').strip()
+                t_text = t_text.strip('。').strip('，').strip()
 
                 new_status_block = f"[{target_girl}]\n阴道：{v_text}\n乳头：{n_text}\n大腿内侧：{t_text}"
                 role_data["character_status"] = new_status_block
 
-                # 💡【核心修正：前端增设独立时空渲染面板块】
-                # 把解析出来的时间地点衣服，做成和生理指标同样高级、但在视觉上色调区分的盒子呈现给前端
+                # 💡【前端独立时空与生理面板块渲染】
                 final_html_elements = [
                     f"""
                     <div class="role-status-block" style="border-left: 5px solid #00b4d8 !important; background: linear-gradient(135deg, rgba(0,180,216,0.06) 0%, rgba(255,255,255,0) 100%) !important;">
