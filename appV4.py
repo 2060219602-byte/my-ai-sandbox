@@ -1852,20 +1852,27 @@ else:
                 str_opt_b = opt_b.group(1).strip() if opt_b else ""
                 str_opt_c = opt_c.group(1).strip() if opt_c else ""
 
+                # 动态回填到 placeholder（实时渲染华丽的 HTML 面板，防止变成裸露字符串）
                 with response_placeholder.container():
                     st.markdown(novel_text_formatter(full_story_response), unsafe_allow_html=True)
                     st.markdown("\n".join(final_html_elements), unsafe_allow_html=True)
 
                 # =======================================================
-                # 5. 最终数据持久化落盒（采用独占式私有锚点隔离，杜绝正则误杀）
+                # 5. 最终数据持久化落盒（采用隔离印记，确保存入数据库的格式统一）
                 # =======================================================
                 single_reply_id = f"reply_{int(time.time() * 1000)}_{random.randint(1000, 9999)}"
                 
-                # 使用绝对唯一的 🔒DATA_SPLIT_MARKER 隔离正文与多轨数据
+                # ❗ 关键修复：落盒时将原始的全身六维变量（pos_text, breast_text 等）拼入隔离区，让历史渲染器能精准重绘
                 full_content_store = (
                     f"{full_story_response}\n\n"
                     f"🔒DATA_SPLIT_MARKER\n"
-                    f"{new_status_block}\n\n"
+                    f"[{target_girl}]\n"
+                    f"姿势：{pos_text}\n"
+                    f"双乳：{breast_text}\n"
+                    f"秘处：{v_text}\n"
+                    f"臀部与后庭：{ass_text}\n"
+                    f"口腔：{mouth_text}\n"
+                    f"双腿：{leg_text}\n\n"
                     f"【欲海场景】：{str_scene}\n\n"
                     f"【时空快照】\n时间：{str_time}\n地点：{str_place}\n着装：{str_clothes}"
                 )
@@ -1889,7 +1896,7 @@ else:
                     role_data["summarized_history"].append(new_turn_summary)
 
                 save_local_data()
-                st.rerun()
+                st.rerun()  # 完璧归赵，交由前置的历史展示切片引擎（已升级隔离版）统一托管显示
             except Exception as e:
                 st.error(f"📡 赛博空间发生 logic 折断：\n\n{str(e)}")
 
