@@ -1822,33 +1822,40 @@ else:
                 new_bg_story = f"时间：{str_time}\n地点：{str_place}\n氛围：时空轴无情平移。\n角色着装：{str_clothes}"
                 role_data["background_story"] = new_bg_story
 
-                # 精准按单行检索各部位知觉
-                pos_txt, breast_txt, secret_txt, ass_txt, mouth_txt, leg_txt = "", "", "", "", "", ""
+                # 💡防御性初始化，防止未定义引起的折断
+                pos_text = "物理体位紧密纠缠定格"
+                breast_text = "顶端在布料摩擦下持续坚硬应激"
+                v_text = "隐秘深处由于体温攀升而大面积充血泥泞，敏感过载"
+                ass_text = "丰满肉臀承受着物理压迫，后庭本能微紧颤抖"
+                mouth_text = "呼吸急促紊乱，唇舌间散发着炽热潮红的吐息"
+                leg_text = "美腿因过度敏感而呈现轻微的神经末梢应激轻轻打颤"
+
+                # 开始精准按单行检索各部位知觉
                 for line in clean_raw_response.split('\n'):
                     line_clean = line.strip()
-                    if "姿势" in line_clean and not pos_txt: pos_txt = re.sub(r'^.*?姿势\s*[：:]\s*', '', line_clean).replace(f"【{target_girl}】感觉到了", "").strip()
-                    elif "双乳" in line_clean and not breast_txt: breast_txt = re.sub(r'^.*?双乳\s*[：:]\s*', '', line_clean).replace(f"【{target_girl}】感觉到了", "").strip()
-                    elif "秘处" in line_clean and not secret_txt: secret_txt = re.sub(r'^.*?秘处\s*[：:]\s*', '', line_clean).replace(f"【{target_girl}】感觉到了", "").strip()
-                    elif "臀部与后庭" in line_clean and not ass_txt: ass_txt = re.sub(r'^.*?臀部与后庭\s*[：:]\s*', '', line_clean).replace(f"【{target_girl}】感觉到了", "").strip()
-                    elif "口腔" in line_clean and not mouth_txt: mouth_txt = re.sub(r'^.*?口腔\s*[：:]\s*', '', line_clean).replace(f"【{target_girl}】感觉到了", "").strip()
-                    elif "双腿" in line_clean and not leg_txt: leg_txt = re.sub(r'^.*?双腿\s*[：:]\s*', '', line_clean).replace(f"【{target_girl}】感觉到了", "").strip()
+                    if "姿势" in line_clean: 
+                        pos_text = re.sub(r'^.*?姿势\s*[：:]\s*', '', line_clean).replace(f"【{target_girl}】感觉到了", "").strip()
+                    elif "双乳" in line_clean: 
+                        breast_text = re.sub(r'^.*?双乳\s*[：:]\s*', '', line_clean).replace(f"【{target_girl}】感觉到了", "").strip()
+                    elif "秘处" in line_clean: 
+                        v_text = re.sub(r'^.*?秘处\s*[：:]\s*', '', line_clean).replace(f"【{target_girl}】感觉到了", "").strip()
+                    elif "臀部与后庭" in line_clean: 
+                        ass_text = re.sub(r'^.*?臀部与后庭\s*[：:]\s*', '', line_clean).replace(f"【{target_girl}】感觉到了", "").strip()
+                    elif "口腔" in line_clean: 
+                        mouth_text = re.sub(r'^.*?口腔\s*[：:]\s*', '', line_clean).replace(f"【{target_girl}】感觉到了", "").strip()
+                    elif "双腿" in line_clean: 
+                        leg_text = re.sub(r'^.*?双腿\s*[：:]\s*', '', line_clean).replace(f"【{target_girl}】感觉到了", "").strip()
 
-                # 兜底防空与尾部杂质清洗
-                if not pos_txt: pos_txt = "物理体位紧密纠缠定格"
-                if not breast_txt: breast_txt = "顶端在剧烈起伏中挺立发硬"
-                if not secret_txt: secret_txt = "隐秘深处由于体温攀升而泥泞泛滥"
-                if not ass_txt: ass_txt = "丰满娇臀滚烫无比，后庭微微绷紧"
-                if not mouth_txt: mouth_txt = "呼吸急促紊乱，津液吞咽间干涸炽热"
-                if not leg_txt: leg_txt = "美腿因过度敏感而本能夹紧轻颤"
+                # 🚀 强力拔除尾部杂质标签（将变量统一清洗）
+                pos_text = re.sub(r'(?:\[|【|建议|剧情|0️⃣|1️⃣|2️⃣|3️⃣)[\s\S]*$', '', pos_text).strip('。').strip()
+                breast_text = re.sub(r'(?:\[|【|建议|剧情|0️⃣|1️⃣|2️⃣|3️⃣)[\s\S]*$', '', breast_text).strip('。').strip()
+                v_text = re.sub(r'(?:\[|【|建议|剧情|0️⃣|1️⃣|2️⃣|3️⃣)[\s\S]*$', '', v_text).strip('。').strip()
+                ass_text = re.sub(r'(?:\[|【|建议|剧情|0️⃣|1️⃣|2️⃣|3️⃣)[\s\S]*$', '', ass_text).strip('。').strip()
+                mouth_text = re.sub(r'(?:\[|【|建议|剧情|0️⃣|1️⃣|2️⃣|3️⃣)[\s\S]*$', '', mouth_text).strip('。').strip()
+                leg_text = re.sub(r'(?:\[|【|建议|剧情|0️⃣|1️⃣|2️⃣|3️⃣)[\s\S]*$', '', leg_text).strip('。').strip()
 
-                pos_txt = re.sub(r'(?:\[|【|建议|剧情|0️⃣|1️⃣|2️⃣|3️⃣)[\s\S]*$', '', pos_txt).strip('。').strip()
-                breast_txt = re.sub(r'(?:\[|【|建议|剧情|0️⃣|1️⃣|2️⃣|3️⃣)[\s\S]*$', '', breast_txt).strip('。').strip()
-                secret_txt = re.sub(r'(?:\[|【|建议|剧情|0️⃣|1️⃣|2️⃣|3️⃣)[\s\S]*$', '', secret_txt).strip('。').strip()
-                ass_txt = re.sub(r'(?:\[|【|建议|剧情|0️⃣|1️⃣|2️⃣|3️⃣)[\s\S]*$', '', ass_txt).strip('。').strip()
-                mouth_txt = re.sub(r'(?:\[|【|建议|剧情|0️⃣|1️⃣|2️⃣|3️⃣)[\s\S]*$', '', mouth_txt).strip('。').strip()
-                leg_txt = re.sub(r'(?:\[|【|建议|剧情|0️⃣|1️⃣|2️⃣|3️⃣)[\s\S]*$', '', leg_txt).strip('。').strip()
-
-                new_status_block = f"[{target_girl}]\n姿势：{pos_txt}\n双乳：{breast_txt}\n秘处：{secret_txt}\n臀部与后庭：{ass_txt}\n口腔：{mouth_txt}\n双腿：{leg_txt}"
+                # 同步到角色的独立数据库
+                new_status_block = f"[{target_girl}]\n姿势：{pos_text}\n双乳：{breast_text}\n秘处：{v_text}\n臀部与后庭：{ass_text}\n口腔：{mouth_text}\n双腿：{leg_text}"
                 role_data["character_status"] = new_status_block
 
                 # 💡 前端双面板同时显性渲染
@@ -1864,12 +1871,12 @@ else:
                     f"""
                     <div class="role-status-block">
                         <div class="role-status-name">[{target_girl}] 实时多轨官能知觉</div>
-                        <span class="role-status-row"><span class="role-status-label">🎬 当前姿势：</span>{pos_txt}</span>
-                        <span class="role-status-row"><span class="role-status-label">🍒 双乳知觉：</span>{breast_txt}</span>
-                        <span class="role-status-row"><span class="role-status-label">💧 秘处状态：</span>{secret_txt}</span>
-                        <span class="role-status-row"><span class="role-status-label">🍑 臀部后庭：</span>{ass_txt}</span>
-                        <span class="role-status-row"><span class="role-status-label">👄 口腔呼吸：</span>{mouth_txt}</span>
-                        <span class="role-status-row"><span class="role-status-label">🦵 双腿应激：</span>{leg_txt}</span>
+                        <span class="role-status-row"><span class="role-status-label">🎬 当前姿势：</span>{pos_text}</span>
+                        <span class="role-status-row"><span class="role-status-label">🍒 双乳知觉：</span>{breast_text}</span>
+                        <span class="role-status-row"><span class="role-status-label">💧 秘处状态：</span>{v_text}</span>
+                        <span class="role-status-row"><span class="role-status-label">🍑 臀部后庭：</span>{ass_text}</span>
+                        <span class="role-status-row"><span class="role-status-label">👄 口腔呼吸：</span>{mouth_text}</span>
+                        <span class="role-status-row"><span class="role-status-label">🦵 双腿应激：</span>{leg_text}</span>
                     </div>
                     """
                 ]
@@ -1895,13 +1902,8 @@ else:
                 # =======================================================
                 single_reply_id = f"reply_{int(time.time() * 1000)}_{random.randint(1000, 9999)}"
                 
-                # 在持久化数据中加入【欲海浮沉提示语】以供前端渲染按钮前置语境
                 full_content_store = (
-                    f"{full_story_response}\n\n"
-                    f"[{target_girl}]\n"
-                    f"阴道的感觉：{v_text}\n"
-                    f"乳头的感觉：{n_text}\n"
-                    f"大腿内侧的感觉：{t_text}\n\n"
+                    f"{full_story_response}\n\n{new_status_block}\n\n"
                     f"【欲海场景】：{str_scene}\n\n"
                     f"【时空快照】\n时间：{str_time}\n地点：{str_place}\n着装：{str_clothes}"
                 )
