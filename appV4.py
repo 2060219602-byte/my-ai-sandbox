@@ -1118,22 +1118,18 @@ def render_message_controls_by_id(msg_id, is_last_msg, agent_name_fallback=""):
 
 
 def render_options_and_status_in_chat(message_item):
-    """
-    ✨ 长效渲染器组件：
-    专门负责在消息气泡下方，把该轮计算出的【3个动态剧情选项】不带截断、永久地画在屏幕上
-    """
     if "options" in message_item and message_item["options"]:
         opts = message_item["options"]
         opt_a = opts.get("A", "")
         opt_b = opts.get("B", "")
         opt_c = opts.get("C", "")
+        opt_d = opts.get("D", "") # ✨ 新增
         
-        if opt_a or opt_b or opt_c:
+        if opt_a or opt_b or opt_c or opt_d:
             st.write("")
             st.caption("🔮 **剧本导师为您推演的后续行动灵感（点击按钮可快速回填提示词）：**")
-            col_opt1, col_opt2, col_opt3 = st.columns(3)
+            col_opt1, col_opt2, col_opt3, col_opt4 = st.columns(4) # ✨ 改为 4 列
             
-            # 使用唯一的 msg_id 动态拼接 key，彻底防止 Streamlit 报 Duplicate Widget ID 错误
             m_id = message_item.get("msg_id", str(random.randint(1000, 9999)))
             
             if opt_a:
@@ -1151,6 +1147,11 @@ def render_options_and_status_in_chat(message_item):
                     if st.button(f"🔥 失控：{opt_c}", use_container_width=True, key=f"btn_opt_c_{m_id}"):
                         st.session_state[f"chat_input_v_{st.session_state.clear_version}"] = opt_c
                         st.toast("已成功回填行动灵感，请在下方输入框继续补充或直接回车发送！")
+            if opt_d: # ✨ 新增选项 D 的前端渲染
+                with col_opt4:
+                    if st.button(f"🧎 被动：{opt_d}", use_container_width=True, key=f"btn_opt_d_{m_id}"):
+                        st.session_state[f"chat_input_v_{st.session_state.clear_version}"] = opt_d
+                        st.toast("已成功回填被动接受，她将采取主动权！请直接发车！")
 
 
 history_len = len(chat_history_view)
@@ -1726,9 +1727,10 @@ else:
                                     f"乳头的感觉: 【{target_girl}】感觉到了[此处专注于娇嫩顶端由于布料摩擦或冷风刮蹭产生的酥麻过载触觉，25~50字]\n"
                                     f"大腿内侧的感觉: 【{target_girl}】感觉到了[此处专注于紧致肌肤间的皮温骤升或欲望越界引发的神经末梢‘软绵颤抖’，25~50字]\n\n"
                                     f"[剧情演进路线指南]\n"
-                                    f"建议选项A: [必须以玩家‘你’为主语动作！提供一个倾向于‘直球官能侵占/物理越界’的动作台词建议，15-30字]\n"
-                                    f"建议选项B: [必须以玩家‘你’为主语动作！提供一个倾向于‘言语整蛊/心理防线博弈’的趣味对峙建议，15-30字]\n"
-                                    f"建议选项C: [必须以玩家‘你’为主语动作！提供一个倾向于‘极度粗俗官能交合/彻底推推倒’的疯狂剧情建议，15-30字]\n"
+                                    f"建议选项A: [必须以玩家‘我’为主语动作！提供一个倾向于‘物理爱抚/物理调情’的动作台词建议，15-30字]\n"
+                                    f"建议选项B: [必须以玩家‘我’为主语动作！提供一个倾向于‘言语诱导/言语暧昧’的趣味对峙建议，15-30字]\n"
+                                    f"建议选项C: [必须以玩家‘我’为主语动作！提供一个倾向于‘直球官能侵占/物理越界，15-30字]\n"
+                                    f"建议选项D: [必须以玩家‘我’为被动视角！提供一个‘放弃抵抗/任由摆布/顺从她主动侵犯’的完全被动接受建议，15-30字]\n" # ✨ 新增选项D
                                     f"==== SIGNAL END ===="
                                 )
                             }
@@ -1815,10 +1817,12 @@ else:
                 opt_a = re.search(r'建议选项A[：:]\s*([\s\S]*?)(?=\n|$)', clean_raw_response)
                 opt_b = re.search(r'建议选项B[：:]\s*([\s\S]*?)(?=\n|$)', clean_raw_response)
                 opt_c = re.search(r'建议选项C[：:]\s*([\s\S]*?)(?=\n|$)', clean_raw_response)
+                opt_d = re.search(r'建议选项D[：:]\s*([\s\S]*?)(?=\n|$)', clean_raw_response)
                 
                 str_opt_a = opt_a.group(1).strip() if opt_a else ""
                 str_opt_b = opt_b.group(1).strip() if opt_b else ""
                 str_opt_c = opt_c.group(1).strip() if opt_c else ""
+                str_opt_d = opt_d.group(1).strip() if opt_d else ""
 
                 # 渲染到当前的动态 Placeholder 视图中
                 with response_placeholder.container():
@@ -1837,7 +1841,8 @@ else:
                     "options": {
                         "A": str_opt_a,
                         "B": str_opt_b,
-                        "C": str_opt_c
+                        "C": str_opt_c,
+                        "D": str_opt_d
                     }
                 })
 
