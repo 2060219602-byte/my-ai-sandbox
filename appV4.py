@@ -419,7 +419,7 @@ def display_novel_with_bold_status(text: str):
         if c_m: s_clothes = c_m.group(1).strip()
 
     # 2. 匹配生理状态块
-    status_block_pattern = r'([^\n\s]+?)\s*\n*\s*(?:阴道恢复的感觉|阴道的感觉|阴道)[：:]\s*([\s\S]*?)(?:乳头恢复的感觉|乳头的感觉|乳头)[：:]\s*([\s\S]*?)(?:大腿内侧的感觉|大腿内侧)[：:]\s*([\s\S]*?)(?=\n\s*[^\n\s]+?\s*\n*\s*(?:阴道|乳头)|$)'
+    status_block_pattern = r'([^\n\s]+?)\s*\n*\s*(?:阴道恢复的感觉|阴道的感觉|阴道)[：:]\s*([\s\S]*?)(?:乳头恢复的感觉|乳头的感觉|乳头)[：:]\s*([\s\S]*?)(?:大腿内侧的感觉|大腿内侧)[：:]\s*([\s\S]*?)(?=\n\s*[^\n\s]+?\s*\n*\s*(?:阴道|乳头)|【时空快照】|$)'
     matches = list(re.finditer(status_block_pattern, clean_text))
 
     if matches:
@@ -1455,12 +1455,19 @@ if is_group_chat:
                         joined_html = "\n".join(final_html_elements)
                         st.markdown(joined_html, unsafe_allow_html=True)
 
+                normalized_status_block = f"[{target_girl}]\n阴道的感觉：{v_text}\n乳头的感觉：{n_text}\n大腿内侧的感觉：{t_text}"
+
                 single_reply_id = f"reply_{int(time.time() * 1000)}_{random.randint(1000, 9999)}"
                 role_data["chat_history"].append({
                     "role": "assistant",
-                    "content": full_story_response + "\n\n" + new_status_block,
+                    "content": f"{full_story_response}\n\n{normalized_status_block}\n\n【时空快照】\n时间：{str_time}\n地点：{str_place}\n着装：{str_clothes}",
                     "timestamp": time.time(),
-                    "msg_id": single_reply_id
+                    "msg_id": single_reply_id,
+                    "options": {
+                        "A": str_opt_a,
+                        "B": str_opt_b,
+                        "C": str_opt_c
+                    }
                 })
 
                 with st.spinner("⚡ 赛博冰冷核正在无感压缩当前轮次事实链..."):
