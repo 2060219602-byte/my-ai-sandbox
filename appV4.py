@@ -1507,7 +1507,7 @@ else:
             cleaned_api_payload.append({"role": "user", "content": latest_summary_prompt})
             cleaned_api_payload.append({
                 "role": "assistant",
-                "content": f"（敏感地将上一秒发生的情节沉淀为行文背景，让时间轴自然向后平移，绝对不在原地机械复读或死咬着旧梗不放）……明白了，上一瞬间的对话与行动已成定局。现在剧情继续向下演进，我会根据当下的最新局势自发展开后续全新的动作和对话。"
+                "content": "（敏感地将上一秒发生的情节沉淀为行文背景，让时间轴自然向后平移，绝对不在原地机械复读或死咬着旧梗不放）……明白了，上一瞬间的对话与行动已成定局。现在剧情继续向下演进，我会根据当下的最新局势自发展开后续全新的动作和对话。"
             })
 
         # 5. 合并最新的用户输入与小说格式死命令
@@ -1534,16 +1534,20 @@ else:
             captured_formatted_thinking = ""
 
             try:
-                # 🚀 严格依照 DeepSeek 官方 2026 原生规范：开启推理，剥离传统冲突参数
+                # 🚀 修正版：严格遵循官方最新原生参数规范，杜绝 SDK 层的属性折断
                 response = client.chat.completions.create(
                     model=model_name, 
                     messages=cleaned_api_payload, 
                     stream=True, 
-                    max_tokens=3000,
+                    max_tokens=5000,
                     timeout=60.0,
-                    # 🔥 官方直连原生调用参数：强制拉满至 high 思考模式
-                    thinking={
-                        "mode": "high"
+                    # ✨ 官方规定：思考强度控制属于 SDK 的顶级传参字段
+                    reasoning_effort="high",
+                    # ✨ 官方规定：激活思考模式的开关字典必须封装在开放式外联体内，防止属性报错
+                    extra_body={
+                        "thinking": {
+                            "type": "enabled"
+                        }
                     }
                 )
 
@@ -1565,17 +1569,17 @@ else:
                                 st.markdown(display_view, unsafe_allow_html=True)
 
                 # 3. 🎯 【格式化思维链终极熔铸闭环】
-                # 流式全部结束后，我们将大模型在隐藏层严格按四个标签推演出的思维链强行清洗
+                # 流式全部结束后，我们将大模型在隐藏层推演出的思维链强行清洗
                 # 直接作为最高密度的养料，重组灌注给你的 0️⃣ 幕！
                 if captured_formatted_thinking:
                     clean_thinking_cot = captured_formatted_thinking.strip()
                     
-                    # 🛡️ 规避机制：利用正则，强行剥离大模型在正文（delta.content）里可能因惯性复读生成的
+                    # 🛡️ 规避机制：利用正则，强行剥离大模型在正文里可能因惯性复读生成的
                     # 半成品或多余的 0️⃣ 标志，防止前后格式发生灾难性重叠
                     full_story_response = re.sub(r'0️⃣\s*（心理：[\s\S]*?）', '', full_story_response).strip()
                     full_story_response = re.sub(r'0️⃣\s*\(心理：[\s\S]*?\)', '', full_story_response).strip()
                     
-                    # 🔥 官方大算力思维链彻底熔铸，完美替换为你指定的 0️⃣ 格式
+                    # 🔥 官方高算力思维链彻底熔铸，完美替换为你指定的 0️⃣ 格式
                     full_story_response = f"0️⃣（心理：\n{clean_thinking_cot}）\n\n" + full_story_response
 
                 # 4. 终极刷新：确保当前及未来历史切片展开时，完美读取包含【格式化思维链】的整装正文
