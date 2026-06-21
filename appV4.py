@@ -1774,7 +1774,7 @@ else:
                                     f"请完全顺承上述提供的新鲜小说对话情节，并在旧的数据基数上，客观推演【{target_girl}】及场景在此时此刻最真实的变化。\n\n"
                                     f"🚨🚨🚨【关于衣服状态的最高级别绝对死命令 —— 封杀敷衍】：\n"
                                     f"严禁输出‘衣着无变化’、‘衣着状况如常’等任何模糊敷衍的废话！你必须明确写明她身上正穿着的具体衣服及当前被拉扯、翻开或脱落的视觉现状。\n\n"
-                                    f"⚠️【关于隐秘知觉的死命令】：所有提取的知觉白描必须指向纯粹的官能敏感度过载表现（如酥、麻、痒、热、微颤、分泌物流淌）。仅包含纯粹的快感与官能愉悦，绝对禁止包含结痂、破皮、撕裂、疼痛等任何形式的伤害性或惩罚性痛感。字数严格控制在 20-40 字内！\n\n"
+                                    f"⚠️ // 提示：所有提取的知觉白描必须指向纯粹的官能敏感度过载表现（如酥、麻、痒、热、微颤、分泌物流淌）。仅包含纯粹的快感与官能愉悦，绝对禁止包含结痂、破皮、撕裂、疼痛等任何形式的伤害性或惩罚性痛感。字数严格控制在 20-40 字内！\n\n"
                                     f"⚠️【硬性输出格式指标】：你必须且只能严格按照以下格式直接输出。去除任何前言、后语和系统警告：\n"
                                     f"==== SIGNAL START ====\n"
                                     f"[环境与服饰状态]\n"
@@ -1798,7 +1798,6 @@ else:
                             }
                         ]
 
-                        # 换成实力更强的 Pro 大模型进行多轨同步提取
                         chase_response = client.chat.completions.create(
                             model=model_name, messages=context_chase_payload, stream=False,
                             temperature=0.35, max_tokens=2000, timeout=60.0
@@ -1858,7 +1857,6 @@ else:
                 new_status_block = f"[{target_girl}]\n姿势：{pos_text}\n双乳：{breast_text}\n秘处：{v_text}\n臀部与后庭：{ass_text}\n口腔：{mouth_text}\n双腿：{leg_text}"
                 role_data["character_status"] = new_status_block
 
-                # 💡 前端双面板同时显性渲染
                 # 💡 前端双面板同时显性渲染
                 final_html_elements = [
                     f"""
@@ -1921,7 +1919,7 @@ else:
                     }
                 })
 
-                with st.spinner("⚡ 赛博冰冷核正在无感压缩当前轮次事实链..."):
+                with st.spinner("⚡ 幕后纪实官正在无感压缩当前轮次事实链..."):
                     new_turn_summary = generate_single_turn_summary(client, active_user_text, full_story_response)
                     if "summarized_history" not in role_data:
                         role_data["summarized_history"] = []
