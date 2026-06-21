@@ -14,9 +14,6 @@ api_key = st.secrets["deepseek"]["api_key"] if "deepseek" in st.secrets else ""
 model_name = st.sidebar.text_input("模型名称 (Model)", value="deepseek-v4-pro")
 client = OpenAI(api_key=api_key, base_url="https://api.deepseek.com")
 
-
-import streamlit as st
-
 import streamlit as st
 
 def run_secure_generation(user_description: str):
@@ -1719,7 +1716,7 @@ else:
                 new_bg_story = f"时间：{str_time}\n地点：{str_place}\n氛围：时空轴无情平移。\n角色着装：{str_clothes}"
                 role_data["background_story"] = new_bg_story
 
-                # 2. 核心修复：更丝滑、更高容错的生理状态提取器（直接按关键字拉取单行，杜绝复杂的后瞻断言出错）
+               # 2. 核心修复：更丝滑、更高容错的生理状态提取器（直接按关键字拉取单行，杜绝复杂的后瞻断言出错）
                 v_text, n_text, t_text = "", "", ""
                 for line in clean_raw_response.split('\n'):
                     line_clean = line.strip()
@@ -1728,23 +1725,23 @@ else:
                     elif "乳头" in line_clean and not n_text:
                         n_text = re.sub(r'^.*?乳头的感觉\s*[：:]\s*', '', line_clean).replace(f"【{target_girl}】感觉到了", "").strip()
                     elif "大腿内侧" in line_clean and not t_text:
-                        # 核心去碎屑：直接把可能顺手带出来的后端标签切掉
-                        t_raw = re.sub(r'^.*?大腿内侧的感觉\s*[：:]\s*', '', line_clean).replace(f"【{target_girl}】感觉到了", "").strip()
-                        # 如果这行后面带了中括号或者建议，只拿中括号前面的纯文本
-                        if "[" in t_raw: t_raw = t_raw.split("[")[0]
-                        if "【" in t_raw: t_raw = t_raw.split("【")[0]
-                        if "建议" in t_raw: t_raw = t_raw.split("建议")[0]
-                        t_text = t_raw.strip()
+                        t_text = re.sub(r'^.*?大腿内侧的感觉\s*[：:]\s*', '', line_clean).replace(f"【{target_girl}】感觉到了", "").strip()
 
                 # 3. 终极安全防空兜底：如果模型完全不按格式乱吐，直接给一个充满感官的自适应常态数据，绝不让前端报空
                 if not v_text or len(v_text) < 3: v_text = "隐秘深处由于体温攀升而大面积充血泥泞，极度敏感过载"
                 if not n_text or len(n_text) < 3: n_text = "娇嫩顶端在布料剧烈摩擦下挺立发硬，泛起阵阵酥麻电流"
                 if not t_text or len(t_text) < 3: t_text = "紧致雪白的肌肤由于羞耻滚烫无比，本能地夹紧颤抖"
 
+                # 🚀【硬核净化补丁】：彻底清除任何可能残留在尾部的 [女儿]、【女儿】、[剧情演进] 等所有中括号标签碎屑
+                # 使用正则把字符串末尾带有 中括号/大括号/建议选项 及其后面的所有杂质全部一次性强行切断抹平
+                v_text = re.sub(r'(?:\[|【|建议|剧情|0️⃣|1️⃣|2️⃣|3️⃣)[\s\S]*$', '', v_text).strip()
+                n_text = re.sub(r'(?:\[|【|建议|剧情|0️⃣|1️⃣|2️⃣|3️⃣)[\s\S]*$', '', n_text).strip()
+                t_text = re.sub(r'(?:\[|【|建议|剧情|0️⃣|1️⃣|2️⃣|3️⃣)[\s\S]*$', '', t_text).strip()
+
                 # 规范化标点与前置角色标签
-                v_text = v_text.strip('。').strip('，').strip(']').strip('】').strip()
-                n_text = n_text.strip('。').strip('，').strip(']').strip('】').strip()
-                t_text = t_text.strip('。').strip('，').strip(']').strip('机制').strip()
+                v_text = v_text.strip('。').strip('，').strip(';').strip(']').strip('】').strip()
+                n_text = n_text.strip('。').strip('，').strip(';').strip(']').strip('】').strip()
+                t_text = t_text.strip('。').strip('，').strip(';').strip(']').strip('】').strip()
 
                 new_status_block = f"[{target_girl}]\n阴道：{v_text}\n乳头：{n_text}\n大腿内侧：{t_text}"
                 role_data["character_status"] = new_status_block
