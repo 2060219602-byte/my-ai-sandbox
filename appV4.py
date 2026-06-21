@@ -1576,14 +1576,14 @@ else:
                 # =======================================================
                 # 此时的 full_story_response 已经是纯净的 1️⃣ 2️⃣ 3️⃣ 正文了
                 
-                # 强行剥离正文里大模型可能由于某种惯性自己生成的 0️⃣ 标志（如果有的话）
+                # =======================================================
+                # 3. 🎯 【格式化思维链终极缝合熔铸闭环 — 纯净版】
+                # =======================================================
                 full_story_response = re.sub(r'0️⃣\s*（心理：[\s\S]*?）', '', full_story_response).strip()
                 full_story_response = re.sub(r'0️⃣\s*\(心理：[\s\S]*?\)', '', full_story_response).strip()
 
-                # 将真正纯净、在后台走完官方原生 High 推理的格式化思维链，优雅地作为 0️⃣ 缝合在最前面
                 if captured_formatted_thinking:
                     clean_thinking_cot = captured_formatted_thinking.strip()
-                    # 过滤掉模型刚动脑时可能产生的出戏自言自语（如“好的，我是xx”）
                     if "[" in clean_thinking_cot:
                         clean_thinking_cot = clean_thinking_cot[clean_thinking_cot.find("["):]
                     else:
@@ -1593,11 +1593,9 @@ else:
                 else:
                     full_story_response = f"0️⃣（心理：……）\n\n" + full_story_response
 
-                # 4. 终极刷新
-                with response_placeholder.container():
-                    st.markdown(novel_text_formatter(full_story_response), unsafe_allow_html=True)
-
-                # 🚀 封闭剧场追发：计算最新生理快感指标
+                # =======================================================
+                # 🚀 封闭剧场高阶追发：推演生理、环境、着装与 3 选项
+                # =======================================================
                 with st.spinner("⚡ 顺承叙事流：正在深度刻录她此时此刻的隐秘身体档案..."):
                     try:
                         old_status_base = role_data.get('character_status', f"[{target_girl}]\n阴道：常态。\n乳头：常态。\n大腿内侧：常态。")
@@ -1625,7 +1623,7 @@ else:
                                 f"大腿内侧的感觉: 【{target_girl}】感觉到了[此处严格基于旧基数叠加最新剧情，专注于紧致肌肤间的皮温骤升、汗湿黏腻、以及欲望越界引发的神经末梢‘软绵颤抖’或本能并拢夹紧，25~50字]\n\n"
                                 f"[剧情演进路线指南]\n"
                                 f"建议选项A: [站在玩家（你）的角度，提供一个倾向于‘直球官能侵占/物理越界’的直白动作台词输入建议，15-30字]\n"
-                                f"建议选项B: [站在玩家（你）的角度，提供一个倾向于‘言语整蛊/心理防线博弈/剧情反转’的趣味对峙输入建议，15-30字]\n"
+                                f"建议选项B: [站在玩家（你）的角度，提供一个倾向于‘言语整蛊/心理防线博弈/剧情反反转’的趣味对峙输入建议，15-30字]\n"
                                 f"建议选项C: [站在玩家（你）的角度，提供一个倾向于‘极度粗俗官能交合/彻底失控堕落’的疯狂剧情推进建议，15-30字]\n"
                                 f"==== SIGNAL END ===="
                             )}
@@ -1633,7 +1631,7 @@ else:
 
                         chase_response = client.chat.completions.create(
                             model="deepseek-v4-flash", messages=context_chase_payload, stream=False,
-                            temperature=0.3, max_tokens=2000, timeout=40.0
+                            temperature=0.3, max_tokens=1500, timeout=40.0
                         )
                         raw_status_response = chase_response.choices[0].message.content.strip()
                     except Exception as chase_err:
@@ -1679,46 +1677,30 @@ else:
                 else:
                     new_status_block = role_data.get("character_status", "")
 
-                # 3. 提取动态建议选项
+                # 3. 提取动态建议选项（彻底废除前面的切片限制，拿满纯文本）
                 opt_a = re.search(r'建议选项A[：:]\s*([\s\S]*?)(?=\n|$)', clean_raw_response)
                 opt_b = re.search(r'建议选项B[：:]\s*([\s\S]*?)(?=\n|$)', clean_raw_response)
                 opt_c = re.search(r'建议选项C[：:]\s*([\s\S]*?)(?=\n|$)', clean_raw_response)
+                
+                str_opt_a = opt_a.group(1).strip() if opt_a else ""
+                str_opt_b = opt_b.group(1).strip() if opt_b else ""
+                str_opt_c = opt_c.group(1).strip() if opt_c else ""
 
                 # =======================================================
-                # 4. 最终全量前端渲染呈现
+                # 4. 最终数据持久化落盒（将选项也作为特征绑定进这条assistant消息）
                 # =======================================================
-                with response_placeholder.container():
-                    st.markdown(novel_text_formatter(full_story_response), unsafe_allow_html=True)
-                    if final_html_elements:
-                        st.markdown("\n".join(final_html_elements), unsafe_allow_html=True)
-                    
-                    if opt_a or opt_b or opt_c:
-                        st.write("")
-                        st.caption("🔮 **剧本导师为您推演的后续行动灵感（点击按钮可快速回填提示）：**")
-                        col_opt1, col_opt2, col_opt3 = st.columns(3)
-                        
-                        if opt_a:
-                            with col_opt1:
-                                if st.button(f"🔴 侵占：{opt_a.group(1).strip()[:18]}...", use_container_width=True, help=opt_a.group(1).strip(), key="btn_opt_a"):
-                                    st.session_state[f"chat_input_v_{st.session_state.clear_version}"] = opt_a.group(1).strip()
-                                    st.toast("已成功回填行动灵感，请在下方输入框继续补充或直接回车发送！")
-                        if opt_b:
-                            with col_opt2:
-                                if st.button(f"🔵 智斗：{opt_b.group(1).strip()[:18]}...", use_container_width=True, help=opt_b.group(1).strip(), key="btn_opt_b"):
-                                    st.session_state[f"chat_input_v_{st.session_state.clear_version}"] = opt_b.group(1).strip()
-                                    st.toast("已成功回填行动灵感，请在下方输入框继续补充或直接回车发送！")
-                        if opt_c:
-                            with col_opt3:
-                                if st.button(f"🔥 失控：{opt_c.group(1).strip()[:18]}...", use_container_width=True, help=opt_c.group(1).strip(), key="btn_opt_c"):
-                                    st.session_state[f"chat_input_v_{st.session_state.clear_version}"] = opt_c.group(1).strip()
-                                    st.toast("已成功回填行动灵感，请在下方输入框继续补充或直接回车发送！")
-
                 single_reply_id = f"reply_{int(time.time() * 1000)}_{random.randint(1000, 9999)}"
                 role_data["chat_history"].append({
                     "role": "assistant",
                     "content": full_story_response + "\n\n" + new_status_block,
                     "timestamp": time.time(),
-                    "msg_id": single_reply_id
+                    "msg_id": single_reply_id,
+                    # ✨ 核心修复：把提取出的完整选项存入数据库，防止页面流逝后消失
+                    "options": {
+                        "A": str_opt_a,
+                        "B": str_opt_b,
+                        "C": str_opt_c
+                    }
                 })
 
                 with st.spinner("⚡ 赛博冰冷核正在无感压缩当前轮次事实链..."):
@@ -1728,7 +1710,7 @@ else:
                     role_data["summarized_history"].append(new_turn_summary)
 
                 save_local_data()
-                st.rerun()
+                st.rerun()  # 🚀 触发刷新，直接交给页面上方的历史记录来统一稳定渲染按钮
             except Exception as e:
                 st.error(f"📡 赛博空间发生 logic 折断：\n\n{str(e)}")
 
