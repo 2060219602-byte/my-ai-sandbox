@@ -264,15 +264,17 @@ st.markdown("""
 
 def novel_text_formatter(raw_text: str) -> str:
     """
-    🎬 智能流式小说排版引擎 (字数阈值拦截+数字符号分段版)：
-    1. 依据纯文本区间的句号（。）进行精确分段换行。
-    2. 💡【字数流智能拦截】：只要双引号内部的内容字数少于等于 14 个字，直接判定为拟声词或短状态，强制保持行内粘连，绝不换行！
-    3. 遇到真正的长剧情对白（字数 > 14），强制终结前文独立成段；遇到闭引号”，强制带着引号收尾并分段。
-    4. 自动检测闭合容器：若句号包含在 ( ) 或 （ ） 内部，强制锁死不进行分段。
-    5. 遇到 1️⃣、2️⃣、3️⃣ 标识符，强制在其前方切断，使其独立作为新幕起点。
+    🎬 智能流式小说排版引擎 (字数阈值拦截+数字符号分段版)
     """
     if not raw_text:
         return raw_text
+
+    # 🚀【硬核净化补丁】：从源头抹去正文前段不慎夹带的角色、视角和心理小碎屑
+    # 彻底粉碎流式输出开头出现的 [女儿]、[心理]、【女儿】 等脏字符
+    raw_text = re.sub(r'^(?:\[.*?\]|【.*?】|0️⃣|好的|我知道了|现在我是|我明白|遵命|开始推演)[\s]*', '', raw_text).strip()
+    # 针对漏网的半截碎屑如 "[女儿" 或 "女儿]" 进行极限抹除
+    raw_text = re.sub(r'^.*?\]', '', raw_text).strip() if (']' in raw_text and not raw_text.startswith('“')) else raw_text
+    raw_text = re.sub(r'^\[[^\s\]]+$', '', raw_text).strip()
 
     # 1. 规范化基础文本
     clean_stream = re.sub(r'\n+', ' ', raw_text).strip()
@@ -320,7 +322,6 @@ def novel_text_formatter(raw_text: str) -> str:
                 quote_content = clean_stream[i+1:closing_idx]
                 
                 # 2. 🌟 纯字数流判定：括号内字数 <= 14 个字（包含标点），直接当成行内文本吞掉
-                # 这样 “滋——”（3字）、“咕叽咕叽”（4字）、“呕呕...咯咯...呜...”（13字）全都会完美留在行内！
                 if len(quote_content) <= 14:
                     full_voice_block = clean_stream[i:closing_idx+1]
                     current_segment.append(full_voice_block)
@@ -1648,9 +1649,14 @@ else:
                             with response_placeholder.container():
                                 st.markdown(display_view, unsafe_allow_html=True)
 
-                # 3. 🎯 【格式化思维链终极格式回填】
+                # =======================================================
+                # 3. 🎯 【格式化思维链终极缝合熔铸闭环 — 强效去杂质版】
+                # =======================================================
+                # 强效拔除大模型有时强行塞进正文里的 0️⃣ 标识和前置角色标记
                 full_story_response = re.sub(r'0️⃣\s*（心理：[\s\S]*?）', '', full_story_response).strip()
                 full_story_response = re.sub(r'0️⃣\s*\(心理：[\s\S]*?\)', '', full_story_response).strip()
+                full_story_response = re.sub(r'^\[.*?\]', '', full_story_response).strip()
+                full_story_response = re.sub(r'^【.*?】', '', full_story_response).strip()
 
                 if captured_formatted_thinking:
                     clean_thinking_cot = captured_formatted_thinking.strip()
