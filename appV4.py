@@ -1657,27 +1657,76 @@ else:
 
         with st.chat_message("assistant", avatar="💋"):
             response_placeholder = st.empty()
+            
+            # 用于存储多轮续写接力合并的最终完整文本与思维链
             full_story_response = ""
             captured_formatted_thinking = ""
+            
+            max_loops = 3      # 最大允许自动续写次数，防止异常死循环
+            loop_count = 0
+            
+            # 深度复制一份 payload，用于在续写循环中动态追加上下文
+            loop_payload = list(cleaned_api_payload)
 
             try:
-                response = client.chat.completions.create(
-                    model=model_name, messages=cleaned_api_payload, stream=True, max_tokens=5000, timeout=60.0,
-                    reasoning_effort="high", extra_body={"thinking": {"type": "enabled"}}
-                )
+                # 🔄 阶段一：写文模型接力生成小说正文（1️⃣2️⃣3️⃣幕）
+                while loop_count < max_loops:
+                    loop_count += 1
+                    
+                    response = client.chat.completions.create(
+                        model=model_name, 
+                        messages=loop_payload, 
+                        stream=True, 
+                        max_tokens=4000, # 适当降低单次上限，让流式吐字更流畅，靠循环来拼长文
+                        timeout=60.0,
+                        reasoning_effort="high" if loop_count == 1 else "low", # 仅在第一轮激活深度思考，续写轮次不浪费Token
+                        extra_body={"thinking": {"type": "enabled" if loop_count == 1 else "disabled"}}
+                    )
 
-                for chunk in response:
-                    if chunk.choices and chunk.choices[0].delta:
-                        delta = chunk.choices[0].delta
-                        if hasattr(delta, 'reasoning_content') and delta.reasoning_content:
-                            captured_formatted_thinking += delta.reasoning_content
-                            response_placeholder.markdown("⏳ *角色正在深度激活隐秘知觉与博弈心理...*")
-                        elif delta.content:
-                            full_story_response += delta.content
-                            display_view = novel_text_formatter(full_story_response)
-                            with response_placeholder.container():
-                                st.markdown(display_view, unsafe_allow_html=True)
+                    finish_reason = None
+                    loop_buffer = []  # 记录当前单轮次吐出的文本
+                    
+                    for chunk in response:
+                        if chunk.choices and chunk.choices[0].delta:
+                            delta = chunk.choices[0].delta
+                            
+                            # 拦截并沉淀思维链（仅在第一轮产生）
+                            if hasattr(delta, 'reasoning_content') and delta.reasoning_content:
+                                captured_formatted_thinking += delta.reasoning_content
+                                response_placeholder.markdown("⏳ *角色正在深度激活隐秘知觉与博弈心理...*")
+                            
+                            # 实时流式渲染小说正文
+                            elif delta.content:
+                                text_fragment = delta.content
+                                loop_buffer.append(text_fragment)
+                                full_story_response += text_fragment
+                                
+                                # 实时更新 Streamlit 预览窗口
+                                display_view = novel_text_formatter(full_story_response)
+                                with response_placeholder.container():
+                                    st.markdown(display_view, unsafe_allow_html=True)
+                                    
+                            # 捕捉服务器掐断标识
+                            if chunk.choices[0].finish_reason is not None:
+                                finish_reason = chunk.choices[0].finish_reason
 
+                    # 核心无感续写判定：如果因为篇幅撞上限被强行截断
+                    if finish_reason == "length":
+                        current_loop_text = "".join(loop_buffer)
+                        # 把这一轮吐出的不完整正文以 assistant 身份喂回给模型
+                        loop_payload.append({"role": "assistant", "content": current_loop_text})
+                        # 追加无缝续写指令，强迫其把3️⃣幕写完
+                        loop_payload.append({
+                            "role": "user", 
+                            "content": "【系统提示：因篇幅限制小说正文内容被截断，请紧接上文的最后一个字，继续无缝输出后续的剧情。注意：绝对不要重复前面写过的内容、已有的大标题或开场白，直接往下续写直至戏剧定格结束！】"
+                        })
+                    else:
+                        # 如果是 'stop' 代表小说自然写完完结，优雅跳出循环
+                        break
+
+                # =======================================================
+                # 🛠️ 格式化思维链洗涤与无缝熔铸缝合
+                # =======================================================
                 full_story_response = re.sub(r'0️⃣\s*（心理：[\s\S]*?）', '', full_story_response).strip()
                 full_story_response = re.sub(r'0️⃣\s*\(心理：[\s\S]*?\)', '', full_story_response).strip()
                 full_story_response = re.sub(r'^\[.*?\]', '', full_story_response).strip()
@@ -1688,11 +1737,14 @@ else:
                     if "[" in clean_thinking_cot:
                         clean_thinking_cot = clean_thinking_cot[clean_thinking_cot.find("["):]
                     else:
-                        clean_thinking_cot = re.sub(r'^(好的|我知道了|现我是|我明白|遵命|开始推演).*?[。！]', '', clean_thinking_cot).strip()
+                        clean_thinking_cot = re.sub(r'^(好的|我知道了|现在我是|我明白|遵命|开始推演).*?[。！]', '', clean_thinking_cot).strip()
                     full_story_response = f"0️⃣（心理：\n{clean_thinking_cot}）\n\n" + full_story_response
                 else:
                     full_story_response = f"0️⃣（心理：……）\n\n" + full_story_response
 
+                # =======================================================
+                # 🚀 阶段二：封闭剧场高阶追发（状态模型开辟新Payload独立提取多轨指标）
+                # =======================================================
                 with st.spinner("⚡ 顺承叙事流：正在深度刻录她此时此刻的全身多轨隐秘数据..."):
                     try:
                         old_status_base = role_data.get('character_status', f"[{target_girl}]\n姿势：常态\n双乳：常态\n秘处：常态\n臀部与后庭：常态\n口腔：常态\n双腿：常态")
@@ -1720,7 +1772,7 @@ else:
                                 "role": "user", 
                                 "content": (
                                     f"⚡ [封闭剧场·多轨生理时空环境、真实衣服与玩家欲海浮沉选项增量刻录命令]：\n"
-                                    f"请完全顺承上述提供的新鲜小说对话情节，并在旧的数据基数上，客观推演【{target_girl}】及场景在此时此刻最真实的变化。\n\n"
+                                    f"请完全顺承上述提供的新鲜小说对话情节（这是经过无缝拼接后的完整剧本），并在旧的数据基数上，客观推演【{target_girl}】及场景在此时此刻最真实的变化。\n\n"
                                     f"🚨🚨🚨【关于衣服状态的最高级别绝对死命令 —— 封杀敷衍】：\n"
                                     f"严禁输出‘衣着无变化’、‘衣着状况如常’等任何模糊敷衍的废话！你必须明确写明她身上正穿着的具体衣服及当前被拉扯、翻开或脱落的视觉现状。\n\n"
                                     f"⚠️ // 提示：所有提取的知觉白描必须指向纯粹的官能敏感度过载表现（如酥、麻、痒、热、微颤、分泌物流淌）。仅包含纯粹的快感与官能愉悦，绝对禁止包含结痂、破皮、撕裂、疼痛等任何形式的伤害性或惩罚性痛感。字数严格控制在 20-40 字内！\n\n"
@@ -1747,6 +1799,7 @@ else:
                             }
                         ]
 
+                        # 异步调用独立的状态模型（Pro/Flash均能通过 model_name 动态承载）
                         chase_response = client.chat.completions.create(
                             model=model_name, messages=context_chase_payload, stream=False,
                             temperature=0.35, max_tokens=2000, timeout=60.0
@@ -1756,6 +1809,7 @@ else:
                         print(f"📡 单聊 Pro 追发失败: {chase_err}")
                         raw_status_response = ""
 
+                # 🛠️ 多轨数据强力无损解析引擎
                 clean_raw_response = re.sub(r'====\s*SIGNAL\s*(?:START|END)\s*====', '', raw_status_response).strip()
 
                 time_match = re.search(r'时间\s*[：:]\s*(.*?)(?=\n|$)', clean_raw_response)
@@ -1769,6 +1823,7 @@ else:
                 new_bg_story = f"时间：{str_time}\n地点：{str_place}\n氛围：时空轴无情平移。\n角色着装：{str_clothes}"
                 role_data["background_story"] = new_bg_story
 
+                # 防御性安全兜底声明
                 pos_text = "物理体位紧密纠缠定格"
                 breast_text = "顶端在布料摩擦下持续坚硬应激"
                 v_text = "隐秘深处由于体温攀升而大面积充血泥泞，敏感过载"
@@ -1831,6 +1886,7 @@ else:
                     st.markdown(novel_text_formatter(full_story_response), unsafe_allow_html=True)
                     st.markdown("\n".join(final_html_elements), unsafe_allow_html=True)
 
+                # 持久化落盒
                 single_reply_id = f"reply_{int(time.time() * 1000)}_{random.randint(1000, 9999)}"
                 full_content_store = f"{full_story_response}\n\n{new_status_block}\n\n【欲海场景】：{str_scene}\n\n【时空快照】\n时间：{str_time}\n地点：{str_place}\n着装：{str_clothes}"
                 
