@@ -1015,61 +1015,56 @@ lazy_insurance_prompt = {
 
 
 # ==========================================
-# 3. 主界面渲染与历史切片折叠机制
+# 3. 主界面渲染与历史切片折叠机制（🔥 彻底修复：支持历史记录及最新消息全量呈现状态与选项）
 # ==========================================
-def render_message_controls_by_id(msg_id, is_last_msg, agent_name_fallback=""):
-    c1, c2, _ = st.columns([0.1, 0.1, 0.8])
-    with c1:
-        if st.button("❌ 删除", key=f"del_btn_{msg_id}"):
-            if is_group_chat:
-                for agent in st.session_state.group_members_list:
-                    agent_history = st.session_state.all_sessions_db["roles"][agent]["chat_history"]
-                    idx_to_del = [i for i, m in enumerate(agent_history) if m.get("msg_id") == msg_id]
-                    if idx_to_del:
-                        target_idx = idx_to_del[0]
-                        if agent_history[target_idx]["role"] == "user" and target_idx + 1 < len(agent_history):
-                            agent_history.pop(target_idx + 1)
-                        agent_history.pop(target_idx)
-            else:
-                hist = role_data["chat_history"]
-                idx_to_del = [i for i, m in enumerate(hist) if m.get("msg_id") == msg_id]
-                if idx_to_del:
-                    target_idx = idx_to_del[0]
-                    if hist[target_idx]["role"] == "user" and target_idx + 1 < len(hist):
-                        hist.pop(target_idx + 1)
-                        if role_data.get("summarized_history"):
-                            role_data["summarized_history"].pop(-1)
-                    elif hist[target_idx]["role"] == "assistant":
-                        if role_data.get("summarized_history"):
-                            role_data["summarized_history"].pop(-1)
-                    hist.pop(target_idx)
-            save_local_data()
-            st.rerun()
-
-    with c2:
-        if is_last_msg:
-            if st.button("🔄 重发", key=f"regen_btn_{msg_id}"):
-                if is_group_chat:
-                    for agent in st.session_state.group_members_list:
-                        agent_history = st.session_state.all_sessions_db["roles"][agent]["chat_history"]
-                        st.session_state.all_sessions_db["roles"][agent]["chat_history"] = [
-                            msg for msg in agent_history if msg.get("msg_id") != msg_id
-                        ]
-                    if agent_name_fallback:
-                        st.session_state.group_active_queue = [agent_name_fallback]
-                        st.session_state.group_active_agent = agent_name_fallback
-                else:
-                    role_data["chat_history"] = [msg for msg in role_data["chat_history"] if
-                                                 msg.get("msg_id") != msg_id]
-                    if role_data.get("summarized_history"):
-                        role_data["summarized_history"].pop(-1)
-                    st.session_state.regenerate_trigger = True
-                save_local_data()
-                st.rerun()
+def render_options_and_status_in_chat(message_item):
+    """
+    ✨ 新增核心辅助渲染器：
+    专门负责在消息气泡内部，把该轮计算出的【隐秘知觉/着装】和【3个动态选项】长效、全量地画在屏幕上
+    """
+    # 1. 检查并渲染绑定的隐秘身体与着装状态（如果 content 尾部没有被其他逻辑处理掉的话）
+    # 实际上由于你的正文和生理块是打包存进 message["content"] 的，display_novel_with_bold_status 会自动画出来。
+    
+    # 2. 检查并长效渲染 3 个灵感选项按钮（去除任何字数切片限制，全量显示）
+    if "options" in message_item and message_item["options"]:
+        opts = message_item["options"]
+        opt_a = opts.get("A", "")
+        opt_b = opts.get("B", "")
+        opt_c = opts.get("C", "")
+        
+        if opt_a or opt_b or opt_c:
+            st.write("")
+            st.caption("🔮 **剧本导师为您推演的后续行动灵感（点击按钮可快速回填提示词）：**")
+            col_opt1, col_opt2, col_opt3 = st.columns(3)
+            
+            # 使用唯一 msg_id 动态拼接 key，彻底防止 Streamlit 报 Duplicate Widget ID 错误
+            m_id = message_item.get("msg_id", str(random.randint(1000, 9999)))
+            
+            if opt_a:
+                with col_opt1:
+                    if st.button(f"🔴 侵占：{opt_a}", use_container_width=True, key=f"btn_opt_a_{m_id}"):
+                        st.session_state[f"chat_input_v_{st.session_state.clear_version}"] = opt_a
+                        st.toast("已成功回填行动灵感，请在下方输入框继续补充或直接回车发送！")
+            if opt_b:
+                with col_opt2:
+                    if st.button(f"🔵 智斗：{opt_b}", use_container_width=True, key=f"btn_opt_b_{m_id}"):
+                        st.session_state[f"chat_input_v_{st.session_state.clear_version}"] = opt_b
+                        st.toast("已成功回填行动灵感，请在下方输入框继续补充或直接回车发送！")
+            if opt_c:
+                with col_opt3:
+                    if st.button(f"🔥 失控：{opt_c}", use_container_width=True, key=f"btn_opt_c_{m_id}"):
+                        st.session_state[f"chat_input_v_{st.session_state.clear_version}"] = opt_c
+                        st.toast("已成功回填行动灵感，请在下方输入框继续补充或直接回车发送！")
 
 
 history_len = len(chat_history_view)
 DISPLAY_LIMIT = 4
+
+# ✨ 针对带有侧边栏或顶部动态状态的展示，在主界面顶部实时拉出当前【时间/地点/着装】面板
+if not is_group_chat and "background_story" in role_data:
+    with st.chunk() if hasattr(st, "chunk") else st.container():
+        st.markdown(f"📌 **当前沙盒物理时空锚点**：")
+        st.info(role_data["background_story"])
 
 if history_len > DISPLAY_LIMIT:
     split_idx = history_len - DISPLAY_LIMIT
@@ -1085,9 +1080,10 @@ if history_len > DISPLAY_LIMIT:
             with st.chat_message(message["role"], avatar=avatar_icon):
                 p_name = message.get("agent_name", "")
                 prefix = f"💬 **【{p_name}】**：\n\n" if p_name else ""
-                # ✨ 统一拦截历史，对所有助手/用户消息重新智能排版与缩进
                 if message["role"] == "assistant":
                     display_novel_with_bold_status(prefix + message["content"])
+                    # 🔥 [核心修复] 在展开的历史记录里也画出这 3 个选项按钮
+                    render_options_and_status_in_chat(message)
                 else:
                     st.markdown(prefix + novel_text_formatter(message["content"]), unsafe_allow_html=True)
             render_message_controls_by_id(message["msg_id"], is_last_msg=False)
@@ -1104,12 +1100,14 @@ if history_len > DISPLAY_LIMIT:
             prefix = f"💬 **【{p_name}】**：\n\n" if p_name else ""
             if message["role"] == "assistant":
                 display_novel_with_bold_status(prefix + message["content"])
+                # 🔥 [核心修复] 在最近几条历史气泡下方画出这 3 个选项按钮
+                render_options_and_status_in_chat(message)
             else:
                 st.markdown(prefix + novel_text_formatter(message["content"]), unsafe_allow_html=True)
         render_message_controls_by_id(message["msg_id"], is_last_msg=is_last,
                                       agent_name_fallback=message.get("agent_name", ""))
 else:
-    # 智能处理未超限时的正常渲染（统一应用包含 novel_text_formatter 的规范排版）
+    # 智能处理未超限时的正常渲染
     for i, message in enumerate(chat_history_view):
         if "msg_id" not in message:
             message["msg_id"] = f"backfill_{i}_{hash(message['content'])}"
@@ -1121,6 +1119,8 @@ else:
             prefix = f"💬 **【{p_name}】**：\n\n" if p_name else ""
             if message["role"] == "assistant":
                 display_novel_with_bold_status(prefix + message["content"])
+                # 🔥 [核心修复] 未超限时，在所有人设气泡下方全量渲染选项按钮
+                render_options_and_status_in_chat(message)
             else:
                 st.markdown(prefix + novel_text_formatter(message["content"]), unsafe_allow_html=True)
         render_message_controls_by_id(message["msg_id"], is_last_msg=is_last,
