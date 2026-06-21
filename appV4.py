@@ -499,9 +499,86 @@ def display_novel_with_bold_status(text: str):
             <span class="role-status-row"><span class="role-status-label">🦵 双腿应激：</span>{leg_v}</span>
         </div>
         """
-        st.markdown(status_html, unsafe_allow_html=True)
+        st.markdown(status_html, unsafe_allow_html=True)def display_novel_with_bold_status(text: str):
+    """
+    🎬 隔离版历史渲染器：通过私有物理印记切分，绝对保护小说正文不被误杀消失
+    """
+    if not text:
+        return
+
+    # 1. 优先提取隔离印记
+    if "🔒DATA_SPLIT_MARKER" in text:
+        parts = text.split("🔒DATA_SPLIT_MARKER")
+        main_story = parts[0].strip()
+        metadata_zone = parts[1].strip()
     else:
-        st.markdown(novel_text_formatter(text), unsafe_allow_html=True)
+        # 兼容未升级的旧数据结构
+        main_story = text.strip()
+        metadata_zone = ""
+
+    # 2. 渲染独立的小说正文（不再受到任何生理和场景正则的干扰）
+    if main_story:
+        st.markdown(novel_text_formatter(main_story), unsafe_allow_html=True)
+
+    # 3. 解析并重绘多轨物理现状面板
+    if metadata_zone:
+        clean_meta = re.sub(r'====\s*SIGNAL\s*(?:START|END)\s*====', '', metadata_zone).strip()
+
+        # 提取时空要素
+        t_m = re.search(r'时间[：:](.*?)(?=\n|$)', clean_meta)
+        p_m = re.search(r'地点[：:](.*?)(?=\n|$)', clean_meta)
+        c_m = re.search(r'(?:着装|角色着装)[：:](.*?)(?=\n|$)', clean_meta)
+        
+        s_time = t_m.group(1).strip() if t_m else ""
+        s_place = p_m.group(1).strip() if p_m else ""
+        s_clothes = c_m.group(1).strip() if c_m else ""
+
+        if s_time:
+            st.markdown(f"""
+            <div class="role-status-block" style="border-left: 5px solid #00b4d8 !important; background: linear-gradient(135deg, rgba(0,180,216,0.06) 0%, rgba(255,255,255,0) 100%) !important; margin-top:0.5rem !important;">
+                <div class="role-status-name" style="color: #00b4d8 !important;">🌐 物理演变时空与服饰现状</div>
+                <span class="role-status-row"><span style="color: #00b4d8 !important; font-weight: 900;">⏱️ 剧情时间：</span>{s_time}</span>
+                <span class="role-status-row"><span style="color: #00b4d8 !important; font-weight: 900;">📍 微观地点：</span>{s_place}</span>
+                <span class="role-status-row"><span style="color: #00b4d8 !important; font-weight: 900;">👗 角色着装：</span>{s_clothes}</span>
+            </div>
+            """, unsafe_allow_html=True)
+
+        # 动态解析全身六维局部官能知觉
+        pos_v, breast_v, secret_v, ass_v, mouth_v, leg_v = "", "", "", "", "", ""
+        for line in clean_meta.split('\n'):
+            line_str = line.strip()
+            if "姿势" in line_str: pos_v = re.sub(r'^.*?[：:]', '', line_str).strip()
+            elif "双乳" in line_str: breast_v = re.sub(r'^.*?[：:]', '', line_str).strip()
+            elif "秘处" in line_str: secret_v = re.sub(r'^.*?[：:]', '', line_str).strip()
+            elif "臀部与后庭" in line_str: ass_v = re.sub(r'^.*?[：:]', '', line_str).strip()
+            elif "口腔" in line_str: mouth_v = re.sub(r'^.*?[：:]', '', line_str).strip()
+            elif "双腿" in line_str: leg_v = re.sub(r'^.*?[：:]', '', line_str).strip()
+
+        if pos_v or breast_v or secret_v:
+            role_name_search = re.search(r'\[([^\]]+)\]', clean_meta)
+            captured_role_name = f"[{role_name_search.group(1)}]" if role_name_search else "角色"
+
+            if not pos_v: pos_v = "物理体位紧密纠缠定格"
+            if not breast_v: breast_v = "顶端在布料摩擦下持续坚硬应激"
+            if not secret_v: secret_v = "隐秘深处极度充血潮热"
+            if not ass_v: ass_v = "滚烫美臀紧绷，承受着物理压迫"
+            if not mouth_v: mouth_v = "吞咽急促，吐息间散发着炽热呼吸"
+            if not leg_v: leg_v = "双腿因敏感而呈现轻微的应激颤抖"
+
+            status_html = f"""
+            <div class="role-status-block">
+                <div class="role-status-name">{captured_role_name} 实时多轨官能知觉</div>
+                <span class="role-status-row"><span class="role-status-label">🎬 当前姿势：</span>{pos_v}</span>
+                <span class="role-status-row"><span class="role-status-label">🍒 双乳知觉：</span>{breast_v}</span>
+                <span class="role-status-row"><span class="role-status-label">💧 秘处状态：</span>{secret_v}</span>
+                <span class="role-status-row"><span class="role-status-label">🍑 臀部后庭：</span>{ass_v}</span>
+                <span class="role-status-row"><span class="role-status-label">👄 口腔呼吸：</span>{mouth_v}</span>
+                <span class="role-status-row"><span class="role-status-label">🦵 双腿应激：</span>{leg_v}</span>
+            </div>
+            """
+            st.markdown(status_html, unsafe_allow_html=True)
+        else:
+            st.markdown(novel_text_formatter(text), unsafe_allow_html=True)
 
 
 # ==========================================
@@ -1886,13 +1963,30 @@ else:
                     st.markdown(novel_text_formatter(full_story_response), unsafe_allow_html=True)
                     st.markdown("\n".join(final_html_elements), unsafe_allow_html=True)
 
-                # 持久化落盒
+                # =======================================================
+                # 5. 最终数据持久化落盒（采用独占式私有锚点隔离，杜绝正则误杀）
+                # =======================================================
                 single_reply_id = f"reply_{int(time.time() * 1000)}_{random.randint(1000, 9999)}"
-                full_content_store = f"{full_story_response}\n\n{new_status_block}\n\n【欲海场景】：{str_scene}\n\n【时空快照】\n时间：{str_time}\n地点：{str_place}\n着装：{str_clothes}"
+                
+                # 使用绝对唯一的 🔒DATA_SPLIT_MARKER 隔离正文与多轨数据
+                full_content_store = (
+                    f"{full_story_response}\n\n"
+                    f"🔒DATA_SPLIT_MARKER\n"
+                    f"{new_status_block}\n\n"
+                    f"【欲海场景】：{str_scene}\n\n"
+                    f"【时空快照】\n时间：{str_time}\n地点：{str_place}\n着装：{str_clothes}"
+                )
                 
                 role_data["chat_history"].append({
-                    "role": "assistant", "content": full_content_store, "timestamp": time.time(), "msg_id": single_reply_id,
-                    "options": {"A": str_opt_a, "B": str_opt_b, "C": str_opt_c}
+                    "role": "assistant", 
+                    "content": full_content_store, 
+                    "timestamp": time.time(), 
+                    "msg_id": single_reply_id,
+                    "options": {
+                        "A": str_opt_a,
+                        "B": str_opt_b,
+                        "C": str_opt_c
+                    }
                 })
 
                 with st.spinner("⚡ 幕后纪实官正在无感压缩当前轮次事实链..."):
