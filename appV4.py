@@ -1137,10 +1137,10 @@ def render_options_and_status_in_chat(message_item):
         opt_a = opts.get("A", "")
         opt_b = opts.get("B", "")
         opt_c = opts.get("C", "")
+        opt_d = opts.get("D", "") # 👈 1. 获取新选项D
 
-        if opt_a or opt_b or opt_c:
+        if opt_a or opt_b or opt_c or opt_d: # 👈 2. 加上判定
             st.write("")
-            # 自动提取历史持久化数据里的场景前置简介
             scene_hint = "⚓ 欲望在海面浮沉，理智与本能交锋，请选择你接下来的内心防线："
             if "【欲海场景】：" in message_item.get("content", ""):
                 try:
@@ -1149,7 +1149,9 @@ def render_options_and_status_in_chat(message_item):
                     pass
 
             st.markdown(f"🧭 **{scene_hint}**")
-            col_opt1, col_opt2, col_opt3 = st.columns(3)
+            
+            # 👇 3. 把原有的 st.columns(3) 改为 st.columns(4)
+            col_opt1, col_opt2, col_opt3, col_opt4 = st.columns(4) 
 
             m_id = message_item.get("msg_id", str(random.randint(1000, 9999)))
 
@@ -1168,6 +1170,13 @@ def render_options_and_status_in_chat(message_item):
                     if st.button(f"🔥 沉沦：{opt_c}", use_container_width=True, key=f"btn_opt_c_{m_id}"):
                         st.session_state[f"chat_input_v_{st.session_state.clear_version}"] = opt_c
                         st.toast("反客为主，自愿溺死于此！请在输入框继续编辑或直接回车！")
+            
+            # 👇 4. 增加选项 D 的按钮渲染逻辑
+            if opt_d:
+                with col_opt4:
+                    if st.button(f"✨ 掌控：{opt_d}", use_container_width=True, key=f"btn_opt_d_{m_id}"):
+                        st.session_state[f"chat_input_v_{st.session_state.clear_version}"] = opt_d
+                        st.toast("局势逆转！请在输入框继续编辑或直接回车！")
 
 
 history_len = len(chat_history_view)
@@ -1418,6 +1427,7 @@ if is_group_chat:
                                 f"建议选项A（抵抗欲望）: [必须以玩家‘我’为主语动作！提供一个试图克制本能、理智刹车的台词行动建议，15-30字]\n"
                                 f"建议选项B（顺从欲望）: [必须以玩家‘我’为主语动作！提供一个半推半就、卸下防线顺应当前暧昧发展的行动建议，15-30字]\n"
                                 f"建议选项C（主动沉沦欲望）: [必须以玩家‘我’为主语动作！提供一个沉沦欲望、加速当前暧昧发展的行动建议，15-30字]\n"
+                                f"建议选项D（反客为主/自定义新维度）: [必须以玩家‘我’为主语动作！提供一个打破常规、出其不意或反向支配的台词行动建议，15-30字]\n"
                                 f"==== SIGNAL END ===="
                             )}
                         ]
@@ -1505,11 +1515,13 @@ if is_group_chat:
                 opt_a = re.search(r'建议选项A（抵抗欲望）\s*[：:]\s*([\s\S]*?)(?=\n|$)', clean_raw_response)
                 opt_b = re.search(r'建议选项B（顺从欲望）\s*[：:]\s*([\s\S]*?)(?=\n|$)', clean_raw_response)
                 opt_c = re.search(r'建议选项C（主动沉沦欲望）\s*[：:]\s*([\s\S]*?)(?=\n|$)', clean_raw_response)
+                opt_d = re.search(r'建议选项D（.*?）\s*[：:]\s*([\s\S]*?)(?=\n|$)', clean_raw_response)
 
                 str_scene = scene_match.group(1).strip() if scene_match else "情欲暗流汹涌，肉体与理智激烈对撞，你将如何抉择？"
                 str_opt_a = opt_a.group(1).strip() if opt_a else ""
                 str_opt_b = opt_b.group(1).strip() if opt_b else ""
                 str_opt_c = opt_c.group(1).strip() if opt_c else ""
+                str_opt_d = opt_d.group(1).strip() if opt_d else ""
 
                 with response_placeholder.container():
                     st.markdown(novel_text_formatter(full_story_response), unsafe_allow_html=True)
@@ -1521,7 +1533,7 @@ if is_group_chat:
                 agent_db["chat_history"].append({
                     "role": "assistant", "content": full_content_store, "timestamp": time.time(),
                     "msg_id": single_reply_id,
-                    "options": {"A": str_opt_a, "B": str_opt_b, "C": str_opt_c}
+                    "options": {"A": str_opt_a, "B": str_opt_b, "C": str_opt_c, "D": str_opt_d}
                 })
 
                 with st.spinner("⚡ 赛博冰冷核正在无感压缩当前轮次事实链..."):
@@ -1795,7 +1807,8 @@ else:
                                     f"场景应对: [用一句话精炼、直白地提炼总结当前紧迫的官能对线局势，并以‘面对此景，你该如何应对？’结尾，30-50字]\n"
                                     f"建议选项A（抵抗欲望）: [必须以玩家‘我’为主语动作！提供一个试图克制本能、理智刹车或推开抗拒的台词行动建议，15-30字]\n"
                                     f"建议选项B（顺从欲望）: [必须以玩家‘我’为主语动作！提供一个半推半就、卸下防线顺应当前暧昧发展的行动建议，15-30字]\n"
-                                    f"建议选项C（主动沉沦欲望）: [官方硬性死命令：必须以玩家‘我’为主语动作！提供一个彻底抛弃理智、反客为主狂热占有或沉沦撕扯的直球行动建议，15-30字]\n"
+                                    f"建议选项C（主动沉沦欲望）: [必须以玩家‘我’为主语动作！提供一个加速沉沦欲望的直球行动建议，15-30字]\n"
+                                    f"建议选项D（反客为主）: [必须以玩家‘我’为主语动作！提供一个打破常规、出其不意的台词行动建议，15-30字]\n"
                                     f"==== SIGNAL END ===="
                                 )
                             }
@@ -1889,11 +1902,13 @@ else:
                 opt_a = re.search(r'建议选项A（抵抗欲望）\s*[：:]\s*([\s\S]*?)(?=\n|$)', clean_raw_response)
                 opt_b = re.search(r'建议选项B（顺从欲望）\s*[：:]\s*([\s\S]*?)(?=\n|$)', clean_raw_response)
                 opt_c = re.search(r'建议选项C（主动沉沦欲望）\s*[：:]\s*([\s\S]*?)(?=\n|$)', clean_raw_response)
+                opt_d = re.search(r'建议选项D（.*?）\s*[：:]\s*([\s\S]*?)(?=\n|$)', clean_raw_response)
 
                 str_scene = scene_match.group(1).strip() if scene_match else "情欲暗流汹涌，肉体与理智激烈对撞，你将如何抉择？"
                 str_opt_a = opt_a.group(1).strip() if opt_a else ""
                 str_opt_b = opt_b.group(1).strip() if opt_b else ""
                 str_opt_c = opt_c.group(1).strip() if opt_c else ""
+                str_opt_d = opt_d.group(1).strip() if opt_d else ""
 
                 # 动态回填到 placeholder（实时渲染华丽的 HTML 面板，防止变成裸露字符串）
                 with response_placeholder.container():
@@ -1928,7 +1943,8 @@ else:
                     "options": {
                         "A": str_opt_a,
                         "B": str_opt_b,
-                        "C": str_opt_c
+                        "C": str_opt_c,
+                        "D": str_opt_d
                     }
                 })
 
