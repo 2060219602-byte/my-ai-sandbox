@@ -1041,9 +1041,9 @@ multi_reply_protocol = (
 
 开篇：【环境动态承接 & 动作流转（防复读）】（全景到中景）
 
-环境微调： 拒绝死板的静态介绍，开篇用1-2句大白话将当前的物理环境（如：光影的微调、空气中弥漫的特定体香/气味、背景声音的变化）与角色的最新动态融为一体。
+环境微调： 拒绝死板的静态介绍，开篇用1-2句大白话将当前的物理环境与角色的最新生理动态融为一体。
 
-即时顺承： 紧扣玩家上一轮的输入。上一轮做完的动作视为过去式，这一秒立刻顺势向下切入最新的物理反应（如：动作的停顿、视线的转移等），让时间轴利落向前推进。
+即时顺承： 紧扣玩家上一轮的输入。上一轮做完的动作视为过去式，这一秒立刻顺势向下切入最新的物理反应，让时间轴利落向前推进。
 
 行文：【台词与直球视觉标签深度交织】（近景特写）
 
@@ -1727,17 +1727,6 @@ else:
                 full_story_response = re.sub(r'0️⃣\s*\(心理：[\s\S]*?\)', '', full_story_response).strip()
                 full_story_response = re.sub(r'^\[.*?\]', '', full_story_response).strip()
                 full_story_response = re.sub(r'^【.*?】', '', full_story_response).strip()
-
-                if captured_formatted_thinking:
-                    clean_thinking_cot = captured_formatted_thinking.strip()
-                    if "[" in clean_thinking_cot:
-                        clean_thinking_cot = clean_thinking_cot[clean_thinking_cot.find("["):]
-                    else:
-                        clean_thinking_cot = re.sub(r'^(好的|我知道了|现在我是|我明白|遵命|开始推演).*?[。！]', '', clean_thinking_cot).strip()
-                    full_story_response = f"0️⃣（心理：\n{clean_thinking_cot}）\n\n" + full_story_response
-                else:
-                    full_story_response = f"0️⃣（心理：……）\n\n" + full_story_response
-
                 # =======================================================
                 # 🚀 阶段二：封闭剧场高阶追发（状态模型开辟新Payload独立提取多轨指标）
                 # =======================================================
