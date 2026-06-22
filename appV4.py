@@ -1743,15 +1743,7 @@ else:
                 full_story_response = re.sub(r'^【.*?】', '', full_story_response).strip()
 
                 if captured_formatted_thinking:
-                    clean_thinking_cot = captured_formatted_thinking.strip()
-                    if "[" in clean_thinking_cot:
-                        clean_thinking_cot = clean_thinking_cot[clean_thinking_cot.find("["):]
-                    else:
-                        clean_thinking_cot = re.sub(r'^(好的|我知道了|现在我是|我明白|遵命|开始推演).*?[。！]', '',
-                                                    clean_thinking_cot).strip()
-                    full_story_response = f"0️⃣（心理：\n{clean_thinking_cot}）\n\n" + full_story_response
-                else:
-                    full_story_response = f"0️⃣（心理：……）\n\n" + full_story_response
+                    pass
 
                 # =======================================================
                 # 🚀 阶段二：封闭剧场高阶追发（状态模型开辟新Payload独立提取多轨指标）
