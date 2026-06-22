@@ -1512,9 +1512,10 @@ if is_group_chat:
                 ]
 
                 scene_match = re.search(r'场景应对\s*[：:]\s*([\s\S]*?)(?=\n|$)', clean_raw_response)
-                opt_a = re.search(r'建议选项A（抵抗欲望）\s*[：:]\s*([\s\S]*?)(?=\n|$)', clean_raw_response)
-                opt_b = re.search(r'建议选项B（顺从欲望）\s*[：:]\s*([\s\S]*?)(?=\n|$)', clean_raw_response)
-                opt_c = re.search(r'建议选项C（主动沉沦欲望）\s*[：:]\s*([\s\S]*?)(?=\n|$)', clean_raw_response)
+                # ✨ 统一替换为全模糊匹配正则，彻底解决因 Prompt 中文变动导致的抓取熔断
+                opt_a = re.search(r'建议选项A（.*?）\s*[：:]\s*([\s\S]*?)(?=\n|$)', clean_raw_response)
+                opt_b = re.search(r'建议选项B（.*?）\s*[：:]\s*([\s\S]*?)(?=\n|$)', clean_raw_response)
+                opt_c = re.search(r'建议选项C（.*?）\s*[：:]\s*([\s\S]*?)(?=\n|$)', clean_raw_response)
                 opt_d = re.search(r'建议选项D（.*?）\s*[：:]\s*([\s\S]*?)(?=\n|$)', clean_raw_response)
 
                 str_scene = scene_match.group(1).strip() if scene_match else "情欲暗流汹涌，肉体与理智激烈对撞，你将如何抉择？"
@@ -1891,9 +1892,10 @@ else:
                 ]
 
                 scene_match = re.search(r'场景应对\s*[：:]\s*([\s\S]*?)(?=\n|$)', clean_raw_response)
-                opt_a = re.search(r'建议选项A（抵抗欲望）\s*[：:]\s*([\s\S]*?)(?=\n|$)', clean_raw_response)
-                opt_b = re.search(r'建议选项B（顺从欲望）\s*[：:]\s*([\s\S]*?)(?=\n|$)', clean_raw_response)
-                opt_c = re.search(r'建议选项C（主动沉沦欲望）\s*[：:]\s*([\s\S]*?)(?=\n|$)', clean_raw_response)
+                # ✨ 统一替换为全模糊匹配正则，彻底解决因 Prompt 中文变动导致的抓取熔断
+                opt_a = re.search(r'建议选项A（.*?）\s*[：:]\s*([\s\S]*?)(?=\n|$)', clean_raw_response)
+                opt_b = re.search(r'建议选项B（.*?）\s*[：:]\s*([\s\S]*?)(?=\n|$)', clean_raw_response)
+                opt_c = re.search(r'建议选项C（.*?）\s*[：:]\s*([\s\S]*?)(?=\n|$)', clean_raw_response)
                 opt_d = re.search(r'建议选项D（.*?）\s*[：:]\s*([\s\S]*?)(?=\n|$)', clean_raw_response)
 
                 str_scene = scene_match.group(1).strip() if scene_match else "情欲暗流汹涌，肉体与理智激烈对撞，你将如何抉择？"
