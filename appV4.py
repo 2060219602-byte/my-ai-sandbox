@@ -1137,9 +1137,9 @@ def render_options_and_status_in_chat(message_item):
         opt_a = opts.get("A", "")
         opt_b = opts.get("B", "")
         opt_c = opts.get("C", "")
-        opt_d = opts.get("D", "") # 👈 1. 获取新选项D
+        opt_d = opts.get("D", "")
 
-        if opt_a or opt_b or opt_c or opt_d: # 👈 2. 加上判定
+        if opt_a or opt_b or opt_c or opt_d:
             st.write("")
             scene_hint = "⚓ 欲望在海面浮沉，理智与本能交锋，请选择你接下来的内心防线："
             if "【欲海场景】：" in message_item.get("content", ""):
@@ -1150,31 +1150,31 @@ def render_options_and_status_in_chat(message_item):
 
             st.markdown(f"🧭 **{scene_hint}**")
             
-            # 👇 3. 把原有的 st.columns(3) 改为 st.columns(4)
+            # ✨ 核心修复：用容器包裹 columns，确保在流式和历史中都能独立占位不被挤压
+            m_id = message_item.get("msg_id", str(random.randint(1000, 9999)))
+            
+            # 创建 4 列
             col_opt1, col_opt2, col_opt3, col_opt4 = st.columns(4) 
 
-            m_id = message_item.get("msg_id", str(random.randint(1000, 9999)))
-
+            # ✨ 使用 with 显式绑定列的作用域，防止组件被覆盖
             if opt_a:
                 with col_opt1:
-                    if st.button(f"🛡️ 抵抗：{opt_a}", use_container_width=True, key=f"btn_opt_a_{m_id}"):
+                    if st.button(f"🛡️ 克制：{opt_a}", use_container_width=True, key=f"btn_opt_a_{m_id}"):
                         st.session_state[f"chat_input_v_{st.session_state.clear_version}"] = opt_a
                         st.toast("已成功拉起克制防线，请在输入框继续编辑或直接回车！")
             if opt_b:
                 with col_opt2:
-                    if st.button(f"🌊 顺从：{opt_b}", use_container_width=True, key=f"btn_opt_b_{m_id}"):
+                    if st.button(f"🌊 拉扯：{opt_b}", use_container_width=True, key=f"btn_opt_b_{m_id}"):
                         st.session_state[f"chat_input_v_{st.session_state.clear_version}"] = opt_b
                         st.toast("防线悄然溃缩……请在输入框继续编辑或直接回车！")
             if opt_c:
                 with col_opt3:
-                    if st.button(f"🔥 沉沦：{opt_c}", use_container_width=True, key=f"btn_opt_c_{m_id}"):
+                    if st.button(f"🔥 直球：{opt_c}", use_container_width=True, key=f"btn_opt_c_{m_id}"):
                         st.session_state[f"chat_input_v_{st.session_state.clear_version}"] = opt_c
                         st.toast("反客为主，自愿溺死于此！请在输入框继续编辑或直接回车！")
-            
-            # 👇 4. 增加选项 D 的按钮渲染逻辑
             if opt_d:
                 with col_opt4:
-                    if st.button(f"✨ 掌控：{opt_d}", use_container_width=True, key=f"btn_opt_d_{m_id}"):
+                    if st.button(f"✨ 主导：{opt_d}", use_container_width=True, key=f"btn_opt_d_{m_id}"):
                         st.session_state[f"chat_input_v_{st.session_state.clear_version}"] = opt_d
                         st.toast("局势逆转！请在输入框继续编辑或直接回车！")
 
