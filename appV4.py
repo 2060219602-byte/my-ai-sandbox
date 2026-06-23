@@ -514,7 +514,7 @@ def generate_single_turn_summary(client, user_text, assistant_text):
 
     try:
         completion = client.chat.completions.create(
-            model="deepseek-v4-flash"
+            model="deepseek-v4-flash",
             messages=[
                 {"role": "system", "content": narrator_prompt},
                 {"role": "user",
