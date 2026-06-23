@@ -1573,6 +1573,9 @@ else:
 
         st.session_state.regenerate_trigger = False
 
+        # ========================================================
+        # 🚀 缓存与逻辑双赢版：单聊 Payload 严格顺序硬核重组
+        # ========================================================
         dynamic_system_prompt = f"{jailbreak_prompt}\n\n"
         dynamic_system_prompt += (
             f"【当前扮演的AI角色名字】：{target_girl}\n"
@@ -1580,12 +1583,10 @@ else:
             f"【当前演出的背景剧情设定】：\n{role_data.get('background_story', '')}"
         )
 
-        # ========================================================
-        # 🚀 逻辑与缓存双赢版：时空知觉置于最近3轮详细对话之后（单聊）
-        # ========================================================
+        # 1. 先放入完全静态的 System Prompt（最易命中缓存）
         cleaned_api_payload = [{"role": "system", "content": dynamic_system_prompt}]
 
-        # 【硬核缓存 1】核心个人记忆备忘录
+        # 2. 放入【核心个人记忆备忘录】（慢变数据）
         if role_data.get("memory_events"):
             memory_ledger_prompt = "📌【核心个人记忆备忘录】重量级设定：\n"
             for idx, event in enumerate(role_data["memory_events"]):
@@ -1593,7 +1594,7 @@ else:
             cleaned_api_payload.append({"role": "user", "content": memory_ledger_prompt})
             cleaned_api_payload.append({"role": "assistant", "content": "（调取灵魂深处的核心羁绊）……这些核心线索我绝不会忘。"})
 
-        # 【硬核缓存 2】早期剧情前情回顾·事实大纲
+        # 3. 放入【早期剧情前情回顾·事实大纲】（放前面命中缓存）
         all_summaries = role_data.get("summarized_history", [])
         older_summaries = all_summaries[-53:-3] if len(all_summaries) > 3 else all_summaries[:-3]
 
@@ -1615,8 +1616,8 @@ else:
 
         # --- ✂️ 缓存安全切断线 ➔ 下方进入极致逻辑叙事流（按时间由远及近） ---
 
-        # 【剧情层 1】提取并加载前3轮详细对话
-        prev_history = role_data["chat_history"][:-1]
+        # 4. 放入【最近3轮详细对话回溯】（作为前置连续镜头）
+        prev_history = role_data["chat_history"][:-1]  # 排除当前这一轮输入
         i = len(prev_history) - 1
         turns_found = []
         while i >= 0 and len(turns_found) < 3:
@@ -1644,12 +1645,13 @@ else:
             cleaned_api_payload.append({"role": "user", "content": latest_detailed_prompt})
             cleaned_api_payload.append({
                 "role": "assistant",
-                "content": "（将最近几轮发生的连续情节沉淀为前置连续镜头，等待接下来的现状显化）……明白了，近期的动作与对白已连接成线。我已准备好承接最新发生的现实。"
+                "content": "（将最近几轮发生的连续情节沉淀为前置连续镜头，等待接下来的现状显化）……剧情正在向下推演。最近一轮的对白已经收尾。）"
             })
 
-        # 【剧情层 2】🔥 放在前3轮之后的、最新的物理时空背景与精简局部知觉
+        # 5. 🔥【核心更正位置】：在这里放入最新的背景环境、服饰与精简生理知觉（比前3轮对话更新、更接近现在）
         old_bg_base = role_data.get('background_story', "时间：未知\n地点：未知\n氛围：未知")
         full_status_single = role_data.get('character_status', '')
+        
         filtered_status_single = f"[{target_girl}] 当前局部敏感知觉：\n"
         for line in full_status_single.split('\n'):
             line_strip = line.strip()
@@ -1658,7 +1660,7 @@ else:
 
         unified_context_prompt = (
             f"📌【物理现场最新时空环境与服饰现状】：\n{old_bg_base}\n\n"
-            f"📌 rushes【承上启下 —— 经历上述3轮对线后，你（{target_girl}）当前最新定格的肉体官能异样】：\n"
+            f"📌【承上启下 —— 经历上述3轮微观纠缠后，你（{target_girl}）当前瞬间最新定格的肉体官能状态】：\n"
             f"\"\"\"\n{filtered_status_single.strip()}\n\"\"\"\n\n"
             f"💡【即时接戏演出令】：请全盘承接上面刚刚发生的3轮纠缠线索，并融合此时此刻体内的真实局部知觉与场景现状，丝滑地展开全新一轮的博弈推演。"
         )
@@ -1667,6 +1669,7 @@ else:
             "role": "assistant",
             "content": "（她身上的衣服已被折腾得有些凌乱，敏感部位传来的阵阵酥麻让她的呼吸瞬间变得急促……剧情在此处彻底衔接，全新的一幕直接爆发。）"
         })
+
 
         if role_data.get("memory_events"):
             memory_ledger_prompt = "📌【核心个人记忆备忘录】：\n"
