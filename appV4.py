@@ -1883,30 +1883,7 @@ else:
                 new_status_block = f"[{target_girl}]\n姿势：{pos_text}\n双乳：{breast_text}\n秘处：{v_text}\n臀部与后庭：{ass_text}\n口腔：{mouth_text}\n双腿：{leg_text}"
                 role_data["character_status"] = new_status_block
 
-                final_html_elements = [
-                    f"""
-                    <div class="role-status-block" style="border-left: 5px solid #00b4d8 !important; background: linear-gradient(135deg, rgba(0,180,216,0.06) 0%, rgba(255,255,255,0) 100%) !important;">
-                        <div class="role-status-name" style="color: #00b4d8 !important;">🌐 物理演变时空与服饰现状</div>
-                        <span class="role-status-row"><span style="color: #00b4d8 !important; font-weight: 900;">⏱️ 剧情时间：</span>{str_time}</span>
-                        <span class="role-status-row"><span style="color: #00b4d8 !important; font-weight: 900;">📍 微观地点：</span>{str_place}</span>
-                        <span class="role-status-row"><span style="color: #00b4d8 !important; font-weight: 900;">👗 角色着装：</span>{str_clothes}</span>
-                    </div>
-                    """,
-                    f"""
-                    <div class="role-status-block">
-                        <div class="role-status-name">[{target_girl}] 实时多轨官能知觉</div>
-                        <span class="role-status-row"><span class="role-status-label">🎬 当前姿势：</span>{pos_text}</span>
-                        <span class="role-status-row"><span class="role-status-label">🍒 双乳知觉：</span>{breast_text}</span>
-                        <span class="role-status-row"><span class="role-status-label">💧 秘处状态：</span>{v_text}</span>
-                        <span class="role-status-row"><span class="role-status-label">🍑 臀部后庭：</span>{ass_text}</span>
-                        <span class="role-status-row"><span class="role-status-label">👄 口腔呼吸：</span>{mouth_text}</span>
-                        <span class="role-status-row"><span class="role-status-label">🦵 双腿应激：</span>{leg_text}</span>
-                    </div>
-                    """
-                ]
-
                 scene_match = re.search(r'场景应对\s*[：:]\s*([\s\S]*?)(?=\n|$)', clean_raw_response)
-                # ✨ 统一替换为全模糊匹配正则，彻底解决因 Prompt 中文变动导致的抓取熔断
                 opt_a = re.search(r'建议选项A（.*?）\s*[：:]\s*([\s\S]*?)(?=\n|$)', clean_raw_response)
                 opt_b = re.search(r'建议选项B（.*?）\s*[：:]\s*([\s\S]*?)(?=\n|$)', clean_raw_response)
                 opt_c = re.search(r'建议选项C（.*?）\s*[：:]\s*([\s\S]*?)(?=\n|$)', clean_raw_response)
@@ -1918,43 +1895,48 @@ else:
                 str_opt_c = opt_c.group(1).strip() if opt_c else ""
                 str_opt_d = opt_d.group(1).strip() if opt_d else ""
 
-                # 动态回填到 placeholder（实时渲染华丽的 HTML 面板，防止变成裸露字符串）
-                with response_placeholder.container():
-                    st.markdown(novel_text_formatter(full_story_response), unsafe_allow_html=True)
-                    st.markdown("\n".join(final_html_elements), unsafe_allow_html=True)
-
-                # =======================================================
-                # 5. 最终数据持久化落盒（采用隔离印记，确保存入数据库的格式统一）
-                # =======================================================
                 single_reply_id = f"reply_{int(time.time() * 1000)}_{random.randint(1000, 9999)}"
-
-                # ❗ 关键修复：落盒时将原始的全身六维变量（pos_text, breast_text 等）拼入隔离区，让历史渲染器能精准重绘
                 full_content_store = (
                     f"{full_story_response}\n\n"
                     f"🔒DATA_SPLIT_MARKER\n"
-                    f"[{target_girl}]\n"
-                    f"姿势：{pos_text}\n"
-                    f"双乳：{breast_text}\n"
-                    f"秘处：{v_text}\n"
-                    f"臀部与后庭：{ass_text}\n"
-                    f"口腔：{mouth_text}\n"
-                    f"双腿：{leg_text}\n\n"
+                    f"{new_status_block}\n\n"
                     f"【欲海场景】：{str_scene}\n\n"
                     f"【时空快照】\n时间：{str_time}\n地点：{str_place}\n着装：{str_clothes}"
                 )
 
-                role_data["chat_history"].append({
+                mock_message_item = {
                     "role": "assistant",
                     "content": full_content_store,
                     "timestamp": time.time(),
                     "msg_id": single_reply_id,
-                    "options": {
-                        "A": str_opt_a,
-                        "B": str_opt_b,
-                        "C": str_opt_c,
-                        "D": str_opt_d
-                    }
-                })
+                    "options": {"A": str_opt_a, "B": str_opt_b, "C": str_opt_c, "D": str_opt_d}
+                }
+
+                final_html_elements = [
+                    f"""<div class="role-status-block" style="border-left: 5px solid #00b4d8 !important; background: linear-gradient(135deg, rgba(0,180,216,0.06) 0%, rgba(255,255,255,0) 100%) !important;">
+                        <div class="role-status-name" style="color: #00b4d8 !important;">🌐 物理演变时空与服饰现状</div>
+                        <span class="role-status-row"><span style="color: #00b4d8 !important; font-weight: 900;">⏱️ 剧情时间：</span>{str_time}</span>
+                        <span class="role-status-row"><span style="color: #00b4d8 !important; font-weight: 900;">📍 微观地点：</span>{str_place}</span>
+                        <span class="role-status-row"><span style="color: #00b4d8 !important; font-weight: 900;">👗 角色着装：</span>{str_clothes}</span>
+                    </div>""",
+                    f"""<div class="role-status-block">
+                        <div class="role-status-name">[{target_girl}] 实时多轨官能知觉</div>
+                        <span class="role-status-row"><span class="role-status-label">🎬 当前姿势：</span>{pos_text}</span>
+                        <span class="role-status-row"><span class="role-status-label">🍒 双乳知觉：</span>{breast_text}</span>
+                        <span class="role-status-row"><span class="role-status-label">💧 秘处状态：</span>{v_text}</span>
+                        <span class="role-status-row"><span class="role-status-label">🍑 臀部后庭：</span>{ass_text}</span>
+                        <span class="role-status-row"><span class="role-status-label">👄 口腔呼吸：</span>{mouth_text}</span>
+                        <span class="role-status-row"><span class="role-status-label">🦵 双腿应激：</span>{leg_text}</span>
+                    </div>"""
+                ]
+
+                # 动态回填到 placeholder（实时渲染华丽的 HTML 面板，防止变成裸露字符串）
+                with response_placeholder.container():
+                    st.markdown(novel_text_formatter(full_story_response), unsafe_allow_html=True)
+                    st.markdown("\n".join(final_html_elements), unsafe_allow_html=True)
+                    render_options_and_status_in_chat(mock_message_item) # 👈 ✨ 核心修复：单聊这里也强制回填出选项按钮！
+
+                role_data["chat_history"].append(mock_message_item)
 
                 with st.spinner("⚡ 幕后纪实官正在无感压缩当前轮次事实链..."):
                     new_turn_summary = generate_single_turn_summary(client, active_user_text, full_story_response)
