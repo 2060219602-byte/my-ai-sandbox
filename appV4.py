@@ -1605,10 +1605,17 @@ else:
                 "content": "（垂下眼眸，过往的历史事实在脑海中闪过）……这些历史事实早已沉淀为我的行事本能。我需要更专注于近期的现实。"
             })
 
+        # 🚀 新增：从完整的状态中只提取双乳和秘处
+        full_status_single = role_data.get('character_status', '')
+        filtered_status_single = f"[{target_girl}]\n"
+        for line in full_status_single.split('\n'):
+            if "双乳" in line or "秘处" in line:
+                filtered_status_single += line + "\n"
+
         # 常态生理数据注入
         unified_context_prompt = (
-            f"📌【物理现场既定事实刻录 —— 这一轮动作前你（{target_girl}）最新的隐秘生理肉体状态】：\n"
-            f"\"\"\"\n{role_data.get('character_status', '')}\n\"\"\"\n\n"
+            f"📌【物理现场既定事实刻录 —— 这一轮动作前你（{target_girl}）最新的隐秘生理肉体状态如下】：\n"
+            f"\"\"\"\n{filtered_status_single.strip()}\n\"\"\"\n\n"  # 👈 这里换成过滤后的状态
             f"💡【小说演化令】：请全盘承接上述此刻体内的真实感官底色，丝滑地展开全新一轮的博弈推演。"
         )
         cleaned_api_payload.append({"role": "user", "content": unified_context_prompt})
