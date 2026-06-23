@@ -1580,12 +1580,12 @@ else:
             f"【当前演出的背景剧情设定】：\n{role_data.get('background_story', '')}"
         )
 
-        # ==========================================
-        # 🚀 完美缓存+后台全数据留存版（单聊）
-        # ==========================================
+        # ========================================================
+        # 🚀 逻辑与缓存双赢版：时空知觉置于最近3轮详细对话之后（单聊）
+        # ========================================================
         cleaned_api_payload = [{"role": "system", "content": dynamic_system_prompt}]
 
-        # 【缓存优化 1】核心个人记忆备忘录（相对固定，放前面）
+        # 【硬核缓存 1】核心个人记忆备忘录
         if role_data.get("memory_events"):
             memory_ledger_prompt = "📌【核心个人记忆备忘录】重量级设定：\n"
             for idx, event in enumerate(role_data["memory_events"]):
@@ -1593,7 +1593,7 @@ else:
             cleaned_api_payload.append({"role": "user", "content": memory_ledger_prompt})
             cleaned_api_payload.append({"role": "assistant", "content": "（调取灵魂深处的核心羁绊）……这些核心线索我绝不会忘。"})
 
-        # 【缓存优化 2】早期剧情前情回顾·事实大纲（放前面命中缓存）
+        # 【硬核缓存 2】早期剧情前情回顾·事实大纲
         all_summaries = role_data.get("summarized_history", [])
         older_summaries = all_summaries[-53:-3] if len(all_summaries) > 3 else all_summaries[:-3]
 
@@ -1613,29 +1613,59 @@ else:
                 "content": "（垂下眼眸，过往的历史事实在脑海中闪过）……这些历史事实早已沉淀为我的行事本能。我需要更专注于近期的现实。"
             })
 
-        # --- 缓存分割线：下方是每轮必变的高频动态数据 ---
+        # --- ✂️ 缓存安全切断线 ➔ 下方进入极致逻辑叙事流（按时间由远及近） ---
 
-        # 🚀 核心修复：1. 完整保留环境信息供剧情参考
+        # 【剧情层 1】提取并加载前3轮详细对话
+        prev_history = role_data["chat_history"][:-1]
+        i = len(prev_history) - 1
+        turns_found = []
+        while i >= 0 and len(turns_found) < 3:
+            if prev_history[i]["role"] == "assistant":
+                if i - 1 >= 0 and prev_history[i-1]["role"] == "user":
+                    turns_found.insert(0, (prev_history[i-1], prev_history[i]))
+                    i -= 2
+                    continue
+            i -= 1
+
+        if turns_found:
+            latest_detailed_prompt = "🎬【📢 当前舞台近景回溯 · 最近3轮详细对话互动锚点】\n"
+            latest_detailed_prompt += "这是你与玩家在刚刚过去的3轮微观互动细节，请作为剧情承接的基础：\n\n"
+            
+            for idx, (u_msg, a_msg) in enumerate(turns_found):
+                clean_ai_content = re.sub(r'\[.*?\][\s\S]*$', '', a_msg["content"]).strip()
+                if "🔒DATA_SPLIT_MARKER" in clean_ai_content:
+                    clean_ai_content = clean_ai_content.split("🔒DATA_SPLIT_MARKER")[0].strip()
+                
+                latest_detailed_prompt += f"========================= [过往第 {3 - idx} 轮近景接戏镜头] =========================\n"
+                latest_detailed_prompt += f"【玩家行动/台词】：\n{u_msg['content']}\n\n"
+                latest_detailed_prompt += f"【你（{target_girl}）剧情回应】：\n{clean_ai_content}\n"
+            
+            latest_detailed_prompt += "=================================================================================\n"
+            cleaned_api_payload.append({"role": "user", "content": latest_detailed_prompt})
+            cleaned_api_payload.append({
+                "role": "assistant",
+                "content": "（将最近几轮发生的连续情节沉淀为前置连续镜头，等待接下来的现状显化）……明白了，近期的动作与对白已连接成线。我已准备好承接最新发生的现实。"
+            })
+
+        # 【剧情层 2】🔥 放在前3轮之后的、最新的物理时空背景与精简局部知觉
         old_bg_base = role_data.get('background_story', "时间：未知\n地点：未知\n氛围：未知")
-        
-        # 🚀 核心修复：2. 精准提取双乳知觉和秘处状态（增强容错率，防止正则失效）
         full_status_single = role_data.get('character_status', '')
-        filtered_status_single = f"[{target_girl}] 核心局部知觉：\n"
+        filtered_status_single = f"[{target_girl}] 当前局部敏感知觉：\n"
         for line in full_status_single.split('\n'):
             line_strip = line.strip()
             if "双乳" in line_strip or "秘处" in line_strip:
                 filtered_status_single += line_strip + "\n"
 
         unified_context_prompt = (
-            f"📌【物理现场环境要素】：\n{old_bg_base}\n\n"
-            f"📌【这一轮动作前你（{target_girl}）最新的局部感官状态】：\n"
+            f"📌【物理现场最新时空环境与服饰现状】：\n{old_bg_base}\n\n"
+            f"📌 rushes【承上启下 —— 经历上述3轮对线后，你（{target_girl}）当前最新定格的肉体官能异样】：\n"
             f"\"\"\"\n{filtered_status_single.strip()}\n\"\"\"\n\n"
-            f"💡【小说演化令】：请全盘承接上述此刻体内的真实感官底色与所处时空环境，丝滑地展开全新一轮的博弈推演。"
+            f"💡【即时接戏演出令】：请全盘承接上面刚刚发生的3轮纠缠线索，并融合此时此刻体内的真实局部知觉与场景现状，丝滑地展开全新一轮的博弈推演。"
         )
         cleaned_api_payload.append({"role": "user", "content": unified_context_prompt})
         cleaned_api_payload.append({
             "role": "assistant",
-            "content": "（敏感地察觉到体内翻涌的局部知觉与所处时空背景）……呼，我全部明白了。我会将最新的环境现状与身体最敏感的肉体异样无痕融入接下来的反应之中。”"
+            "content": "（她身上的衣服已被折腾得有些凌乱，敏感部位传来的阵阵酥麻让她的呼吸瞬间变得急促……剧情在此处彻底衔接，全新的一幕直接爆发。）"
         })
 
         if role_data.get("memory_events"):
