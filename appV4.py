@@ -1754,18 +1754,15 @@ else:
                 if captured_formatted_thinking:
                     pass
 
-                # =======================================================
-                # 🚀 阶段二：封闭剧场高阶追发（状态模型开辟新Payload独立提取多轨指标）
-                # =======================================================
                 with st.spinner("⚡ 顺承叙事流：正在深度刻录她此时此刻的全身多轨隐秘数据..."):
+                    raw_status_response = ""
                     try:
                         old_status_base = role_data.get('character_status',
-                                                        f"[{target_girl}]\n姿势：常态\n双乳：常态\n秘处：常态\n臀部与后庭：常态\n口腔：常态\n双腿：常态")
+                                                       f"[{target_girl}]\n姿势：常态\n双乳：常态\n秘处：常态\n臀部与后庭：常态\n口腔：常态\n双腿：常态")
                         old_bg_base = role_data.get('background_story', "时间：未知\n地点：未知\n氛围：未知")
 
                         initial_clothes_hint = "未指定初始服饰"
-                        combined_search_src = role_data.get('system_role',
-                                                            '') + "\n" + old_bg_base + "\n" + old_status_base
+                        combined_search_src = role_data.get('system_role', '') + "\n" + old_bg_base + "\n" + old_status_base
                         clothes_find = re.search(r'(?:日常穿搭|服饰美学|服饰|穿着|衣服|着装)[：:][\s\S]*?$', combined_search_src)
                         if clothes_find:
                             initial_clothes_hint = clothes_find.group(0)[:400].strip()
@@ -1780,8 +1777,7 @@ else:
                                 )
                             },
                             {"role": "user", "content": f"【该角色已知的所有服饰设定与前置衣服线索】：\n{initial_clothes_hint}"},
-                            {"role": "user",
-                             "content": f"【上一轮既定环境与物理背景】：\n{old_bg_base}\n\n【上一轮肉体生理状态】：\n{old_status_base}"},
+                            {"role": "user", "content": f"【上一轮既定环境与物理背景】：\n{old_bg_base}\n\n【上一轮肉体生理状态】：\n{old_status_base}"},
                             {"role": "user", "content": f"【这一轮刚刚发生的详细对话/小说剧情流】：\n{full_story_response}"},
                             {
                                 "role": "user",
@@ -1815,23 +1811,31 @@ else:
                             }
                         ]
 
-                        # 异步调用独立的状态模型，换成 Flash 且开启 max 思考
-                        chase_response = client.chat.completions.create(
-                            model="deepseek-v4-flash",  # 👈 换成 flash
-                            messages=context_chase_payload, 
-                            stream=False,
-                            temperature=0.35, 
-                            max_tokens=2500, 
-                            timeout=60.0,
-                            reasoning_effort="max",  # 👈 思考开 max
-                            extra_body={"thinking": {"type": "enabled"}}  # 👈 激活深度思考
-                        )
-                        raw_status_response = chase_response.choices[0].message.content.strip()
-                    except Exception as chase_err:
-                        print(f"📡 单聊 Pro 追发失败: {chase_err}")
-                        raw_status_response = ""
+                        # 🔄 3次智能重试核心循环 (单聊)
+                        for attempt in range(3):
+                            try:
+                                chase_response = client.chat.completions.create(
+                                    model="deepseek-v4-flash",
+                                    messages=context_chase_payload, 
+                                    stream=False,
+                                    temperature=0.35, 
+                                    max_tokens=2500, 
+                                    timeout=60.0,
+                                    reasoning_effort="max",
+                                    extra_body={"thinking": {"type": "enabled"}}
+                                )
+                                raw_status_response = chase_response.choices[0].message.content.strip()
+                                if raw_status_response and "建议选项" in raw_status_response:
+                                    break  # 成功，跳出循环
+                            except Exception as chase_err:
+                                if attempt == 2:
+                                    print(f"📡 单聊 Flash 追发连续3次重试失败: {chase_err}")
+                                else:
+                                    time.sleep(1.5 * (attempt + 1))
+                    except Exception as prep_err:
+                        print(f"📡 预准备数据失败: {prep_err}")
 
-                # 🛠️ 多轨数据强力无损解析引擎
+                # 🛠️ 下方保持之前的强力无损解析引擎
                 clean_raw_response = re.sub(r'====\s*SIGNAL\s*(?:START|END)\s*====', '', raw_status_response).strip()
 
                 time_match = re.search(r'时间\s*[：:]\s*(.*?)(?=\n|$)', clean_raw_response)
@@ -1845,7 +1849,6 @@ else:
                 new_bg_story = f"时间：{str_time}\n地点：{str_place}\n氛围：时空轴无情平移。\n角色着装：{str_clothes}"
                 role_data["background_story"] = new_bg_story
 
-                # 防御性安全兜底声明
                 pos_text = "物理体位紧密纠缠定格"
                 breast_text = "顶端在布料摩擦下持续坚硬应激"
                 v_text = "隐秘深处由于体温攀升而大面积充血泥泞，敏感过载"
@@ -1856,22 +1859,17 @@ else:
                 for line in clean_raw_response.split('\n'):
                     line_clean = line.strip()
                     if "姿势" in line_clean:
-                        pos_text = re.sub(r'^.*?姿势\s*[：:]\s*', '', line_clean).replace(f"【{target_girl}】感觉到了",
-                                                                                       "").strip()
+                        pos_text = re.sub(r'^.*?姿势\s*[：:]\s*', '', line_clean).replace(f"【{target_girl}】感觉到了", "").strip()
                     elif "双乳" in line_clean:
-                        breast_text = re.sub(r'^.*?双乳\s*[：:]\s*', '', line_clean).replace(f"【{target_girl}】感觉到了",
-                                                                                          "").strip()
+                        breast_text = re.sub(r'^.*?双乳\s*[：:]\s*', '', line_clean).replace(f"【{target_girl}】感觉到了", "").strip()
                     elif "秘处" in line_clean:
                         v_text = re.sub(r'^.*?秘处\s*[：:]\s*', '', line_clean).replace(f"【{target_girl}】感觉到了", "").strip()
                     elif "臀部与后庭" in line_clean:
-                        ass_text = re.sub(r'^.*?臀部与后庭\s*[：:]\s*', '', line_clean).replace(f"【{target_girl}】感觉到了",
-                                                                                          "").strip()
+                        ass_text = re.sub(r'^.*?臀部与后庭\s*[：:]\s*', '', line_clean).replace(f"【{target_girl}】感觉到了", "").strip()
                     elif "口腔" in line_clean:
-                        mouth_text = re.sub(r'^.*?口腔\s*[：:]\s*', '', line_clean).replace(f"【{target_girl}】感觉到了",
-                                                                                         "").strip()
+                        mouth_text = re.sub(r'^.*?口腔\s*[：:]\s*', '', line_clean).replace(f"【{target_girl}】感觉到了", "").strip()
                     elif "双腿" in line_clean:
-                        leg_text = re.sub(r'^.*?双腿\s*[：:]\s*', '', line_clean).replace(f"【{target_girl}】感觉到了",
-                                                                                       "").strip()
+                        leg_text = re.sub(r'^.*?双腿\s*[：:]\s*', '', line_clean).replace(f"【{target_girl}】感觉到了", "").strip()
 
                 pos_text = re.sub(r'(?:\[|【|建议|剧情|0️⃣|1️⃣|2️⃣|3️⃣)[\s\S]*$', '', pos_text).strip('。').strip()
                 breast_text = re.sub(r'(?:\[|【|建议|剧情|0️⃣|1️⃣|2️⃣|3️⃣)[\s\S]*$', '', breast_text).strip('。').strip()
@@ -1895,6 +1893,10 @@ else:
                 str_opt_c = opt_c.group(1).strip() if opt_c else ""
                 str_opt_d = opt_d.group(1).strip() if opt_d else ""
 
+                with response_placeholder.container():
+                    st.markdown(novel_text_formatter(full_story_response), unsafe_allow_html=True)
+                    st.markdown("\n".join(final_html_elements), unsafe_allow_html=True)
+
                 single_reply_id = f"reply_{int(time.time() * 1000)}_{random.randint(1000, 9999)}"
                 full_content_store = (
                     f"{full_story_response}\n\n"
@@ -1912,29 +1914,10 @@ else:
                     "options": {"A": str_opt_a, "B": str_opt_b, "C": str_opt_c, "D": str_opt_d}
                 }
 
-                final_html_elements = [
-                    f"""<div class="role-status-block" style="border-left: 5px solid #00b4d8 !important; background: linear-gradient(135deg, rgba(0,180,216,0.06) 0%, rgba(255,255,255,0) 100%) !important;">
-                        <div class="role-status-name" style="color: #00b4d8 !important;">🌐 物理演变时空与服饰现状</div>
-                        <span class="role-status-row"><span style="color: #00b4d8 !important; font-weight: 900;">⏱️ 剧情时间：</span>{str_time}</span>
-                        <span class="role-status-row"><span style="color: #00b4d8 !important; font-weight: 900;">📍 微观地点：</span>{str_place}</span>
-                        <span class="role-status-row"><span style="color: #00b4d8 !important; font-weight: 900;">👗 角色着装：</span>{str_clothes}</span>
-                    </div>""",
-                    f"""<div class="role-status-block">
-                        <div class="role-status-name">[{target_girl}] 实时多轨官能知觉</div>
-                        <span class="role-status-row"><span class="role-status-label">🎬 当前姿势：</span>{pos_text}</span>
-                        <span class="role-status-row"><span class="role-status-label">🍒 双乳知觉：</span>{breast_text}</span>
-                        <span class="role-status-row"><span class="role-status-label">💧 秘处状态：</span>{v_text}</span>
-                        <span class="role-status-row"><span class="role-status-label">🍑 臀部后庭：</span>{ass_text}</span>
-                        <span class="role-status-row"><span class="role-status-label">👄 口腔呼吸：</span>{mouth_text}</span>
-                        <span class="role-status-row"><span class="role-status-label">🦵 双腿应激：</span>{leg_text}</span>
-                    </div>"""
-                ]
-
-                # 动态回填到 placeholder（实时渲染华丽的 HTML 面板，防止变成裸露字符串）
                 with response_placeholder.container():
                     st.markdown(novel_text_formatter(full_story_response), unsafe_allow_html=True)
                     st.markdown("\n".join(final_html_elements), unsafe_allow_html=True)
-                    render_options_and_status_in_chat(mock_message_item) # 👈 ✨ 核心修复：单聊这里也强制回填出选项按钮！
+                    render_options_and_status_in_chat(mock_message_item)
 
                 role_data["chat_history"].append(mock_message_item)
 
