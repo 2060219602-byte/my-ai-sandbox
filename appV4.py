@@ -1616,35 +1616,30 @@ else:
 
         cleaned_api_payload = [{"role": "system", "content": dynamic_system_prompt}]
 
+        # ==========================================
+        # 核心修改：提炼前50轮的概述历史（不含最后3轮）
+        # ==========================================
         all_summaries = role_data.get("summarized_history", [])
-        older_summaries = all_summaries[-50:-1] if len(all_summaries) > 1 else []
-
-        prev_history = role_data["chat_history"][:-1]
-        latest_detailed_turn = ""
-        ai_messages = [m for m in prev_history if m["role"] == "assistant"]
-        if ai_messages:
-            last_ai_msg = ai_messages[-1]
-            idx = prev_history.index(last_ai_msg)
-            last_user_content = prev_history[idx - 1]["content"] if idx > 0 else "无"
-            last_ai_content = re.sub(r'\[.*?\][\s\S]*$', '', last_ai_msg["content"]).strip()
-            latest_detailed_turn = f"【玩家上一轮行动/台词】：\n{last_user_content}\n\n【你（{target_girl}）上一轮剧情回应】：\n{last_ai_content}"
+        # 排除最后3轮对应的概述，向前追溯50轮
+        older_summaries = all_summaries[-53:-3] if len(all_summaries) > 3 else all_summaries[:-3]
 
         if older_summaries:
             formatted_lines = []
             for idx, line in enumerate(older_summaries):
-                formatted_lines.append(f"🎬 [过往戏剧回顾 · 第 {idx + 1} 幕档案]:\n{line}")
+                formatted_lines.append(f"🎬 [过往戏剧回顾 · 事实大纲]:\n{line}")
 
             chronicle_content = (
-                    "💡【剧情前情回顾 · 历史深层记忆总览】\n"
-                    "以下情节在戏剧时间线上均已完全落幕并封存，已化为你本能的潜意识背景，无需在后续回复中复述它们：\n\n" +
-                    "\n\n-------------------- \n\n".join(formatted_lines)
+                "💡【早期剧情前情回顾 · 历史深层记忆总览】\n"
+                "以下是更早之前发生的情节事实大纲，已化为你本能的潜意识背景，无需在后续回复中复述它们：\n\n" +
+                "\n\n-------------------- \n\n".join(formatted_lines)
             )
             cleaned_api_payload.append({"role": "user", "content": chronicle_content})
             cleaned_api_payload.append({
                 "role": "assistant",
-                "content": "（垂下眼眸，那些曾经纠缠的既定事实走马灯般在脑海中闪过，随后深深吸了一口气）……这些久远的历史事实早已沉淀为我的行事本能。我不会遗忘，但我需要更专注于眼前的现实。"
+                "content": "（垂下眼眸，过往的历史事实在脑海中闪过）……这些历史事实早已沉淀为我的行事本能。我需要更专注于近期的现实。"
             })
 
+        # 常态生理数据注入
         unified_context_prompt = (
             f"📌【物理现场既定事实刻录 —— 这一轮动作前你（{target_girl}）最新的隐秘生理肉体状态】：\n"
             f"\"\"\"\n{role_data.get('character_status', '')}\n\"\"\"\n\n"
@@ -1653,31 +1648,55 @@ else:
         cleaned_api_payload.append({"role": "user", "content": unified_context_prompt})
         cleaned_api_payload.append({
             "role": "assistant",
-            "content": "（敏感地察觉到体内翻涌的最新知觉与生理变化，强行将其沉淀于感官暗流中）……呼，我全部明白了。我会将最新的身体异样无痕融入接下来的反应之中。”"
+            "content": "（敏感地察觉到体内翻涌的最新知觉与生理变化）……呼，我全部明白了。我会将最新的身体异样无痕融入接下来的反应之中。”"
         })
 
         if role_data.get("memory_events"):
-            memory_ledger_prompt = "📌【核心个人记忆备忘录 —— 这是我们之间发生的既定事实】：\n"
+            memory_ledger_prompt = "📌【核心个人记忆备忘录】：\n"
             for idx, event in enumerate(role_data["memory_events"]):
                 memory_ledger_prompt += f"{idx + 1}. {event}\n"
-
             cleaned_api_payload.append({"role": "user", "content": memory_ledger_prompt})
-            cleaned_api_payload.append({
-                "role": "assistant",
-                "content": f"（调取灵魂深处永不磨灭的核心羁绊，将其作为不可动摇的行为逻辑基底）……这些核心线索我绝不会忘。我会严格遵循这些人设基调进行回应。"
-            })
+            cleaned_api_payload.append({"role": "assistant", "content": "（调取灵魂深处的核心羁绊）……这些核心线索我绝不会忘。"})
 
-        if latest_detailed_turn:
-            latest_summary_prompt = (
-                f"🎬【📢 当前舞台核心爆发点 · 上一秒详细对话与互动锚点】\n"
-                f"请注意！这是你（{target_girl}）与玩家在【上一瞬间】刚刚发生的详细对话与微观互动细节，是当前对线火药味的直接来源：\n"
-                f"\"\"\"\n{latest_detailed_turn}\n\"\"\"\n\n"
-                f"💡【即时接戏演出令】：大模型请注意，上面的详细内容就是你当下的‘上一秒画面’！严禁机械复读或原封不动重复它，请直接无缝顺承这些细节线索，针对玩家接下来的输入展开高密度的肢体与对白演艺！"
-            )
+        # ==========================================
+        # 核心修改：提取并分割前3轮的详细对话
+        # ==========================================
+        prev_history = role_data["chat_history"][:-1]  # 排除当前这一轮输入
+        detailed_turns = []
+        
+        # 从后往前找出最近的3轮完整的 user-assistant 对话
+        # 一轮代表：一个 user 加上随后的一个 assistant 消息
+        i = len(prev_history) - 1
+        turns_found = []
+        while i >= 0 and len(turns_found) < 3:
+            if prev_history[i]["role"] == "assistant":
+                if i - 1 >= 0 and prev_history[i-1]["role"] == "user":
+                    turns_found.insert(0, (prev_history[i-1], prev_history[i]))
+                    i -= 2
+                    continue
+            i -= 1
+
+        if turns_found:
+            latest_detailed_prompt = "🎬【📢 当前舞台近景回溯 · 最近3轮详细对话互动锚点】\n"
+            latest_detailed_prompt += "这是你与玩家在【最近3轮瞬间】刚刚发生的微观互动细节，请严格遵循这些线索的时间轴向下发展，严禁机械复读原地打转：\n\n"
+            
+            for idx, (u_msg, a_msg) in enumerate(turns_found):
+                clean_ai_content = re.sub(r'\[.*?\][\s\S]*$', '', a_msg["content"]).strip()
+                # 兼容处理带隔离印记的数据
+                if "🔒DATA_SPLIT_MARKER" in clean_ai_content:
+                    clean_ai_content = clean_ai_content.split("🔒DATA_SPLIT_MARKER")[0].strip()
+                
+                latest_detailed_prompt += f"========================= [最近第 {3 - idx} 轮近景接戏线索] =========================\n"
+                latest_detailed_prompt += f"【玩家行动/台词】：\n{u_msg['content']}\n\n"
+                latest_detailed_prompt += f"【你（{target_girl}）剧情回应】：\n{clean_ai_content}\n"
+            
+            latest_detailed_prompt += "=================================================================================\n\n"
+            latest_detailed_prompt += "💡【即时接戏演出令】：上面的内容就是你的‘前置连续镜头’！请直接无缝顺承最近一轮的细节，针对玩家接下来的输入展开后续演绎！"
+            
             cleaned_api_payload.append({"role": "user", "content": latest_summary_prompt})
             cleaned_api_payload.append({
                 "role": "assistant",
-                "content": "（敏感地将上一秒发生的情节沉淀为行文背景，让时间轴自然向后平移，绝对不在原地机械复读或死咬着旧梗不放）……明白了，上一瞬间的对话与行动已成定局。现在剧情继续向下演进，我会根据当下的最新局势自发展开后续全新的动作和对话。"
+                "content": "（将最近几轮连续发生的情节沉淀为背景，让时间轴自然向后平移）……明白了，近期的动作与对白已连接成线。剧情继续向下演进，我会自发展开后续全新的动作和对话。"
             })
 
         if "继续推演" in active_user_text or "重算" in active_user_text:
