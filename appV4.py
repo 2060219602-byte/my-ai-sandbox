@@ -1148,9 +1148,9 @@ def render_options_and_status_in_chat(message_item):
             # ✨ 使用 with 显式绑定列的作用域，防止组件被覆盖
             if opt_a:
                 with col_opt1:
-                    if st.button(f"🛡️ 克制：{opt_a}", use_container_width=True, key=f"btn_opt_a_{m_id}"):
+                    if st.button(f"🛡️ 顺从：{opt_a}", use_container_width=True, key=f"btn_opt_a_{m_id}"):
                         st.session_state[f"chat_input_v_{st.session_state.clear_version}"] = opt_a
-                        st.toast("已成功拉起克制防线，请在输入框继续编辑或直接回车！")
+                        st.toast("顺应对方要求，请在输入框继续编辑或直接回车！")
             if opt_b:
                 with col_opt2:
                     if st.button(f"🌊 拉扯：{opt_b}", use_container_width=True, key=f"btn_opt_b_{m_id}"):
