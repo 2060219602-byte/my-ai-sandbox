@@ -520,21 +520,34 @@ def generate_single_turn_summary(client, user_text, assistant_text):
                 model="deepseek-v4-flash",
                 messages=[
                     {"role": "system", "content": narrator_prompt},
-                    {"role": "user",
-                     "content": f"请立刻切换为旁白官身份，为主观戏剧档案留下两行精细的纪实大纲：\n玩家行动：{user_text}\n角色响应：{clean_assistant}"}
+                    {"role": "user", "content": f"请立刻切换为旁白官身份...\n玩家行动：{user_text}\n角色响应：{clean_assistant}"}
                 ],
                 stream=False,
-                temperature=round(current_temp, 2),  # 确保浮点数精度正常
+                temperature=round(current_temp, 2),
                 max_tokens=2000,   
                 reasoning_effort="max",  
                 extra_body={"thinking": {"type": "enabled"}}  
             )
             
+            # ⚡ 捕捉结束状态：如果是因为长度截断(length)而不是正常结束(stop)，主动抛出异常触发重试！
+            finish_reason = completion.choices[0].finish_reason
+            if finish_reason == "length":
+                raise ValueError("🚨 大纲生成由于篇幅或思考超限被强行截断，启动重试！")
+
             res_content = completion.choices[0].message.content.strip()
             
-            # 防御机制：如果模型返回了空文本或者触发了某些拒绝关键词，主动视为失败并进入重试
-            if not res_content or "抱歉" in res_content or "无法提供" in res_content:
+            # 1. 基础合规与标签完整性审计
+            if not res_content or "抱歉" in res_content:
                 raise ValueError("模型返回了合规拒绝文本或空内容")
+                
+            if "【你】" not in res_content or "【虚拟角色】" not in res_content:
+                raise ValueError("🚨 大纲核心实体标签不完整，启动重试！")
+            
+            # 2. ✨【核心新增】：语义断尾/烂尾极限拦截卡尺
+            # 如果文本两层标签都有，但最后不是以常见的结句标点（。、】、”、）结尾，说明字数在半路吐不出来了
+            allowed_endings = ("。", "】", "”", "；", ";", "]", "!")
+            if not res_content.endswith(allowed_endings):
+                raise ValueError(f"🚨 概述文本虽然包含双标签，但句尾字符为 '{res_content[-1]}'，明显未正常结句，判定为半路截断，启动重试！")
                 
             return res_content
             
