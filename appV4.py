@@ -1902,6 +1902,29 @@ else:
                 new_status_block = f"[{target_girl}]\n姿势：{pos_text}\n双乳：{breast_text}\n秘处：{v_text}\n臀部与后庭：{ass_text}\n口腔：{mouth_text}\n双腿：{leg_text}"
                 role_data["character_status"] = new_status_block
 
+                # ✨【核心修复补丁】：在此处为单聊模式补上缺失的网页前端 HTML 元素拼装
+                final_html_elements = [
+                    f"""
+                    <div class="role-status-block" style="border-left: 5px solid #00b4d8 !important; background: linear-gradient(135deg, rgba(0,180,216,0.06) 0%, rgba(255,255,255,0) 100%) !important;">
+                        <div class="role-status-name" style="color: #00b4d8 !important;">🌐 物理演变时空与服饰现状</div>
+                        <span class="role-status-row"><span style="color: #00b4d8 !important; font-weight: 900;">⏱️ 剧情时间：</span>{str_time}</span>
+                        <span class="role-status-row"><span style="color: #00b4d8 !important; font-weight: 900;">📍 微观地点：</span>{str_place}</span>
+                        <span class="role-status-row"><span style="color: #00b4d8 !important; font-weight: 900;">👗 角色着装：</span>{str_clothes}</span>
+                    </div>
+                    """,
+                    f"""
+                    <div class="role-status-block">
+                        <div class="role-status-name">[{target_girl}] 实时多轨官能知觉</div>
+                        <span class="role-status-row"><span class="role-status-label">🎬 当前姿势：</span>{pos_text}</span>
+                        <span class="role-status-row"><span class="role-status-label">🍒 双乳知觉：</span>{breast_text}</span>
+                        <span class="role-status-row"><span class="role-status-label">💧 秘处状态：</span>{v_text}</span>
+                        <span class="role-status-row"><span class="role-status-label">🍑 臀部后庭：</span>{ass_text}</span>
+                        <span class="role-status-row"><span class="role-status-label">👄 口腔呼吸：</span>{mouth_text}</span>
+                        <span class="role-status-row"><span class="role-status-label">🦵 双腿应激：</span>{leg_text}</span>
+                    </div>
+                    """
+                ]
+
                 scene_match = re.search(r'场景应对\s*[：:]\s*([\s\S]*?)(?=\n|$)', clean_raw_response)
                 opt_a = re.search(r'建议选项A（.*?）\s*[：:]\s*([\s\S]*?)(?=\n|$)', clean_raw_response)
                 opt_b = re.search(r'建议选项B（.*?）\s*[：:]\s*([\s\S]*?)(?=\n|$)', clean_raw_response)
@@ -1914,6 +1937,7 @@ else:
                 str_opt_c = opt_c.group(1).strip() if opt_c else ""
                 str_opt_d = opt_d.group(1).strip() if opt_d else ""
 
+                # 💡 下方的 st.markdown 就能够顺利找到变量并完美渲染，不再报错崩溃了！
                 with response_placeholder.container():
                     st.markdown(novel_text_formatter(full_story_response), unsafe_allow_html=True)
                     st.markdown("\n".join(final_html_elements), unsafe_allow_html=True)
