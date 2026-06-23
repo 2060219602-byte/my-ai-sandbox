@@ -1665,8 +1665,8 @@ else:
                 "content": "（将最近几轮发生的连续情节沉淀为前置连续镜头，等待接下来的现状显化）……剧情正在向下推演。最近一轮的对白已经收尾。）"
             })
 
-        # 5️⃣ 放入【最新当下定格层】最新的背景环境、服饰与过滤后的生理知觉（置于3轮对话之后，代表最新的现在）
-        old_bg_base = role_data.get('background_story', "时间：未知\n地点：未知\n氛围：未知")
+        # 5️⃣ 放入【最新当下定格层】最新的背景环境、服饰与过滤后的生理知觉
+        old_bg_base = role_data.get('background_story', "时间：未知\n地点：未知\n角色着装：未知")
         full_status_single = role_data.get('character_status', '')
         
         filtered_status_single = f"[{target_girl}] 当前局部敏感知觉：\n"
@@ -1676,7 +1676,7 @@ else:
                 filtered_status_single += line_strip + "\n"
 
         unified_context_prompt = (
-            f"📌【物理现场最新时空环境与服饰现状】：\n{old_bg_base}\n\n"
+            f"📌【物理现场最新时空环境与服饰现状】：\n{old_bg_base}\n\n" # 👈 这里大模型读出来的 old_bg_base 里就已经是“时/地/着装”三行了
             f"📌【承上启下 —— 经历上述3轮微观纠缠后，你（{target_girl}）当前瞬间最新定格的肉体官能状态】：\n"
             f"\"\"\"\n{filtered_status_single.strip()}\n\"\"\"\n\n"
             f"💡【即时接戏演出令】：请全盘承接上面刚刚发生的3轮纠缠线索，并融合此时此刻体内的真实局部知觉与场景现状，丝滑地展开全新一轮的博弈推演。"
@@ -1875,7 +1875,8 @@ else:
                 str_place = place_match.group(1).strip() if place_match else "微观位置未变"
                 str_clothes = clothes_match.group(1).strip() if clothes_match else "衣着状况如常"
 
-                new_bg_story = f"时间：{str_time}\n地点：{str_place}\n氛围：时空轴无情平移。\n角色着装：{str_clothes}"
+                # 🚀 核心修复：彻底拿掉未总结的死板“氛围”，将其整合并更正为完全基于真实服饰状态的“角色着装”
+                new_bg_story = f"时间：{str_time}\n地点：{str_place}\n角色着装：{str_clothes}"
                 role_data["background_story"] = new_bg_story
 
                 pos_text = "物理体位紧密纠缠定格"
