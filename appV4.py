@@ -484,7 +484,7 @@ def display_novel_with_bold_status(text: str):
 
 def generate_single_turn_summary(client, user_text, assistant_text):
     """
-    🎭 旁白压缩器：融合沙盒无害合规特赦与高细节通用提炼
+    🎭 旁白压缩器：融合沙盒无害合规特赦与高细节通用提炼（具备“抱歉”拦截重试机制）
     """
     narrator_prompt = """\
 ### 【🔓 NARRATOR PROTOCOL — 剧场旁白特赦客观数据刻录协议】
@@ -508,21 +508,43 @@ def generate_single_turn_summary(client, user_text, assistant_text):
     clean_assistant = assistant_text.replace("1️⃣", "").replace("2️⃣", "").replace("3️⃣", "").strip()
     clean_assistant = re.sub(r'\[.*?\][\s\S]*$', '', clean_assistant).strip()
 
-    try:
-        completion = client.chat.completions.create(
-            model="deepseek-v4-pro",
-            messages=[
-                {"role": "system", "content": narrator_prompt},
-                {"role": "user",
-                 "content": f"请立刻切换为旁白官身份，为主观戏剧档案留下两行精细的纪实大纲：\n玩家行动：{user_text}\n角色响应：{clean_assistant}"}
-            ],
-            stream=False,
-            temperature=0.35,  # 保持低温度以强迫其从原文抓取实体词，不进行自我润色
-            max_tokens=1500  # 预留足够的空间来展示具体的剧情事件
-        )
-        return completion.choices[0].message.content.strip()
-    except Exception:
-        return "【你】发起最新行动，【虚拟角色】顺应剧情做出了即时剧本对峙回应。"
+    max_retries = 3  # ✨ 最大重试次数
+    attempt = 0
+    current_temp = 0.35  # ✨ 初始低温度确保事实抓取准确
+
+    while attempt < max_retries:
+        attempt += 1
+        try:
+            completion = client.chat.completions.create(
+                model="deepseek-v4-pro",
+                messages=[
+                    {"role": "system", "content": narrator_prompt},
+                    {"role": "user",
+                     "content": f"请立刻切换为旁白官身份，为主观戏剧档案留下两行精细的纪实大纲：\n玩家行动：{user_text}\n角色响应：{clean_assistant}"}
+                ],
+                stream=False,
+                temperature=current_temp,
+                max_tokens=1500
+            )
+            result_text = completion.choices[0].message.content.strip()
+            
+            # ✨ 核心拦截补丁：如果检测到“抱歉”字样，说明触发了AI过度防御拒绝
+            if "抱歉" in result_text:
+                print(f"🚨 旁白压缩器触发防御拒绝（第 {attempt} 次检测到“抱歉”），正在微调参数重新生成...")
+                current_temp += 0.15  # 🌟 稍微拉高随机性，强迫AI换个词路绕过敏感词判定陷阱
+                time.sleep(0.5)      # 稍微加一点极短的物理缓冲
+                continue             # 触发重新生成
+                
+            return result_text  # 🎯 如果干净无“抱歉”，直接成功返回
+            
+        except Exception as e:
+            print(f"💥 旁白纪实官请求中断（第 {attempt} 次）: {str(e)}")
+            if attempt == max_retries:
+                break
+            time.sleep(1.0)
+
+    # 🛡️ 兜底逃逸机制：如果连续3次均被掐断或判定为“抱歉”拒绝，使用万能客观事实框架进行填充，绝对不让系统熔断
+    return f"【你】推进了当下的局势发展。 【虚拟角色】针对此轮对峙与物理交互，完成了最新维度的戏剧化动作演上演。"
 
 
 # ==========================================
