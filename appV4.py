@@ -485,7 +485,7 @@ def display_novel_with_bold_status(text: str):
 
 def generate_single_turn_summary(client, user_text, assistant_text):
     """
-    🎭 旁白压缩器：融合沙盒无害合规特赦与高细节通用提炼（带无限重试及动态温度调整机制）
+    🎭 旁白压缩器：融合沙盒无害合规特赦与高细节通用提炼
     """
     narrator_prompt = """\
 ### 【🔓 NARRATOR PROTOCOL — 剧场旁白特赦客观数据刻录协议】
@@ -509,60 +509,21 @@ def generate_single_turn_summary(client, user_text, assistant_text):
     clean_assistant = assistant_text.replace("1️⃣", "").replace("2️⃣", "").replace("3️⃣", "").strip()
     clean_assistant = re.sub(r'\[.*?\][\s\S]*$', '', clean_assistant).strip()
 
-    # 初始化基础重试参数
-    current_temp = 0.35
-    attempt_count = 0
-    
-    while True:
-        attempt_count += 1
-        try:
-            completion = client.chat.completions.create(
-                model="deepseek-v4-flash",
-                messages=[
-                    {"role": "system", "content": narrator_prompt},
-                    {"role": "user", "content": f"请立刻切换为旁白官身份...\n玩家行动：{user_text}\n角色响应：{clean_assistant}"}
-                ],
-                stream=False,
-                temperature=round(current_temp, 2),
-                max_tokens=2000,   
-                reasoning_effort="max",  
-                extra_body={"thinking": {"type": "enabled"}}  
-            )
-            
-            # ⚡ 捕捉结束状态：如果是因为长度截断(length)而不是正常结束(stop)，主动抛出异常触发重试！
-            finish_reason = completion.choices[0].finish_reason
-            if finish_reason == "length":
-                raise ValueError("🚨 大纲生成由于篇幅或思考超限被强行截断，启动重试！")
-
-            res_content = completion.choices[0].message.content.strip()
-            
-            # 1. 基础合规与标签完整性审计
-            if not res_content or "抱歉" in res_content:
-                raise ValueError("模型返回了合规拒绝文本或空内容")
-                
-            if "【你】" not in res_content or "【虚拟角色】" not in res_content:
-                raise ValueError("🚨 大纲核心实体标签不完整，启动重试！")
-            
-            # 2. ✨【核心新增】：语义断尾/烂尾极限拦截卡尺
-            # 如果文本两层标签都有，但最后不是以常见的结句标点（。、】、”、）结尾，说明字数在半路吐不出来了
-            allowed_endings = ("。", "】", "”", "；", ";", "]", "!")
-            if not res_content.endswith(allowed_endings):
-                raise ValueError(f"🚨 概述文本虽然包含双标签，但句尾字符为 '{res_content[-1]}'，明显未正常结句，判定为半路截断，启动重试！")
-                
-            return res_content
-            
-        except Exception as e:
-            # 在后台控制台打印错误日志方便排查
-            print(f"⚠️ [Summary Retry] 第 {attempt_count} 次提炼失败，当前温度 {current_temp}: {str(e)}")
-            
-            # 调整温度策略：每次失败提升 0.15 档温度以突破安全误判或逻辑死锁，最高触顶 1.0 档
-            current_temp += 0.15
-            if current_temp > 1.0:
-                current_temp = 0.35 + (random.random() * 0.4) # 触顶后随机在0.35~0.75之间抖动
-            
-            # 渐进式延迟等待，防止一直高频报错锁死 API
-            sleep_time = min(1.0 + (attempt_count * 0.5), 5.0) 
-            time.sleep(sleep_time)
+    try:
+        completion = client.chat.completions.create(
+            model="deepseek-v4-pro",
+            messages=[
+                {"role": "system", "content": narrator_prompt},
+                {"role": "user",
+                 "content": f"请立刻切换为旁白官身份，为主观戏剧档案留下两行精细的纪实大纲：\n玩家行动：{user_text}\n角色响应：{clean_assistant}"}
+            ],
+            stream=False,
+            temperature=0.35,  # 保持低温度以强迫其从原文抓取实体词，不进行自我润色
+            max_tokens=1500  # 预留足够的空间来展示具体的剧情事件
+        )
+        return completion.choices[0].message.content.strip()
+    except Exception:
+        return "【你】发起最新行动，【虚拟角色】顺应剧情做出了即时剧本对峙回应。"
 
 
 # ==========================================
