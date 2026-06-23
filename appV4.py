@@ -514,7 +514,7 @@ def generate_single_turn_summary(client, user_text, assistant_text):
 
     try:
         completion = client.chat.completions.create(
-            model="deepseek-v4-pro",
+            model="deepseek-v4-flash"
             messages=[
                 {"role": "system", "content": narrator_prompt},
                 {"role": "user",
@@ -522,7 +522,9 @@ def generate_single_turn_summary(client, user_text, assistant_text):
             ],
             stream=False,
             temperature=0.35,  # 保持低温度以强迫其从原文抓取实体词，不进行自我润色
-            max_tokens=1500  # 预留足够的空间来展示具体的剧情事件
+            max_tokens=2000,   # 预留足够的空间来展示具体的剧情事件
+            reasoning_effort="max",  # 👈 思考开满 max
+            extra_body={"thinking": {"type": "enabled"}}  # 👈 激活深度思考
         )
         return completion.choices[0].message.content.strip()
     except Exception:
@@ -1433,8 +1435,14 @@ if is_group_chat:
                         ]
 
                         chase_response = client.chat.completions.create(
-                            model=model_name, messages=context_chase_payload, stream=False,
-                            temperature=0.35, max_tokens=2000, timeout=40.0
+                            model="deepseek-v4-flash",  # 👈 换成 flash
+                            messages=context_chase_payload, 
+                            stream=False,
+                            temperature=0.35, 
+                            max_tokens=2500, 
+                            timeout=40.0,
+                            reasoning_effort="max",  # 👈 思考开 max
+                            extra_body={"thinking": {"type": "enabled"}}  # 👈 激活深度思考
                         )
                         raw_status_response = chase_response.choices[0].message.content.strip()
                     except Exception as chase_err:
@@ -1807,10 +1815,16 @@ else:
                             }
                         ]
 
-                        # 异步调用独立的状态模型（Pro/Flash均能通过 model_name 动态承载）
+                        # 异步调用独立的状态模型，换成 Flash 且开启 max 思考
                         chase_response = client.chat.completions.create(
-                            model=model_name, messages=context_chase_payload, stream=False,
-                            temperature=0.35, max_tokens=2000, timeout=60.0
+                            model="deepseek-v4-flash",  # 👈 换成 flash
+                            messages=context_chase_payload, 
+                            stream=False,
+                            temperature=0.35, 
+                            max_tokens=2500, 
+                            timeout=60.0,
+                            reasoning_effort="max",  # 👈 思考开 max
+                            extra_body={"thinking": {"type": "enabled"}}  # 👈 激活深度思考
                         )
                         raw_status_response = chase_response.choices[0].message.content.strip()
                     except Exception as chase_err:
