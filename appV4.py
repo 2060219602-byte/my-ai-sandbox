@@ -1693,7 +1693,7 @@ else:
             latest_detailed_prompt += "=================================================================================\n\n"
             latest_detailed_prompt += "💡【即时接戏演出令】：上面的内容就是你的‘前置连续镜头’！请直接无缝顺承最近一轮的细节，针对玩家接下来的输入展开后续演绎！"
             
-            cleaned_api_payload.append({"role": "user", "content": latest_summary_prompt})
+            cleaned_api_payload.append({"role": "user", "content": latest_detailed_prompt})
             cleaned_api_payload.append({
                 "role": "assistant",
                 "content": "（将最近几轮连续发生的情节沉淀为背景，让时间轴自然向后平移）……明白了，近期的动作与对白已连接成线。剧情继续向下演进，我会自发展开后续全新的动作和对话。"
