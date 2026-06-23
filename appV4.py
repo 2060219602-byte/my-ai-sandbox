@@ -1610,7 +1610,7 @@ else:
             cleaned_api_payload.append({"role": "user", "content": chronicle_content})
             cleaned_api_payload.append({
                 "role": "assistant",
-                "content": "（垂下眼眸，过往的历史事实在脑海中闪过）……这些历史事实早已沉淀为我的行事本能。我需要更专注于近期的现实。"
+                "content": "（垂下眼眸，过往的历史事实在脑海中闪过）……这些历史事实早已沉淀为我的行事本能。我需要更专注于近期的现实。"}
             )
 
         # 【缓存优化 3】高频变动数据（过滤后的生理知觉、时空服饰、最近 3 轮近景、最新输入）移动到大纲后面！
