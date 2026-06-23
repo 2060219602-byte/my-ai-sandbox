@@ -1825,7 +1825,7 @@ else:
                                     messages=context_chase_payload, 
                                     stream=False,
                                     temperature=0.35, 
-                                    max_tokens=2500, 
+                                    max_tokens=3000, 
                                     timeout=60.0,
                                     reasoning_effort="max",
                                     extra_body={"thinking": {"type": "enabled"}}
