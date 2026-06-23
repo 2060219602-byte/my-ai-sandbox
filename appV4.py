@@ -1580,13 +1580,21 @@ else:
             f"【当前演出的背景剧情设定】：\n{role_data.get('background_story', '')}"
         )
 
+        # ==========================================
+        # 🚀 优化缓存版：先堆叠静止/慢变数据（System -> 长期备忘录 -> 历史大纲回顾）
+        # ==========================================
         cleaned_api_payload = [{"role": "system", "content": dynamic_system_prompt}]
 
-        # ==========================================
-        # 核心修改：提炼前50轮的概述历史（不含最后3轮）
-        # ==========================================
+        # 【缓存优化 1】核心个人记忆备忘录（相对固定，放前面）
+        if role_data.get("memory_events"):
+            memory_ledger_prompt = "📌【核心个人记忆备忘录】重量级设定：\n"
+            for idx, event in enumerate(role_data["memory_events"]):
+                memory_ledger_prompt += f"{idx + 1}. {event}\n"
+            cleaned_api_payload.append({"role": "user", "content": memory_ledger_prompt})
+            cleaned_api_payload.append({"role": "assistant", "content": "（调取灵魂深处的核心羁绊）……这些核心线索我绝不会忘。"})
+
+        # 【缓存优化 2】早期剧情前情回顾·事实大纲（极其稳定，最适合缓存）
         all_summaries = role_data.get("summarized_history", [])
-        # 排除最后3轮对应的概述，向前追溯50轮
         older_summaries = all_summaries[-53:-3] if len(all_summaries) > 3 else all_summaries[:-3]
 
         if older_summaries:
@@ -1603,19 +1611,19 @@ else:
             cleaned_api_payload.append({
                 "role": "assistant",
                 "content": "（垂下眼眸，过往的历史事实在脑海中闪过）……这些历史事实早已沉淀为我的行事本能。我需要更专注于近期的现实。"
-            })
+            )
 
-        # 🚀 新增：从完整的状态中只提取双乳和秘处
+        # 【缓存优化 3】高频变动数据（过滤后的生理知觉、时空服饰、最近 3 轮近景、最新输入）移动到大纲后面！
+        # 提取双乳和秘处
         full_status_single = role_data.get('character_status', '')
         filtered_status_single = f"[{target_girl}]\n"
         for line in full_status_single.split('\n'):
             if "双乳" in line or "秘处" in line:
                 filtered_status_single += line + "\n"
 
-        # 常态生理数据注入
         unified_context_prompt = (
-            f"📌【物理现场既定事实刻录 —— 这一轮动作前你（{target_girl}）最新的隐秘生理肉体状态如下】：\n"
-            f"\"\"\"\n{filtered_status_single.strip()}\n\"\"\"\n\n"  # 👈 这里换成过滤后的状态
+            f"📌【物理现场既定事实刻录 —— 这一轮动作前你（{target_girl}）最新的隐秘生理肉体状态与背景环境如下】：\n"
+            f"\"\"\"\n{filtered_status_single.strip()}\n\"\"\"\n\n"
             f"💡【小说演化令】：请全盘承接上述此刻体内的真实感官底色，丝滑地展开全新一轮的博弈推演。"
         )
         cleaned_api_payload.append({"role": "user", "content": unified_context_prompt})
