@@ -1422,13 +1422,13 @@ if is_group_chat:
                         ]
 
                         chase_response = client.chat.completions.create(
-                            model="deepseek-v4-flash",  # 👈 换成 flash
+                            model="deepseek-v4-pro",  # 👈 换成 flash
                             messages=context_chase_payload, 
                             stream=False,
                             temperature=0.35, 
                             max_tokens=2500, 
                             timeout=40.0,
-                            reasoning_effort="max",  # 👈 思考开 max
+                            reasoning_effort="high",  # 👈 思考开 max
                             extra_body={"thinking": {"type": "enabled"}}  # 👈 激活深度思考
                         )
                         raw_status_response = chase_response.choices[0].message.content.strip()
@@ -1821,13 +1821,13 @@ else:
                         for attempt in range(3):
                             try:
                                 chase_response = client.chat.completions.create(
-                                    model="deepseek-v4-flash",
+                                    model="deepseek-v4-pro",
                                     messages=context_chase_payload, 
                                     stream=False,
                                     temperature=0.35, 
                                     max_tokens=3000, 
                                     timeout=60.0,
-                                    reasoning_effort="max",
+                                    reasoning_effort="high",
                                     extra_body={"thinking": {"type": "enabled"}}
                                 )
                                 raw_status_response = chase_response.choices[0].message.content.strip()
