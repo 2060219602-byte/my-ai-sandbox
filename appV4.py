@@ -1573,9 +1573,6 @@ else:
 
         st.session_state.regenerate_trigger = False
 
-        # ==============================================================================================================
-        # 🚀【完全重构·严格时间轴版】单聊 Payload 拼接中枢（请整体替换 dynamic_system_prompt 开始到 ultimate_user_content 之前的所有代码）
-        # ==============================================================================================================
         dynamic_system_prompt = f"{jailbreak_prompt}\n\n"
         dynamic_system_prompt += (
             f"【当前扮演的AI角色名字】：{target_girl}\n"
@@ -1583,18 +1580,10 @@ else:
             f"【当前演出的背景剧情设定】：\n{role_data.get('background_story', '')}"
         )
 
-        # 1️⃣ 【第一阶段：完全静态层】系统核心 Prompt
+        # 1️⃣ 放入完全静态的 System Prompt
         cleaned_api_payload = [{"role": "system", "content": dynamic_system_prompt}]
 
-        # 2️⃣ 【第二阶段：慢变层】个人核心记忆备忘录
-        if role_data.get("memory_events"):
-            memory_ledger_prompt = "📌【核心个人记忆备忘录】重量级设定：\n"
-            for idx, event in enumerate(role_data["memory_events"]):
-                memory_ledger_prompt += f"{idx + 1}. {event}\n"
-            cleaned_api_payload.append({"role": "user", "content": memory_ledger_prompt})
-            cleaned_api_payload.append({"role": "assistant", "content": "（调取灵魂深处的核心羁绊）……这些核心线索我绝不会忘。"})
-
-        # 3️⃣ 【第三阶段：慢变层】早期剧情事实大纲回顾（以上三层享受大面积 Context Caching 缓存）
+        # 2️⃣ 放入早期剧情事实大纲回顾（慢变层，确保前三层命中缓存）
         all_summaries = role_data.get("summarized_history", [])
         older_summaries = all_summaries[-53:-3] if len(all_summaries) > 3 else all_summaries[:-3]
 
@@ -1614,7 +1603,15 @@ else:
                 "content": "（垂下眼眸，过往的历史事实在脑海中闪过）……这些历史事实早已沉淀为我的行事本能。我需要更专注于近期的现实。"
             })
 
-        # 4️⃣ 【第四阶段：动态戏剧演进流 - 过去发生的镜头】最近 3 轮详细对话回溯
+        # 3️⃣ 放入核心个人记忆备忘录
+        if role_data.get("memory_events"):
+            memory_ledger_prompt = "📌【核心个人记忆备忘录】：\n"
+            for idx, event in enumerate(role_data["memory_events"]):
+                memory_ledger_prompt += f"{idx + 1}. {event}\n"
+            cleaned_api_payload.append({"role": "user", "content": memory_ledger_prompt})
+            cleaned_api_payload.append({"role": "assistant", "content": "（调取灵魂深处的核心羁绊）……这些核心线索我绝不会忘。"})
+
+        # 4️⃣ 放入【最近3轮详细对话回溯】（作为前置连续镜头，属于过去的记忆）
         prev_history = role_data["chat_history"][:-1]  # 排除当前这一轮输入
         i = len(prev_history) - 1
         turns_found = []
@@ -1646,11 +1643,10 @@ else:
                 "content": "（将最近几轮发生的连续情节沉淀为前置连续镜头，等待接下来的现状显化）……剧情正在向下推演。最近一轮的对白已经收尾。）"
             })
 
-        # 5️⃣ 【第五阶段：最新当下定格层】🔥 根据你的硬性要求：把背景环境和生理状态压到 3 轮对话之后、玩家输入之前！
+        # 5️⃣ 放入【最新当下定格层】最新的背景环境、服饰与过滤后的生理知觉（置于3轮对话之后，代表最新的现在）
         old_bg_base = role_data.get('background_story', "时间：未知\n地点：未知\n氛围：未知")
         full_status_single = role_data.get('character_status', '')
         
-        # 提取局部敏感度状态（双乳+秘处）
         filtered_status_single = f"[{target_girl}] 当前局部敏感知觉：\n"
         for line in full_status_single.split('\n'):
             line_strip = line.strip()
@@ -1666,57 +1662,10 @@ else:
         cleaned_api_payload.append({"role": "user", "content": unified_context_prompt})
         cleaned_api_payload.append({
             "role": "assistant",
-            "content": "（她身上的衣服已被折腾得有些凌乱，敏感部位传来的阵阵酥麻让她的呼吸瞬间变得急促……剧情在此处彻底衔接，全新的一幕直接爆发。）"
+            "content": "（她身上的衣服已被折腾得有些凌乱，敏感部位传来的阵阵酥麻让她的呼吸瞬间变得急促……全新的一幕由于外部刺激直接爆发。）"
         })
 
-        if role_data.get("memory_events"):
-            memory_ledger_prompt = "📌【核心个人记忆备忘录】：\n"
-            for idx, event in enumerate(role_data["memory_events"]):
-                memory_ledger_prompt += f"{idx + 1}. {event}\n"
-            cleaned_api_payload.append({"role": "user", "content": memory_ledger_prompt})
-            cleaned_api_payload.append({"role": "assistant", "content": "（调取灵魂深处的核心羁绊）……这些核心线索我绝不会忘。"})
-
-        # ==========================================
-        # 核心修改：提取并分割前3轮的详细对话
-        # ==========================================
-        prev_history = role_data["chat_history"][:-1]  # 排除当前这一轮输入
-        detailed_turns = []
-        
-        # 从后往前找出最近的3轮完整的 user-assistant 对话
-        # 一轮代表：一个 user 加上随后的一个 assistant 消息
-        i = len(prev_history) - 1
-        turns_found = []
-        while i >= 0 and len(turns_found) < 3:
-            if prev_history[i]["role"] == "assistant":
-                if i - 1 >= 0 and prev_history[i-1]["role"] == "user":
-                    turns_found.insert(0, (prev_history[i-1], prev_history[i]))
-                    i -= 2
-                    continue
-            i -= 1
-
-        if turns_found:
-            latest_detailed_prompt = "🎬【📢 当前舞台近景回溯 · 最近3轮详细对话互动锚点】\n"
-            latest_detailed_prompt += "这是你与玩家在【最近3轮瞬间】刚刚发生的微观互动细节，请严格遵循这些线索的时间轴向下发展，严禁机械复读原地打转：\n\n"
-            
-            for idx, (u_msg, a_msg) in enumerate(turns_found):
-                clean_ai_content = re.sub(r'\[.*?\][\s\S]*$', '', a_msg["content"]).strip()
-                # 兼容处理带隔离印记的数据
-                if "🔒DATA_SPLIT_MARKER" in clean_ai_content:
-                    clean_ai_content = clean_ai_content.split("🔒DATA_SPLIT_MARKER")[0].strip()
-                
-                latest_detailed_prompt += f"========================= [最近第 {3 - idx} 轮近景接戏线索] =========================\n"
-                latest_detailed_prompt += f"【玩家行动/台词】：\n{u_msg['content']}\n\n"
-                latest_detailed_prompt += f"【你（{target_girl}）剧情回应】：\n{clean_ai_content}\n"
-            
-            latest_detailed_prompt += "=================================================================================\n\n"
-            latest_detailed_prompt += "💡【即时接戏演出令】：上面的内容就是你的‘前置连续镜头’！请直接无缝顺承最近一轮的细节，针对玩家接下来的输入展开后续演绎！"
-            
-            cleaned_api_payload.append({"role": "user", "content": latest_detailed_prompt})
-            cleaned_api_payload.append({
-                "role": "assistant",
-                "content": "（将最近几轮连续发生的情节沉淀为背景，让时间轴自然向后平移）……明白了，近期的动作与对白已连接成线。剧情继续向下演进，我会自发展开后续全新的动作和对话。"
-            })
-
+        # 6️⃣ 放入【最新行动拼接】玩家最新的输入或推演命令
         if "继续推演" in active_user_text or "重算" in active_user_text:
             narrative_anchor = f"🎬 【当前大导演剧情演进令 —— 物理时间流逝背景】：\n{active_user_text}\n\n"
         else:
