@@ -1581,7 +1581,7 @@ else:
         )
 
         # ==========================================
-        # 🚀 优化缓存版：先堆叠静止/慢变数据（System -> 长期备忘录 -> 历史大纲回顾）
+        # 🚀 完美缓存+后台全数据留存版（单聊）
         # ==========================================
         cleaned_api_payload = [{"role": "system", "content": dynamic_system_prompt}]
 
@@ -1593,7 +1593,7 @@ else:
             cleaned_api_payload.append({"role": "user", "content": memory_ledger_prompt})
             cleaned_api_payload.append({"role": "assistant", "content": "（调取灵魂深处的核心羁绊）……这些核心线索我绝不会忘。"})
 
-        # 【缓存优化 2】早期剧情前情回顾·事实大纲（极其稳定，最适合缓存）
+        # 【缓存优化 2】早期剧情前情回顾·事实大纲（放前面命中缓存）
         all_summaries = role_data.get("summarized_history", [])
         older_summaries = all_summaries[-53:-3] if len(all_summaries) > 3 else all_summaries[:-3]
 
@@ -1610,26 +1610,32 @@ else:
             cleaned_api_payload.append({"role": "user", "content": chronicle_content})
             cleaned_api_payload.append({
                 "role": "assistant",
-                "content": "（垂下眼眸，过往的历史事实在脑海中闪过）……这些历史事实早已沉淀为我的行事本能。我需要更专注于近期的现实。"}
-            )
+                "content": "（垂下眼眸，过往的历史事实在脑海中闪过）……这些历史事实早已沉淀为我的行事本能。我需要更专注于近期的现实。"
+            })
 
-        # 【缓存优化 3】高频变动数据（过滤后的生理知觉、时空服饰、最近 3 轮近景、最新输入）移动到大纲后面！
-        # 提取双乳和秘处
+        # --- 缓存分割线：下方是每轮必变的高频动态数据 ---
+
+        # 🚀 核心修复：1. 完整保留环境信息供剧情参考
+        old_bg_base = role_data.get('background_story', "时间：未知\n地点：未知\n氛围：未知")
+        
+        # 🚀 核心修复：2. 精准提取双乳知觉和秘处状态（增强容错率，防止正则失效）
         full_status_single = role_data.get('character_status', '')
-        filtered_status_single = f"[{target_girl}]\n"
+        filtered_status_single = f"[{target_girl}] 核心局部知觉：\n"
         for line in full_status_single.split('\n'):
-            if "双乳" in line or "秘处" in line:
-                filtered_status_single += line + "\n"
+            line_strip = line.strip()
+            if "双乳" in line_strip or "秘处" in line_strip:
+                filtered_status_single += line_strip + "\n"
 
         unified_context_prompt = (
-            f"📌【物理现场既定事实刻录 —— 这一轮动作前你（{target_girl}）最新的隐秘生理肉体状态与背景环境如下】：\n"
+            f"📌【物理现场环境要素】：\n{old_bg_base}\n\n"
+            f"📌【这一轮动作前你（{target_girl}）最新的局部感官状态】：\n"
             f"\"\"\"\n{filtered_status_single.strip()}\n\"\"\"\n\n"
-            f"💡【小说演化令】：请全盘承接上述此刻体内的真实感官底色，丝滑地展开全新一轮的博弈推演。"
+            f"💡【小说演化令】：请全盘承接上述此刻体内的真实感官底色与所处时空环境，丝滑地展开全新一轮的博弈推演。"
         )
         cleaned_api_payload.append({"role": "user", "content": unified_context_prompt})
         cleaned_api_payload.append({
             "role": "assistant",
-            "content": "（敏感地察觉到体内翻涌的最新知觉与生理变化）……呼，我全部明白了。我会将最新的身体异样无痕融入接下来的反应之中。”"
+            "content": "（敏感地察觉到体内翻涌的局部知觉与所处时空背景）……呼，我全部明白了。我会将最新的环境现状与身体最敏感的肉体异样无痕融入接下来的反应之中。”"
         })
 
         if role_data.get("memory_events"):
