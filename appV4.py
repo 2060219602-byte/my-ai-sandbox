@@ -1682,7 +1682,7 @@ else:
         if "继续推演" in active_user_text or "重算" in active_user_text:
             narrative_anchor = f"🎬 【当前大导演剧情演进令 —— 物理时间流逝背景】：\n{active_user_text}\n\n"
         else:
-            narrative_anchor = f"⚔️ 【玩家（你）在这一轮发起的最新即时行动/台词如下】：\n\"\"\"\n{active_user_text}\n\"\"\"\n\n"
+            narrative_anchor = f"⚔️ 【玩家在这一轮发起的最新即时行动/台词如下】：\n\"\"\"\n{active_user_text}\n\"\"\"\n\n"
 
         ultimate_user_content = (
             f"{narrative_anchor}"
