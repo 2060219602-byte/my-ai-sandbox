@@ -1675,7 +1675,7 @@ else:
         cleaned_api_payload.append({"role": "user", "content": unified_context_prompt})
         cleaned_api_payload.append({
             "role": "assistant",
-            "content": "（她身上的衣服已被折腾得有些凌乱，敏感部位传来的阵阵酥麻让她的呼吸瞬间变得急促……全新的一幕由于外部刺激直接爆发。）"
+            "content": f"（她迅速理清了当下的时空处境，将注意力锁定在眼前发生的所有冲突事实与对峙边界上，准备展开接下来的回应。）"
         })
 
         # 6️⃣ 放入【最新行动拼接】玩家最新的输入或推演命令
