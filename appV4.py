@@ -1666,19 +1666,11 @@ else:
 
         # 5️⃣ 放入【最新当下定格层】最新的背景环境、服饰与过滤后的生理知觉
         old_bg_base = role_data.get('background_story', "时间：未知\n地点：未知\n角色着装：未知")
-        full_status_single = role_data.get('character_status', '')
-        
-        filtered_status_single = f"[{target_girl}] 当前局部敏感知觉：\n"
-        for line in full_status_single.split('\n'):
-            line_strip = line.strip()
-            if "双乳" in line_strip or "秘处" in line_strip:
-                filtered_status_single += line_strip + "\n"
 
         unified_context_prompt = (
-            f"📌【物理现场最新时空环境与服饰现状】：\n{old_bg_base}\n\n" # 👈 这里大模型读出来的 old_bg_base 里就已经是“时/地/着装”三行了
-            f"📌【承上启下 —— 经历上述3轮微观纠缠后，你（{target_girl}）当前瞬间最新定格的肉体官能状态】：\n"
-            f"\"\"\"\n{filtered_status_single.strip()}\n\"\"\"\n\n"
-            f"💡【即时接戏演出令】：请全盘承接上面刚刚发生的3轮纠缠线索，并融合此时此刻体内的真实局部知觉与场景现状，丝滑地展开全新一轮的博弈推演。"
+            f"📌【物理现场最新时空环境与剧情背景】：\n{old_bg_base}\n\n"
+            f"💡【即时接戏演出令】：请全盘承接并无缝继承上述时空环境与前文发生的3轮纠缠线索，"
+            f"作为全新一轮博弈推演的唯一既定物理边界，继续向下展现你的即时行动与戏剧反应。"
         )
         cleaned_api_payload.append({"role": "user", "content": unified_context_prompt})
         cleaned_api_payload.append({
