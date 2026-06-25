@@ -1586,8 +1586,16 @@ else:
                     # 核心无感续写判定：如果因为篇幅撞上限被强行截断
                     if finish_reason == "length":
                         current_loop_text = "".join(loop_buffer)
+
+                        assistant_message = {
+                            "role": "assistant",
+                            "content": current_loop_text
+                        }
                         # 把这一轮吐出的不完整正文以 assistant 身份喂回给模型
-                        loop_payload.append({"role": "assistant", "content": current_loop_text})
+                       if loop_count == 1 and captured_formatted_thinking:
+                            assistant_message["reasoning_content"] = captured_formatted_thinking
+
+                       loop_payload.append(assistant_message)
                         # 追加无缝续写指令，强迫其把3️⃣幕写完
                         loop_payload.append({
                             "role": "user",
