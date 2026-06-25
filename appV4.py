@@ -1507,13 +1507,7 @@ else:
                 "content": "（将最近几轮发生的连续情节沉淀为前置连续镜头，等待接下来的现状显化）……剧情正在向下推演。最近一轮的对白已经收尾。）"
             })
 
-        # 5️⃣ 放入最新的背景剧情设定，不再绑定和灌输复杂的生理状态
         cleaned_api_payload.append({"role": "user", "content": "💡【即时接戏演出令】：请全盘承接并无缝继承前文发生的所有剧情线索，继续向下展现你的即时行动与戏剧反应。"})
-        cleaned_api_payload.append({"role": "user", "content": unified_context_prompt})
-        cleaned_api_payload.append({
-            "role": "assistant",
-            "content": f"（她迅速理清了当下的处境，准备展开接下来的回应。）"
-        })
 
         # 6️⃣ 放入【最新行动拼接】玩家最新的输入或推演命令
         if "继续推演" in active_user_text or "重算" in active_user_text:
