@@ -1549,7 +1549,7 @@ else:
                         stream=True,
                         max_tokens=4000,  # 适当降低单次上限，让流式吐字更流畅，靠循环来拼长文
                         timeout=60.0,
-                        reasoning_effort="max" if loop_count == 1 else "low",  # 仅在第一轮激活深度思考，续写轮次不浪费Token
+                        reasoning_effort="high" if loop_count == 1 else "low",  # 仅在第一轮激活深度思考，续写轮次不浪费Token
                         extra_body={"thinking": {"type": "enabled" if loop_count == 1 else "disabled"}}
                     )
 
