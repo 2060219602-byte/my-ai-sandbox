@@ -1547,9 +1547,12 @@ else:
                         model=model_name,
                         messages=loop_payload,
                         stream=True,
-                        max_tokens=4000,  # 适当降低单次上限，让流式吐字更流畅，靠循环来拼长文
+                        max_tokens=4000, 
                         timeout=60.0,
-                        reasoning_effort="high" if loop_count == 1 else "low",  # 仅在第一轮激活深度思考，续写轮次不浪费Token
+                        # 🌟 联动修改：第一轮思考忽略温度；续写轮次给予 0.7 的黄金 RP 温度
+                        temperature=0.0 if loop_count == 1 else 0.7, 
+                        # 官方支持 discrete native 级别：low/medium 自动映射为 high，想省事直接用 high 和 max
+                        reasoning_effort="high" if loop_count == 1 else "high", 
                         extra_body={"thinking": {"type": "enabled" if loop_count == 1 else "disabled"}}
                     )
 
