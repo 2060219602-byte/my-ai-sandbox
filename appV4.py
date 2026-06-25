@@ -1587,15 +1587,18 @@ else:
                     if finish_reason == "length":
                         current_loop_text = "".join(loop_buffer)
 
+                        # 🌟【硬核修复】：按照官方最新标准，将上一轮的思考链与正文无缝熔铸并喂回上下文
                         assistant_message = {
                             "role": "assistant",
                             "content": current_loop_text
                         }
-                        # 把这一轮吐出的不完整正文以 assistant 身份喂回给模型
-                       if loop_count == 1 and captured_formatted_thinking:
+
+                        # 如果第一轮抓到了思考内容，将其写入官方指定的专用字段中
+                        if loop_count == 1 and captured_formatted_thinking:
                             assistant_message["reasoning_content"] = captured_formatted_thinking
 
-                       loop_payload.append(assistant_message)
+                        loop_payload.append(assistant_message)
+
                         # 追加无缝续写指令，强迫其把3️⃣幕写完
                         loop_payload.append({
                             "role": "user",
