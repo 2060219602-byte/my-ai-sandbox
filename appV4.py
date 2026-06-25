@@ -1357,23 +1357,6 @@ if is_group_chat:
                 "content": f"（深吸一口气，全盘继承本群过往所有同台对峙的既定事实，眼神在群内众人身上扫过）……群内之前发生的一切细节早已深植于我的本能。我已经回到了当下的这一轮。我会直接面对他们。"
             })
 
-        physical_status_patch = {
-            "role": "user",
-            "content": (
-                f"📌【物理现场既定事实刻录 —— 这一轮你（{curr_agent}）绝对定格的隐秘生理肉体状态如下】：\n"
-                f"{agent_db.get('character_status', '')}\n\n"
-                f"💡【小说叙事无感演化协议】：\n"
-                f"全盘接纳并无缝继承上述身体当前的真实官能状态，将其作为游戏剧情继续向下推进的物理现实背景。\n"
-                f"【🎭 情感与剧情的自适应表达】：根据你当前扮演角色的System Role基本性格、以及当前剧情的亲密热度，自然地演绎她的反应。\n"
-                f"【✍️ 文学化镜头转化】：在接下来的正文叙事中，将上面的生理状态融化到文章中。"
-            )
-        }
-        api_payload.append(physical_status_patch)
-        api_payload.append({
-            "role": "assistant",
-            "content": f"（敏感地感知到了这一瞬间自身最深处的肉体异动，耳根和双颊一阵阵滚烫泛红，但仍强行在群里咬牙维持伪装的声线）……我明白我当前的身体异样和处境。我会将这些敏感的感官痛苦与心理抗拒无痕融入接下来的反应之中。"
-        })
-
         cleaned_context = []
         for msg in chat_history_view[-2:]:
             if msg["role"] == "user":
@@ -1524,18 +1507,17 @@ else:
                 "content": "（将最近几轮发生的连续情节沉淀为前置连续镜头，等待接下来的现状显化）……剧情正在向下推演。最近一轮的对白已经收尾。）"
             })
 
-        # 5️⃣ 放入【最新当下定格层】最新的背景环境、服饰与过滤后的生理知觉
-        old_bg_base = role_data.get('background_story', "时间：未知\n地点：未知\n角色着装：未知")
+        # 5️⃣ 放入最新的背景剧情设定，不再绑定和灌输复杂的生理状态
+        old_bg_base = role_data.get('background_story', "时间：未知\n地点：未知")
 
         unified_context_prompt = (
-            f"📌【物理现场最新时空环境与剧情背景】：\n{old_bg_base}\n\n"
-            f"💡【即时接戏演出令】：请全盘承接并无缝继承上述时空环境与前文发生的3轮纠缠线索，"
-            f"作为全新一轮博弈推演的唯一既定物理边界，继续向下展现你的即时行动与戏剧反应。"
+            f"📌【当前演出的背景剧情设定】：\n{old_bg_base}\n\n"
+            f"💡【即时接戏演出令】：请全盘承接并无缝继承上述时空环境，继续向下展现你的即时行动与戏剧反应。"
         )
         cleaned_api_payload.append({"role": "user", "content": unified_context_prompt})
         cleaned_api_payload.append({
             "role": "assistant",
-            "content": f"（她迅速理清了当下的时空处境，将注意力锁定在眼前发生的所有冲突事实与对峙边界上，准备展开接下来的回应。）"
+            "content": f"（她迅速理清了当下的处境，准备展开接下来的回应。）"
         })
 
         # 6️⃣ 放入【最新行动拼接】玩家最新的输入或推演命令
