@@ -1508,12 +1508,7 @@ else:
             })
 
         # 5️⃣ 放入最新的背景剧情设定，不再绑定和灌输复杂的生理状态
-        old_bg_base = role_data.get('background_story', "时间：未知\n地点：未知")
-
-        unified_context_prompt = (
-            f"📌【当前演出的背景剧情设定】：\n{old_bg_base}\n\n"
-            f"💡【即时接戏演出令】：请全盘承接并无缝继承上述时空环境，继续向下展现你的即时行动与戏剧反应。"
-        )
+        cleaned_api_payload.append({"role": "user", "content": "💡【即时接戏演出令】：请全盘承接并无缝继承前文发生的所有剧情线索，继续向下展现你的即时行动与戏剧反应。"})
         cleaned_api_payload.append({"role": "user", "content": unified_context_prompt})
         cleaned_api_payload.append({
             "role": "assistant",
