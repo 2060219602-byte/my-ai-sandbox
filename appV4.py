@@ -1190,52 +1190,37 @@ def render_message_controls_by_id(msg_id, is_last_msg, agent_name_fallback=""):
 
 
 def render_options_and_status_in_chat(message_item):
+    """
+    📋 渲染 A, B, C, D 四维选项，点击一键填充动作至 st.chat_input
+    """
     if "options" in message_item and message_item["options"]:
         opts = message_item["options"]
-        opt_a = opts.get("A", "")
-        opt_b = opts.get("B", "")
-        opt_c = opts.get("C", "")
-        opt_d = opts.get("D", "")
+        st.markdown("---")
+        st.markdown("🧭 **次轮可选行动分支预测（第三人称描述）：**")
 
-        if opt_a or opt_b or opt_c or opt_d:
-            st.write("")
-            scene_hint = "⚓ 欲望在海面浮沉，理智与本能交锋，请选择你接下来的内心防线："
-            if "【欲海场景】：" in message_item.get("content", ""):
-                try:
-                    scene_hint = message_item["content"].split("【欲海场景】：")[1].split("\n\n")[0].strip()
-                except Exception:
-                    pass
+        for key in ["A", "B", "C", "D"]:
+            opt = opts.get(key)
+            if opt:
+                # 智能兼容：如果大模型返回的是标准字典则提取 action，如果是老数据字符串则兜底
+                if isinstance(opt, dict):
+                    action_text = opt.get("action", "")
+                    effect_text = opt.get("effect", "")
+                else:
+                    action_text = str(opt)
+                    effect_text = "顺应前置推演局势延伸。"
+                
+                if action_text:
+                    # 优雅排版打印行动与潜在效果
+                    st.markdown(f"**🔴 选项 {key}**：{action_text}")
+                    if effect_text:
+                        st.markdown(f"&emsp; *💡 潜在效果：{effect_text}*")
 
-            st.markdown(f"🧭 **{scene_hint}**")
-            
-            # ✨ 核心修复：用容器包裹 columns，确保在流式和历史中都能独立占位不被挤压
-            m_id = message_item.get("msg_id", str(random.randint(1000, 9999)))
-            
-            # 创建 4 列
-            col_opt1, col_opt2, col_opt3, col_opt4 = st.columns(4) 
-
-            # ✨ 使用 with 显式绑定列的作用域，防止组件被覆盖
-            if opt_a:
-                with col_opt1:
-                    if st.button(f"🛡️ 顺从：{opt_a}", use_container_width=True, key=f"btn_opt_a_{m_id}"):
-                        st.session_state[f"chat_input_v_{st.session_state.clear_version}"] = opt_a
-                        st.toast("顺应对方要求，请在输入框继续编辑或直接回车！")
-            if opt_b:
-                with col_opt2:
-                    if st.button(f"🌊 拉扯：{opt_b}", use_container_width=True, key=f"btn_opt_b_{m_id}"):
-                        st.session_state[f"chat_input_v_{st.session_state.clear_version}"] = opt_b
-                        st.toast("防线悄然溃缩……请在输入框继续编辑或直接回车！")
-            if opt_c:
-                with col_opt3:
-                    if st.button(f"🔥 直球：{opt_c}", use_container_width=True, key=f"btn_opt_c_{m_id}"):
-                        st.session_state[f"chat_input_v_{st.session_state.clear_version}"] = opt_c
-                        st.toast("反客为主，自愿溺死于此！请在输入框继续编辑或直接回车！")
-            if opt_d:
-                with col_opt4:
-                    if st.button(f"✨ 主导：{opt_d}", use_container_width=True, key=f"btn_opt_d_{m_id}"):
-                        st.session_state[f"chat_input_v_{st.session_state.clear_version}"] = opt_d
-                        st.toast("局势逆转！请在输入框继续编辑或直接回车！")
-
+                    m_id = message_item.get("msg_id", str(random.randint(1000, 9999)))
+                    # 关键修复：点击按钮时，使用 str() 强制将文本降维成纯字符串，断绝字典注入输入框的可能
+                    if st.button(f"📋 选定并加载选项 {key}", key=f"btn_opt_{key}_{m_id}", use_container_width=True):
+                        st.session_state[f"chat_input_v_{st.session_state.clear_version}"] = str(action_text)
+                        st.toast(f"选项 {key} 已成功注入下方输入框，可编辑或直接回车发送！")
+                    st.write("")
 
 history_len = len(chat_history_view)
 DISPLAY_LIMIT = 4
@@ -1313,7 +1298,17 @@ with col_action1:
         st.session_state.continue_trigger = True
         st.rerun()
 
-user_input = st.chat_input("在此处输入聊天内容...", key=f"chat_input_v_{st.session_state.clear_version}")
+# ====== 替换为下方安全渲染组件 ======
+input_key = f"chat_input_v_{st.session_state.clear_version}"
+
+# 🛡️ 强制类型洗涤防御：若历史残留或意外存入了非字符串数据（如旧版字典对象），立刻强转清洗，根除前端熔断
+if input_key in st.session_state:
+    if not isinstance(st.session_state[input_key], str):
+        st.session_state[input_key] = str(st.session_state[input_key]) if st.session_state[input_key] is not None else ""
+
+# 渲染输入框
+user_input = st.chat_input("在此处输入聊天内容...", key=input_key)
+# ==================================
 
 is_continue_mode = st.session_state.continue_trigger
 if is_continue_mode:
