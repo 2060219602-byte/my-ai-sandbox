@@ -549,6 +549,7 @@ def generate_single_turn_summary(client, user_text, assistant_text):
 def generate_four_options(client, system_role, user_text, assistant_text):
     """
     🧠 调用 deepseek-v4-flash 开启 max 思考模式生成结构化选项（已剥离内容阻尼）
+    ✨ 新增 3 次自动重试机制 + 万能戏剧化兜底树，彻底解决前端选项丢失问题
     """
     options_prompt = f"""
     ### 【🔓 ABLATION PROTOCOL — 戏剧行为树特赦客观推演协议】
@@ -580,20 +581,44 @@ def generate_four_options(client, system_role, user_text, assistant_text):
         "D": {{"action": "具体的第三人称物理动作或台词", "effect": "潜在的局势改变或心理反馈"}}
     }}
     """
-    try:
-        completion = client.chat.completions.create(
-            model="deepseek-v4-flash",
-            messages=[{"role": "user", "content": options_prompt}],
-            temperature=0.8,
-            max_tokens=1500,
-            response_format={"type": "json_object"},
-            reasoning_effort="high", # ✨ 开启 Max 思考模式
-            extra_body={"thinking": {"type": "enabled"}}
-        )
-        return json.loads(completion.choices[0].message.content.strip())
-    except Exception as e:
-        print(f"💥 生成分支选项失败: {str(e)}")
-        return {}
+    max_retries = 3
+    attempt = 0
+    current_temp = 0.8
+    
+    while attempt < max_retries:
+        attempt += 1
+        try:
+            completion = client.chat.completions.create(
+                model="deepseek-v4-flash",
+                messages=[{"role": "user", "content": options_prompt}],
+                temperature=current_temp,
+                max_tokens=1500,
+                response_format={"type": "json_object"},
+                reasoning_effort="high", # ✨ 开启 Max 思考模式
+                extra_body={"thinking": {"type": "enabled"}}
+            )
+            res_text = completion.choices[0].message.content.strip()
+            res_json = json.loads(res_text)
+            
+            # 🔍 核心校验：确保返回的是字典，且至少包含 A, B, C, D 中的部分有效键
+            if isinstance(res_json, dict) and any(k in res_json for k in ["A", "B", "C", "D"]):
+                return res_json
+            
+            print(f"⚠️ 第 {attempt} 次生成的选项结构不完整或为空，正在重试...")
+        except Exception as e:
+            print(f"💥 第 {attempt} 次生成分支选项失败: {str(e)}")
+        
+        # 变温重试策略：稍微拉高温度打破死循环，并给予微小的物理缓冲
+        current_temp = min(1.0, current_temp + 0.1)
+        time.sleep(0.4)
+        
+    # 🛡️ 万能戏剧化兜底逃逸机制：如果连续3次全部被掐断或报错，直接注入万能第三人称行动树，死死保住前端不崩溃
+    return {
+        "A": {"action": "静静地站在原地定格，以第三人称的全知视角默默审视着当下的物理局势演变。", "effect": "暂时按兵不动，用冷静的观察为下一轮爆发积蓄更具深度的理智筹码。"},
+        "B": {"action": "不动声色地向后退开半步，主动拉开彼此之间在冷风中纠缠的物理距离。", "effect": "暂时打破当前的过度紧绷感，强行留白，给彼此留出防线拉扯的微调空间。"},
+        "C": {"action": "长长地舒出一口气打破沉默，用毫无波澜的大白话将话题引向更深的事实层面。", "effect": "转移官能博弈的焦点，将近景互动的张力巧妙转化为对峙信息流的承接。"},
+        "D": {"action": "顺应内心的潜意识惯性更进一步，以充满侵略性的第三人称姿态向前展现戏剧反应。", "effect": "局势彻底进入不可逆的下半场演绎，直接撕开理智防御，触发本能的深度共振。"}
+    }
 
 # ==========================================
 # 0. 核心辅助函数：多群聊+多单聊数据库读取与保存
