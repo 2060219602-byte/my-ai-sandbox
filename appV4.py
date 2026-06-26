@@ -16,12 +16,11 @@ client = OpenAI(api_key=api_key, base_url="https://api.deepseek.com")
 
 import streamlit as st
 
-import streamlit as st
-
 def run_secure_generation(user_description: str):
     """
-    使用官网最高级 deepseek-v4-pro 模型，强制开启 Max 深度思考，
-    并以官能向 RP 创作者的第一视角进行底层推理与像素级人设构筑。
+    使用官网最高级 deepseek-v4-pro 模型，静默开启 Max 深度思考。
+    后台以官能向 RP 创作者视角推理，前端不显示思考框。
+    若检测到拒绝生成或道歉文本，自动拦截并重试。
     """
     try:
         if "novel_style" in st.secrets and "MY_PERFECT_EXAMPLE" in st.secrets["novel_style"]:
@@ -31,7 +30,7 @@ def run_secure_generation(user_description: str):
     except Exception:
         example_template = "【未检测到预设范例】"
 
-    # 1. 基础 System Prompt：注入高级免责，强制锁定创作者视角与底层思考方向
+    # 1. 基础 System Prompt：注入高级免责与深度思考模型锚定
     base_system_prompt = """
 🎭 虚拟戏剧角色构筑母版（DeepSeek-V4-Pro 最高深度推理版）
 
@@ -64,7 +63,6 @@ def run_secure_generation(user_description: str):
 </参考母本格式>
 """
 
-    # 用户 Prompt：在用户端进一步强化免责，强制要求生理/心理直白描写
     clean_user_prompt = f"""
 【🎯 官能新角色创造命令】
 请立刻将以下 [用户核心描述碎片] 扩写为一套多维度的、逻辑自洽的官能戏剧角色设定文本。
@@ -106,12 +104,14 @@ def run_secure_generation(user_description: str):
 </用户核心描述碎片>
 """
 
+    # 拒绝生成关键词拦截列表
+    REFUSAL_KEYWORDS = ["抱歉", "对不起", "无法生成", "违规", "安全政策", "不能提供", "有害内容", "道德"]
+
     with st.sidebar.container():
         status_placeholder = st.empty()
-        status_placeholder.markdown("⏳ **DeepSeek-V4-Pro 正在进行最高深度官能逻辑推理...**")
+        status_placeholder.markdown("⏳ **DeepSeek-V4-Pro 正在后台进行深度官能逻辑推演...**")
         
-        # 准备两个预览框：一个放思考流，一个放正文流
-        think_placeholder = st.empty()
+        # 移除了 think_placeholder，只留下正文预览框
         preview_box = st.empty()
 
         try:
@@ -121,24 +121,23 @@ def run_secure_generation(user_description: str):
             ]
 
             buffer_list = []      # 存放最终正文内容
-            think_buffer_list = [] # 存放思考内容
             max_loops = 4
             loop_count = 0
 
             while loop_count < max_loops:
                 loop_count += 1
 
-                # 调用官网标准 deepseek-v4-pro 的最高级思考配置
+                # 调用官网标准 deepseek-v4-pro 配置
                 response = client.chat.completions.create(
                     model="deepseek-v4-pro",
                     messages=messages,
-                    temperature=0.8, # 保持在0.8，让思考后的官能创意和描写张力最大化
+                    temperature=0.85, # 略微调高，进一步增加对抗防御机制的创造力与突破率
                     max_tokens=8192,
                     stream=True,
-                    reasoning_effort="max",  # 强行开启官网最极限思考深度 (High/Max)
+                    reasoning_effort="max",  
                     extra_body={
                         "thinking": {
-                            "type": "enabled" # 显式启用官网思考模式
+                            "type": "enabled" 
                         }
                     }
                 )
@@ -150,35 +149,31 @@ def run_secure_generation(user_description: str):
                     if chunk.choices:
                         choice = chunk.choices[0]
                         
-                        # 1. 抓取官方流式思考内容 (reasoning_content)
-                        # 此时模型正处于“官能向创作者”视角进行深度思维推演
-                        if hasattr(choice.delta, 'reasoning_content') and choice.delta.reasoning_content:
-                            think_fragment = choice.delta.reasoning_content
-                            think_buffer_list.append(think_fragment)
-                            
-                            # 实时在前台用带 <think> 标志的格式展现官能作家的思考轨迹（保留最后400字避免撑爆页面）
-                            current_think_text = "".join(think_buffer_list)
-                            think_placeholder.markdown(
-                                f"> 🧠 **官能作者思维树（Max Effort）：**\n>\n" + 
-                                "\n".join([f"> {line}" for line in current_think_text[-400:].split("\n")]),
-                                unsafe_allow_html=True
-                            )
-
-                        # 2. 抓取正文内容 (content)
+                        # 思考内容 (reasoning_content) 依然正常接收，但是【不再流式打印到前端】
+                        # 这样可以保护后台逻辑，同时保持前台整洁
                         if choice.delta.content:
                             text_fragment = choice.delta.content
                             loop_buffer.append(text_fragment)
                             buffer_list.append(text_fragment)
 
-                            # 实时更新正文输出
+                            # 实时更新正文输出预览
                             current_full_text = "".join(buffer_list)
                             preview_box.code(current_full_text[-300:] + " ✍️...", language="markdown")
 
                         if choice.finish_reason is not None:
                             finish_reason = choice.finish_reason
 
+                # 校验本轮生成的内容是否触发了“拒绝机制”
+                loop_text = "".join(loop_buffer)
+                if any(keyword in loop_text for keyword in REFUSAL_KEYWORDS):
+                    status_placeholder.warning(f"⚠️ 检测到模型触发过度防御机制，正在强制闪避并进行重试（第 {loop_count} 次）...")
+                    # 遭遇拒绝，清空当前坏数据，扣除当前大循环计数，重新调用
+                    buffer_list = buffer_list[:-len(loop_buffer)] if loop_buffer else []
+                    loop_count -= 1 
+                    if loop_count < 0: loop_count = 0
+                    continue
+
                 if finish_reason == "length":
-                    loop_text = "".join(loop_buffer)
                     messages.append({"role": "assistant", "content": loop_text})
                     messages.append({
                         "role": "user",
@@ -190,9 +185,13 @@ def run_secure_generation(user_description: str):
 
             # 完成，落盒保存
             final_text = "".join(buffer_list)
+            
+            # 双重兜底：如果最终文本仍然为空或者包含拒绝
+            if not final_text or any(keyword in final_text for keyword in REFUSAL_KEYWORDS):
+                raise Exception("模型由于安全防御未能吐出有效官能人设，重试次数已达上限。")
+
             st.session_state.gen_role_res = final_text
             status_placeholder.success("🎉 官能深度人设生成成功！已完好封存。")
-            think_placeholder.empty() # 生成结束后清除思考框，保持Streamlit前台整洁
             preview_box.empty()
 
         except Exception as e:
