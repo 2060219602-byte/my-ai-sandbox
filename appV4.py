@@ -1309,6 +1309,11 @@ if history_len > DISPLAY_LIMIT:
             p_name = message.get("agent_name", "")
             prefix = f"💬 **【{p_name}】**：\n\n" if p_name else ""
             if message["role"] == "assistant":
+                # 🧠 仅在前端展示思维链折叠框，完全隔离，不污染后续发给 AI 的上下文
+                if message.get("thinking"):
+                    with st.expander("💭 查看模型内心独白/心理推演...", expanded=False):
+                        st.markdown(f"<span style='color:#6c757d; font-size:16px;'>{message['thinking']}</span>", unsafe_allow_html=True)
+
                 display_novel_with_bold_status(prefix + message["content"])
                 render_options_and_status_in_chat(message)
             else:
@@ -1329,6 +1334,11 @@ else:
             p_name = message.get("agent_name", "")
             prefix = f"💬 **【{p_name}】**：\n\n" if p_name else ""
             if message["role"] == "assistant":
+                # 🧠 仅在前端展示思维链折叠框，完全隔离，不污染后续发给 AI 的上下文
+                if message.get("thinking"):
+                    with st.expander("💭 查看模型内心独白/心理推演...", expanded=False):
+                        st.markdown(f"<span style='color:#6c757d; font-size:16px;'>{message['thinking']}</span>", unsafe_allow_html=True)
+
                 display_novel_with_bold_status(prefix + message["content"])
                 render_options_and_status_in_chat(message)
             else:
@@ -1742,14 +1752,15 @@ else:
                     )
 
                 single_reply_id = f"reply_{int(time.time() * 1000)}_{random.randint(1000, 9999)}"
-                
-                # 创建干净的纯文本消息项存入历史（追加绑定 options 选项）
+
+                # 创建干净的纯文本消息项存入历史（追加绑定 options 选项与隐藏思维链）
                 mock_message_item = {
                     "role": "assistant",
                     "content": full_story_response,
+                    "thinking": captured_formatted_thinking,  # ✨ 仅保存在本地字典，不作为上下文发给 AI
                     "timestamp": time.time(),
                     "msg_id": single_reply_id,
-                    "options": action_options  # ✨ 完美落库
+                    "options": action_options
                 }
                 role_data["chat_history"].append(mock_message_item)
                 # ========================================
