@@ -1665,7 +1665,7 @@ else:
                         # 🌟 联动修改：第一轮思考忽略温度；续写轮次给予 0.7 的黄金 RP 温度
                         temperature=0.0 if loop_count == 1 else 0.7, 
                         # 官方支持 discrete native 级别：low/medium 自动映射为 high，想省事直接用 high 和 max
-                        reasoning_effort="high" if loop_count == 1 else "high", 
+                        reasoning_effort="max" if loop_count == 1 else "max", 
                         extra_body={"thinking": {"type": "enabled" if loop_count == 1 else "disabled"}}
                     )
 
