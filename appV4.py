@@ -264,22 +264,20 @@ st.markdown("""
 
 def novel_text_formatter(raw_text: str) -> str:
     """
-    🎬 智能流式小说排版引擎 (字数阈值拦截+数字符号分段版)
+    🎬 智能流式小说排版引擎 (放行0️⃣幕心理输出并优雅渲染)
     """
     if not raw_text:
         return raw_text
 
-    # 🚀【硬核净化补丁】：从源头抹去正文前段不慎夹带的角色、视角和心理小碎屑
-    # 彻底粉碎流式输出开头出现的 [女儿]、[心理]、【女儿】 等脏字符
-    raw_text = re.sub(r'^(?:\[.*?\]|【.*?】|0️⃣|好的|我知道了|现在我是|我明白|遵命|开始推演)[\s]*', '', raw_text).strip()
-    # 针对漏网的半截碎屑如 "[女儿" 或 "女儿]" 进行极限抹除
+    # 🚀【修复硬核净化补丁】：移除了对 '0️⃣' 的无脑抹除，只清除真正的脏碎屑
+    raw_text = re.sub(r'^(?:\[.*?\]|【.*?】|好的|我知道了|现在我是|我明白|遵命|开始推演)[\s]*', '', raw_text).strip()
     raw_text = re.sub(r'^.*?\]', '', raw_text).strip() if (
                 ']' in raw_text and not raw_text.startswith('“')) else raw_text
-    raw_text = re.sub(r'^\[[^\s\]]+$', '', raw_text).strip()
 
     # 1. 规范化基础文本
     clean_stream = re.sub(r'\n+', ' ', raw_text).strip()
-    clean_stream = re.sub(r'(1️⃣|2️⃣|3️⃣)', r' \1 ', clean_stream)
+    # ✨ 允许 0️⃣ 参与分段标识扫描
+    clean_stream = re.sub(r'(0️⃣|1️⃣|2️⃣|3️⃣)', r' \1 ', clean_stream)
     clean_stream = re.sub(r'\s+', ' ', clean_stream).strip()
 
     segments = []
@@ -289,14 +287,14 @@ def novel_text_formatter(raw_text: str) -> str:
     paren_depth = 0  # 英文括号嵌套层级
     zh_paren_depth = 0  # 中文括号嵌套层级
 
-    target_markers = ["1️⃣", "2️⃣", "3️⃣"]
+    # 包含 0️⃣ 在内的所有目标符号
+    target_markers = ["0️⃣", "1️⃣", "2️⃣", "3️⃣"]
 
     # 2. 高级状态机扫描
     i = 0
     stream_len = len(clean_stream)
 
     while i < stream_len:
-        # ⚡ 前瞻扫描：是否撞上了三幕数字标识符
         matched_marker = None
         for marker in target_markers:
             if clean_stream.startswith(marker, i):
@@ -315,21 +313,16 @@ def novel_text_formatter(raw_text: str) -> str:
 
         char = clean_stream[i]
 
-        # 🎭 【字数流对话/拟声词拦截核心】
         if char == "“":
-            # 1. 动态前瞻：寻找距离最近的闭引号
             closing_idx = clean_stream.find("”", i)
             if closing_idx != -1:
                 quote_content = clean_stream[i + 1:closing_idx]
-
-                # 2. 🌟 纯字数流判定：括号内字数 <= 14 个字（包含标点），直接当成行内文本吞掉
                 if len(quote_content) <= 14:
                     full_voice_block = clean_stream[i:closing_idx + 1]
                     current_segment.append(full_voice_block)
-                    i = closing_idx + 1  # 游标跳过右引号
+                    i = closing_idx + 1
                     continue
 
-            # 3. 如果字数 > 14，说明是正经的长剧情对白，执行原本的独立换行分段逻辑
             if current_segment:
                 seg_str = "".join(current_segment).strip()
                 if seg_str:
@@ -344,7 +337,6 @@ def novel_text_formatter(raw_text: str) -> str:
         elif char == "”":
             in_quote = False
             current_segment.append(char)
-
             seg_str = "".join(current_segment).strip()
             if seg_str:
                 segments.append(seg_str)
@@ -352,7 +344,6 @@ def novel_text_formatter(raw_text: str) -> str:
             i += 1
             continue
 
-        # 其它常规括号容器状态维护
         if char == "(":
             paren_depth += 1
         elif char == ")":
@@ -364,7 +355,6 @@ def novel_text_formatter(raw_text: str) -> str:
 
         current_segment.append(char)
 
-        # 正常句号换行切分逻辑
         if char == "。" and not in_quote and paren_depth == 0 and zh_paren_depth == 0:
             seg_str = "".join(current_segment).strip()
             if seg_str:
@@ -373,7 +363,6 @@ def novel_text_formatter(raw_text: str) -> str:
 
         i += 1
 
-    # 尾部收尾
     if current_segment:
         seg_str = "".join(current_segment).strip()
         if seg_str:
@@ -385,9 +374,17 @@ def novel_text_formatter(raw_text: str) -> str:
         if not seg:
             continue
         if seg in target_markers:
-            processed_blocks.append(f"\n\n{seg}")
+            # ✨ 为 0️⃣ 注入高显眼的古典气泡心理暗示标签，其余照旧
+            if seg == "0️⃣":
+                processed_blocks.append(f"\n\n💡 <b>【角色心声独白】</b>\n")
+            else:
+                processed_blocks.append(f"\n\n{seg}")
         else:
-            processed_blocks.append(f"&emsp;&emsp;{seg}")
+            # 如果上一个是心理开场，这一段落可以让它变成优雅的灰色斜体
+            if processed_blocks and "💡 <b>【角色心声独白】</b>" in processed_blocks[-1]:
+                processed_blocks.append(f"&emsp;&emsp;<i><span style='color:#888888;'>{seg}</span></i>")
+            else:
+                processed_blocks.append(f"&emsp;&emsp;{seg}")
 
     # 4. 输出净化
     final_output = "\n\n".join(processed_blocks)
@@ -1723,14 +1720,6 @@ else:
                     else:
                         # 如果是 'stop' 代表小说自然写完完结，优雅跳出循环
                         break
-
-                # =======================================================
-                # 🛠️ 格式化思维链洗涤与无缝熔铸缝合
-                # =======================================================
-                full_story_response = re.sub(r'0️⃣\s*（心理：[\s\S]*?）', '', full_story_response).strip()
-                full_story_response = re.sub(r'0️⃣\s*\(心理：[\s\S]*?\)', '', full_story_response).strip()
-                full_story_response = re.sub(r'^\[.*?\]', '', full_story_response).strip()
-                full_story_response = re.sub(r'^【.*?】', '', full_story_response).strip()
 
                 if captured_formatted_thinking:
                     pass
