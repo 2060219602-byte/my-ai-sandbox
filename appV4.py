@@ -269,10 +269,12 @@ def novel_text_formatter(raw_text: str) -> str:
     if not raw_text:
         return raw_text
 
-    # 🚀【修复硬核净化补丁】：移除了对 '0️⃣' 的无脑抹除，只清除真正的脏碎屑
-    raw_text = re.sub(r'^(?:\[.*?\]|【.*?】|好的|我知道了|现在我是|我明白|遵命|开始推演)[\s]*', '', raw_text).strip()
-    raw_text = re.sub(r'^.*?\]', '', raw_text).strip() if (
-                ']' in raw_text and not raw_text.startswith('“')) else raw_text
+    if raw_text.strip().startswith("0️⃣"):
+        pass 
+    else:
+        raw_text = re.sub(r'^(?:\[.*?\]|【.*?】|好的|我知道了|现在我是|我明白|遵命|开始推演)[\s]*', '', raw_text).strip()
+        raw_text = re.sub(r'^.*?\]', '', raw_text).strip() if (
+                    ']' in raw_text and not raw_text.startswith('“')) else raw_text
 
     # 1. 规范化基础文本
     clean_stream = re.sub(r'\n+', ' ', raw_text).strip()
@@ -1724,8 +1726,11 @@ else:
                 if captured_formatted_thinking:
                     pass
 
-                full_story_response = re.sub(r'0️⃣\s*（心理：[\s\S]*?）', '', full_story_response).strip()
-                full_story_response = re.sub(r'0️⃣\s*\(心理：[\s\S]*?\)', '', full_story_response).strip()
+                # ====== 【修复】安全清洗前缀，绝对放行 0️⃣ ======
+                full_story_response = full_story_response.strip()
+                # 仅移除模型偶尔吐出的多余说明性大括号前缀，不误杀 0️⃣
+                full_story_response = re.sub(r'^(?:好的|我知道了|现在我是|我明白|遵命|开始推演)[\s]*', '', full_story_response).strip()
+                # =============================================
                 full_story_response = re.sub(r'^\[.*?\]', '', full_story_response).strip()
                 full_story_response = re.sub(r'^【.*?】', '', full_story_response).strip()
 
