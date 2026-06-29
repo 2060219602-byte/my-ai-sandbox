@@ -1662,8 +1662,9 @@ else:
                         stream=True,
                         max_tokens=4000, 
                         timeout=60.0,
-                        temperature=0.85,  # 统一 0.85 黄金 RP 温度
-                        reasoning_effort="max",  # 统一全轮次 max 思考
+                        temperature=0.85,  
+                        # 🌟 核心修改 2：删掉 reasoning_effort，改用 extra_body 显式关闭思考模式
+                        extra_body={"thinking": {"type": "disabled"}}
                     )
 
                     finish_reason = None
