@@ -1485,12 +1485,13 @@ if is_group_chat:
                 # 🚀 注入：在群聊落盒前同样唤醒 flash 模型全速规划群戏剧局势切片
                 with st.spinner("⚡ 正在进行多人群戏局势切片推演..."):
                     action_options = generate_four_options(
-                        client=client,
-                        system_role=agent_db.get('system_role', ''),
-                        user_text=active_content,
-                        assistant_text=full_story_response
+                        client,
+                        agent_db.get('system_role', ''),
+                        agent_db.get('background_story', ''),  # 传入背景剧情
+                        chat_history_view,                      # 传入群聊历史切片
+                        full_story_response                     # 传入当前AI响应
                     )
-
+                    
                 single_reply_id = f"reply_{int(time.time() * 1000)}_{random.randint(1000, 9999)}"
                 # 仅保存纯小说文本（追加绑定 options 选项）
                 agent_db["chat_history"].append({
@@ -1733,10 +1734,11 @@ else:
                 # 🚀 注入：在这里调用 flash 模型全速规划分支行为树
                 with st.spinner("⚡ 正在全速推演次轮行动分支..."):
                     action_options = generate_four_options(
-                        client=client,
-                        system_role=role_data.get('system_role', ''),
-                        user_text=active_user_text,
-                        assistant_text=full_story_response
+                        client,
+                        role_data.get('system_role', ''),
+                        role_data.get('background_story', ''), # 传入背景剧情
+                        chat_history_view,                     # 传入单聊历史切片
+                        full_story_response                    # 传入当前AI响应
                     )
 
                 single_reply_id = f"reply_{int(time.time() * 1000)}_{random.randint(1000, 9999)}"
