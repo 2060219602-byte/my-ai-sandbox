@@ -1663,7 +1663,6 @@ else:
         # ==========================================
         # 2️⃣ 【全新升级】：RAG 双轨深层长期记忆唤醒区
         # ==========================================
-        # 唤醒记忆海中与当前玩家输入最匹配的 2 轮高清长文画面
         retrieved_memories = rag_retrieve_older_context(active_user_text, role_data, top_k=2)
 
         if retrieved_memories:
@@ -1676,10 +1675,9 @@ else:
             cleaned_api_payload.append({"role": "user", "content": chronicle_content})
             cleaned_api_payload.append({
                 "role": "assistant",
-                "content": "（某些久远而深刻的回忆画面在脑海剧烈翻涌，咬了咬红唇）……原来我们经历过这些。当时的感觉重新在浑身血液里复燃了，我不会忘记。我会顺着现在的局面继续应对他。"
+                "content": "（某些久远而深刻的回忆画面在脑海剧烈翻涌，咬了误红唇）……原来我们经历过这些。当时的感觉重新在浑身血液里复燃了，我不会忘记。我会顺着现在的局面继续应对他。"
             })
         else:
-            # 🚀 线性过渡层：如果历史太短或没检索到相关内容，固定抽取紧接着近景前面的第 6~7 轮摘要垫背，防止长线逻辑断层
             all_summaries = role_data.get("summarized_history", [])
             if len(all_summaries) > 5:
                 older_summaries = all_summaries[-7:-5]
@@ -1696,8 +1694,8 @@ else:
             cleaned_api_payload.append({"role": "user", "content": memory_ledger_prompt})
             cleaned_api_payload.append({"role": "assistant", "content": "（调取灵魂深处的核心羁绊）……这些核心线索我绝不会忘。"})
 
-        # 4️⃣ 放入【最近3轮详细对话回溯】（作为前置连续镜头，属于过去的记忆）
-        prev_history = role_data["chat_history"][:-1]  # 排除当前这一轮输入
+        # 4️⃣ 放入【最近5轮详细对话回溯】（✨ 修复死循环硬伤，对齐近景镜头）
+        prev_history = role_data["chat_history"][:-1]  
         i = len(prev_history) - 1
         turns_found = []
         while i >= 0 and len(turns_found) < 5:
@@ -1706,18 +1704,18 @@ else:
                     turns_found.insert(0, (prev_history[i-1], prev_history[i]))
                     i -= 2
                     continue
-            i -= 1
+            i -= 1  # ✨ 【核心修复】：防止不规整数据导致无限死循环白屏！
 
         if turns_found:
-            latest_detailed_prompt = "🎬【📢 当前舞台近景回溯 · 最近3轮详细对话互动锚点】\n"
-            latest_detailed_prompt += "这是你与玩家在刚刚过去的3轮微观互动细节，请作为剧情承接的基础：\n\n"
+            latest_detailed_prompt = f"🎬【📢 当前舞台近景回溯 · 最近{len(turns_found)}轮详细对话互动锚点】\n"
+            latest_detailed_prompt += f"这是你与玩家在刚刚过去的{len(turns_found)}轮微观互动细节，请作为剧情承接的基础：\n\n"
             
             for idx, (u_msg, a_msg) in enumerate(turns_found):
                 clean_ai_content = re.sub(r'\[.*?\][\s\S]*$', '', a_msg["content"]).strip()
                 if "🔒DATA_SPLIT_MARKER" in clean_ai_content:
                     clean_ai_content = clean_ai_content.split("🔒DATA_SPLIT_MARKER")[0].strip()
                 
-                latest_detailed_prompt += f"========================= [过往第 {3 - idx} 轮近景接戏镜头] =========================\n"
+                latest_detailed_prompt += f"========================= [过往第 {len(turns_found) - idx} 轮近景接戏镜头] =========================\n"
                 latest_detailed_prompt += f"【玩家行动/台词】：\n{u_msg['content']}\n\n"
                 latest_detailed_prompt += f"【你（{target_girl}）剧情回应】：\n{clean_ai_content}\n"
             
@@ -1730,7 +1728,7 @@ else:
 
         cleaned_api_payload.append({"role": "user", "content": "💡【即时接戏演出令】：请全盘承接并无缝继承前文发生的所有剧情线索，继续向下展现你的即时行动与戏剧反应。"})
 
-        # 6️⃣ 放入【最新行动拼接】玩家最新的输入或推演命令
+        # 6️⃣ 放入【最新行动拼接】
         if "继续推演" in active_user_text or "重算" in active_user_text:
             narrative_anchor = f"🎬 【当前大导演剧情演进令 —— 物理时间流逝背景】：\n{active_user_text}\n\n"
         else:
@@ -1749,21 +1747,15 @@ else:
         with st.chat_message("assistant", avatar="💋"):
             response_placeholder = st.empty()
 
-            # 用于存储多轮续写接力合并的最终完整文本与思维链
             full_story_response = ""
             captured_formatted_thinking = ""
-
-            max_loops = 3  # 最大允许自动续写次数，防止异常死循环
+            max_loops = 3  
             loop_count = 0
-
-            # 深度复制一份 payload，用于在续写循环中动态追加上下文
             loop_payload = list(cleaned_api_payload)
 
             try:
-                # 🔄 阶段一：写文模型接力生成小说正文（1️⃣2️⃣3️⃣幕）
                 while loop_count < max_loops:
                     loop_count += 1
-
                     response = client.chat.completions.create(
                         model=model_name,
                         messages=loop_payload,
@@ -1771,120 +1763,91 @@ else:
                         max_tokens=4000, 
                         timeout=60.0,
                         temperature=0.85,  
-                        # 🌟 核心修改 2：删掉 reasoning_effort，改用 extra_body 显式关闭思考模式
                         extra_body={"thinking": {"type": "disabled"}}
                     )
 
                     finish_reason = None
-                    loop_buffer = []  # 记录当前单轮次吐出的文本
+                    loop_buffer = []  
 
                     for chunk in response:
                         if chunk.choices and chunk.choices[0].delta:
                             delta = chunk.choices[0].delta
 
-                            # 拦截并沉淀思维链（仅在第一轮产生）
                             if hasattr(delta, 'reasoning_content') and delta.reasoning_content:
                                 captured_formatted_thinking += delta.reasoning_content
                                 response_placeholder.markdown("⏳ *角色正在深度激活隐秘知觉与博弈心理...*")
-
-                            # 实时流式渲染小说正文
                             elif delta.content:
                                 text_fragment = delta.content
                                 loop_buffer.append(text_fragment)
                                 full_story_response += text_fragment
-
-                                # 实时更新 Streamlit 预览窗口
                                 display_view = novel_text_formatter(full_story_response)
                                 with response_placeholder.container():
                                     st.markdown(display_view, unsafe_allow_html=True)
 
-                            # 捕捉服务器掐断标识
                             if chunk.choices[0].finish_reason is not None:
                                 finish_reason = chunk.choices[0].finish_reason
 
-                    # 核心无感续写判定：如果因为篇幅撞上限被强行截断
                     if finish_reason == "length":
                         current_loop_text = "".join(loop_buffer)
-
-                        # 🌟【硬核修复】：按照官方最新标准，将上一轮的思考链与正文无缝熔铸并喂回上下文
                         assistant_message = {
                             "role": "assistant",
                             "content": current_loop_text
                         }
-
-                        # 如果第一轮抓到了思考内容，将其写入官方指定的专用字段中
                         if loop_count == 1 and captured_formatted_thinking:
                             assistant_message["reasoning_content"] = captured_formatted_thinking
 
                         loop_payload.append(assistant_message)
-
-                        # 追加无缝续写指令，强迫其把3️⃣幕写完
                         loop_payload.append({
                             "role": "user",
                             "content": "【系统提示：因篇幅限制小说正文内容被截断，请紧接上文的最后一个字，继续无缝输出后续的剧情。注意：绝对不要重复前面写过的内容、已有的大标题或开场白，直接往下续写直至戏剧定格结束！】"
                         })
                     else:
-                        # 如果是 'stop' 代表小说自然写完完结，优雅跳出循环
                         break
 
-                if captured_formatted_thinking:
-                    pass
-
-                # ====== 【硬核修复】安全清洗前缀，绝对防行 0️⃣ ======
                 full_story_response = full_story_response.strip()
-                
-                # 检查 0️⃣ 是否存在，如果存在，只安全移除可能包裹在 0️⃣ 之前的冗余废话
                 if "0️⃣" in full_story_response:
-                    # 找出 0️⃣ 的位置，把 0️⃣ 之前的大模型废话（如 "好的，开始推演："）切掉
                     zero_idx = full_story_response.find("0️⃣")
                     prefix = full_story_response[:zero_idx]
-                    # 如果 0️⃣ 前面确实有类似括号或引导词，才进行裁剪，否则保持原样
                     if any(kw in prefix for kw in ["好的", "我知道了", "【", "[", "开始"]):
                         full_story_response = full_story_response[zero_idx:]
                 else:
-                    # 如果根本没有 0️⃣，才执行常规的括号前缀擦除
                     full_story_response = re.sub(r'^(?:好的|我知道了|现在我是|我明白|遵命|开始推演)[\s]*', '', full_story_response).strip()
                     full_story_response = re.sub(r'^\[.*?\]', '', full_story_response).strip()
                     full_story_response = re.sub(r'^【.*?】', '', full_story_response).strip()
-                # ===================================================
 
                 with response_placeholder.container():
                     st.markdown(novel_text_formatter(full_story_response), unsafe_allow_html=True)
 
-                # 🚀 注入：在这里调用 flash 模型全速规划分支行为树
                 with st.spinner("⚡ 正在全速推演次轮行动分支..."):
                     action_options = generate_four_options(
                         client,
                         role_data.get('system_role', ''),
-                        role_data.get('background_story', ''), # 传入背景剧情
-                        chat_history_view,                     # 传入单聊历史切片
-                        full_story_response                    # 传入当前AI响应
+                        role_data.get('background_story', ''), 
+                        chat_history_view,                     
+                        full_story_response                    
                     )
 
                 single_reply_id = f"reply_{int(time.time() * 1000)}_{random.randint(1000, 9999)}"
 
-                # 创建干净的纯文本消息项存入历史（追加绑定 options 选项与隐藏思维链）
                 mock_message_item = {
                     "role": "assistant",
                     "content": full_story_response,
-                    "thinking": captured_formatted_thinking,  # ✨ 仅保存在本地字典，不作为上下文发给 AI
+                    "thinking": captured_formatted_thinking,  
                     "timestamp": time.time(),
                     "msg_id": single_reply_id,
                     "options": action_options
                 }
                 role_data["chat_history"].append(mock_message_item)
-                # ========================================
 
                 with st.spinner("⚡ 幕后纪实官正在无感压缩当前轮次事实链..."):
                     new_turn_summary = generate_single_turn_summary(client, active_user_text, full_story_response)
                     if "summarized_history" not in role_data:
                         role_data["summarized_history"] = []
                     role_data["summarized_history"].append(new_turn_summary)
-    
-                    # ✨✨ 【新增：阿里的向量同步入库机制】
+                    
+                    # ✨ 【向量同步入库】：确保单聊存储绝对闭环
                     if "embeddings_history" not in role_data:
                         role_data["embeddings_history"] = []
-                    # 调用百炼接口转换为 1536 维向量
                     new_vector_data = get_text_embedding(new_turn_summary)
                     role_data["embeddings_history"].append(new_vector_data)
 
