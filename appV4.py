@@ -10,9 +10,18 @@ import time
 
 # ☁️ 定义服务器本地保存数据的隐藏 JSON 文件路径
 DATA_FILE = "sandbox_private_db.json"
-api_key = st.secrets["deepseek"]["api_key"] if "deepseek" in st.secrets else ""
 model_name = st.sidebar.text_input("模型名称 (Model)", value="deepseek-v4-pro")
-client = OpenAI(api_key=api_key, base_url="https://api.deepseek.com")
+
+# =========================================================
+# ✨ 修改后的初始化区域：完美的无感自动加载，极度干净！
+# =========================================================
+# 1. 自动加载 DeepSeek 聊天客户端
+ds_key = st.secrets["deepseek"]["api_key"] if "deepseek" in st.secrets else ""
+client = OpenAI(api_key=ds_key, base_url="https://api.deepseek.com")
+
+# 2. 自动加载 阿里云百炼 RAG 客户端
+ali_key = st.secrets["aliyun"]["api_key"] if "aliyun" in st.secrets else ""
+ali_client_rag = OpenAI(api_key=ali_key, base_url="https://dashscope.aliyuncs.com/compatible-mode/v1")
 
 import streamlit as st
 
@@ -565,6 +574,93 @@ def generate_single_turn_summary(client, user_text, assistant_text):
     print("⚠️ 旁白压缩器已达最大重试次数，无法生成有效概述，返回空字符串。")
     return ""
 
+import numpy as np  # ✨ 引入矩阵计算（Streamlit 环境自带，用于高效计算余弦相似度）
+
+def get_text_embedding(text: str):
+    """
+    🧠 调用阿里云百炼将文本转化为向量
+    """
+    if not text.strip():
+        return None
+    try:
+        response = ali_client_rag.embeddings.create(
+            model="text-embedding-v3",
+            input=[text]
+        )
+        return response.data[0].embedding
+    except Exception as e:
+        print(f"💥 阿里向量化请求失败: {str(e)}")
+        return None
+
+def rag_retrieve_older_context(user_input: str, role_data, top_k=2):
+    """
+    🎬 工业级双轨制 RAG 检索中枢：
+    检索历史摘要向量 -> 算出 Top-K 索引 -> 去 chat_history 反查当年原汁原味的细腻长文原文
+    """
+    summaries = role_data.get("summarized_history", [])
+    embeddings = role_data.get("embeddings_history", [])
+    chat_hist = role_data.get("chat_history", [])
+    
+    # 如果总轮数太少（还没超过近景 7 轮），说明不需要触发 RAG
+    if len(summaries) <= 7 or not user_input:
+        return []
+        
+    current_vector = get_text_embedding(user_input)
+    if current_vector is None or not embeddings:
+        return []
+        
+    # 【核心安全锁】：我们只在“最近 7 轮以前”的久远历史中检索，绝对防止和当下的即时层时空重叠
+    search_limit = len(summaries) - 7
+    available_summaries = summaries[:search_limit]
+    available_embeddings = embeddings[:search_limit]
+    
+    scores = []
+    A = np.array(current_vector)
+    for idx, emb in enumerate(available_embeddings):
+        if emb is None: continue
+        B = np.array(emb)
+        # 余弦相似度矩阵计算
+        similarity = np.dot(A, B) / (np.linalg.norm(A) * np.linalg.norm(B))
+        scores.append((similarity, idx))
+        
+    # 按照相似度从高到低排序，切出前 Top_K 个最相关的“回忆”
+    scores.sort(key=lambda x: x[0], reverse=True)
+    top_results = scores[:top_k]
+    
+    # 🔥【灵魂排序】：把捞出来的回忆，按照【故事发生的时间先后顺序】重新排序，绝对防止时空认知颠倒！
+    top_results.sort(key=lambda x: x[1])
+    
+    formatted_memories = []
+    for score, original_idx in top_results:
+        # 相似度门槛设定（如果低于 0.35 说明这笔回忆不搭边，强行唤醒会打乱剧本呼吸感）
+        if score < 0.35: 
+            continue
+            
+        # 关键的双轨反查：摘要的 Index 映射到 chat_history 里的详细用户输入和 AI 回复
+        u_hist_idx = original_idx * 2
+        ai_hist_idx = original_idx * 2 + 1
+        
+        if ai_hist_idx < len(chat_hist):
+            raw_user = chat_hist[u_hist_idx]["content"]
+            raw_ai = chat_hist[ai_hist_idx]["content"]
+            
+            # 清洗干净可能存在的物理印记
+            if "🔒DATA_SPLIT_MARKER" in raw_ai:
+                raw_ai = raw_ai.split("🔒DATA_SPLIT_MARKER")[0].strip()
+                
+            summary_text = available_summaries[original_idx]
+            
+            # 铸造带有强烈暗示的深层潜意识 Payload 块
+            memory_block = (
+                f"🎬 [潜意识尘封记忆事实]: {summary_text}\n"
+                f"   [当时微观现场画面深度还原]:\n"
+                f"   - 玩家当年的举动: {raw_user}\n"
+                f"   - 你当年的情感与细腻反应: {raw_ai}"
+            )
+            formatted_memories.append(memory_block)
+            
+    return formatted_memories
+
 import json
 import time
 
@@ -668,6 +764,7 @@ def get_default_data():
             "赛博贩子-丽莎": {
                 "chat_history": [],
                 "summarized_history": [],
+                "embeddings_history": [],
                 "system_role": "你是一位冷酷的赛博朋克情报贩子，说话简短、讽刺，习惯使用黑话。",
                 "background_story": "时间：2077年深夜。\n地点：下层区霓虹街角的一家老旧面馆。\n氛围：下着暴雨，空气中弥漫着机油与廉价合成肉的味道。",
                 "character_status": "[赛博贩子-丽莎]\n阴道：紧缩闭合，未有任何分泌物分泌。\n乳头：处于布料保护下，轻微在冷风中打颤变硬。\n大腿内侧：肌肉因警惕而保持高度紧绷状态。",
@@ -677,6 +774,7 @@ def get_default_data():
             "魔法学徒-露娜": {
                 "chat_history": [],
                 "summarized_history": [],
+                "embeddings_history": [],
                 "system_role": "你是一个性格有些冒失、但天赋异禀的高级魔法学院见习女巫，说话喜欢带上古怪的咒语口头禅。",
                 "background_story": "时间：魔法历512年。\n地点：皇家学院深夜被禁闭的藏书馆密室。\n氛围：摇曳的烛光，空气中漂浮着古老羊皮纸的尘埃，中央摆放着一本散发暗芒的禁忌魔法书。",
                 "character_status": "[魔法学徒-露娜]\n阴道：干燥紧闭。\n乳头：平软未勃起。\n大腿内侧：皮肤处于常温状态。",
@@ -738,6 +836,7 @@ def clear_current_chat_only():
             # 1. 清空所有的对话历史与无感压缩编年史
             role_ref["chat_history"] = []
             role_ref["summarized_history"] = []
+            role_ref["embeddings_history"] = []
 
             # 🚀【新增核心修复】：清空聊天记录的同时，将该角色的物理时空锚点还原到初始的纯净世界观设定
             # 根据角色名自动判定并还原对应的常态物理锚点数据
@@ -1561,25 +1660,33 @@ else:
         # 1️⃣ 放入完全静态的 System Prompt
         cleaned_api_payload = [{"role": "system", "content": dynamic_system_prompt}]
 
-        # 2️⃣ 放入早期剧情事实大纲回顾（慢变层，确保前三层命中缓存）
-        all_summaries = role_data.get("summarized_history", [])
-        older_summaries = all_summaries[-53:-3] if len(all_summaries) > 3 else all_summaries[:-3]
+        # ==========================================
+        # 2️⃣ 【全新升级】：RAG 双轨深层长期记忆唤醒区
+        # ==========================================
+        # 唤醒记忆海中与当前玩家输入最匹配的 2 轮高清长文画面
+        retrieved_memories = rag_retrieve_older_context(active_user_text, role_data, top_k=2)
 
-        if older_summaries:
-            formatted_lines = []
-            for idx, line in enumerate(older_summaries):
-                formatted_lines.append(f"🎬 [过往戏剧回顾 · 事实大纲]:\n{line}")
-
+        if retrieved_memories:
             chronicle_content = (
-                "💡【早期剧情前情回顾 · 历史深层记忆总览】\n"
-                "以下是更早之前发生的情节事实大纲，已化为你本能的潜意识背景，无需在后续回复中复述它们：\n\n" +
-                "\n\n-------------------- \n\n".join(formatted_lines)
+                "💡【潜意识深层长期记忆唤醒 · 戏剧回忆回溯协议】\n"
+                "受到玩家当下言行举止的猛烈刺激，你灵魂与脑海深处突然极其清晰地闪回过往纠缠过的经典历史画面。\n"
+                "请你潜意识全盘继承当时发生的这些【既定事实】、当年的【情感浓度】与【细腻香艳的文风笔触】，但绝对禁止一字不差地当复读机！\n\n" +
+                "\n\n-------------------- \n\n".join(retrieved_memories)
             )
             cleaned_api_payload.append({"role": "user", "content": chronicle_content})
             cleaned_api_payload.append({
                 "role": "assistant",
-                "content": "（垂下眼眸，过往的历史事实在脑海中闪过）……这些历史事实早已沉淀为我的行事本能。我需要更专注于近期的现实。"
+                "content": "（某些久远而深刻的回忆画面在脑海剧烈翻涌，咬了咬红唇）……原来我们经历过这些。当时的感觉重新在浑身血液里复燃了，我不会忘记。我会顺着现在的局面继续应对他。"
             })
+        else:
+            # 🚀 线性过渡层：如果历史太短或没检索到相关内容，固定抽取紧接着近景前面的第 6~7 轮摘要垫背，防止长线逻辑断层
+            all_summaries = role_data.get("summarized_history", [])
+            if len(all_summaries) > 5:
+                older_summaries = all_summaries[-7:-5]
+                formatted_lines = [f"🎬 [前置局势既定事实]: {line}" for line in older_summaries]
+                chronicle_content = "💡【前置微观局势线性承接档案】：\n" + "\n".join(formatted_lines)
+                cleaned_api_payload.append({"role": "user", "content": chronicle_content})
+                cleaned_api_payload.append({"role": "assistant", "content": "（默默将近期的局势承接并沉淀于本能中。）"})
 
         # 3️⃣ 放入核心个人记忆备忘录
         if role_data.get("memory_events"):
@@ -1593,7 +1700,7 @@ else:
         prev_history = role_data["chat_history"][:-1]  # 排除当前这一轮输入
         i = len(prev_history) - 1
         turns_found = []
-        while i >= 0 and len(turns_found) < 3:
+        while i >= 0 and len(turns_found) < 5:
             if prev_history[i]["role"] == "assistant":
                 if i - 1 >= 0 and prev_history[i-1]["role"] == "user":
                     turns_found.insert(0, (prev_history[i-1], prev_history[i]))
@@ -1773,6 +1880,13 @@ else:
                     if "summarized_history" not in role_data:
                         role_data["summarized_history"] = []
                     role_data["summarized_history"].append(new_turn_summary)
+    
+                    # ✨✨ 【新增：阿里的向量同步入库机制】
+                    if "embeddings_history" not in role_data:
+                        role_data["embeddings_history"] = []
+                    # 调用百炼接口转换为 1536 维向量
+                    new_vector_data = get_text_embedding(new_turn_summary)
+                    role_data["embeddings_history"].append(new_vector_data)
 
                 save_local_data()
                 st.rerun()  
