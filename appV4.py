@@ -264,17 +264,14 @@ st.markdown("""
 
 def novel_text_formatter(raw_text: str) -> str:
     """
-    🎬 智能流式小说排版引擎 (放行0️⃣幕心理输出并优雅渲染)
+    🎬 智能流式小说排版引擎 (安全保护 0️⃣ 幕心理输出并优雅渲染)
     """
     if not raw_text:
         return raw_text
 
-    if raw_text.strip().startswith("0️⃣"):
-        pass 
-    else:
-        raw_text = re.sub(r'^(?:\[.*?\]|【.*?】|好的|我知道了|现在我是|我明白|遵命|开始推演)[\s]*', '', raw_text).strip()
-        raw_text = re.sub(r'^.*?\]', '', raw_text).strip() if (
-                    ']' in raw_text and not raw_text.startswith('“')) else raw_text
+    # ✨ 核心修复：优先清洗掉可能顶在 0️⃣ 前面的前缀或说明性括号，确保 0️⃣ 始终能暴露在最开头
+    raw_text = raw_text.strip()
+    raw_text = re.sub(r'^(?:好的|我知道了|现在我是|我明白|遵命|开始推演|\[.*?\]|【.*?】)[\s]*', '', raw_text).strip()
 
     # 1. 规范化基础文本
     clean_stream = re.sub(r'\n+', ' ', raw_text).strip()
@@ -1146,7 +1143,7 @@ multi_reply_protocol = (
 现在，带着对范本文风的绝对记忆，严格应用到下面的回复中，开始输出：
 ---
 【🎭 四幕大白话流水账执行准则】
-0️⃣ 内心直白开场（硬性前置指标：每次回复必须开头先甩一句大白话心里话）
+0️⃣ 内心直白开场（绝对铁律：你的整篇回复必须以“0️⃣”这个符号作为全文的第一个字符动笔，严禁吐出任何前言或多余符号！）
 • 在一切画面描写与对白之前，先用 【一句话内心独白】 打头。
 • 内心独白必须使用 【】括起来，字数20-60字，纯角色第一人称，说当下最真实的情绪、欲念或没说出口的真心话。
 • 禁止任何跳出角色的分析或剧情评价，必须像人物自己在心里嘀咕一样直白。
@@ -1726,15 +1723,24 @@ else:
                 if captured_formatted_thinking:
                     pass
 
-                # ====== 【修复】安全清洗前缀，绝对放行 0️⃣ ======
+                # ====== 【硬核修复】安全清洗前缀，绝对防行 0️⃣ ======
                 full_story_response = full_story_response.strip()
-                # 仅移除模型偶尔吐出的多余说明性大括号前缀，不误杀 0️⃣
-                full_story_response = re.sub(r'^(?:好的|我知道了|现在我是|我明白|遵命|开始推演)[\s]*', '', full_story_response).strip()
-                # =============================================
-                full_story_response = re.sub(r'^\[.*?\]', '', full_story_response).strip()
-                full_story_response = re.sub(r'^【.*?】', '', full_story_response).strip()
+                
+                # 检查 0️⃣ 是否存在，如果存在，只安全移除可能包裹在 0️⃣ 之前的冗余废话
+                if "0️⃣" in full_story_response:
+                    # 找出 0️⃣ 的位置，把 0️⃣ 之前的大模型废话（如 "好的，开始推演："）切掉
+                    zero_idx = full_story_response.find("0️⃣")
+                    prefix = full_story_response[:zero_idx]
+                    # 如果 0️⃣ 前面确实有类似括号或引导词，才进行裁剪，否则保持原样
+                    if any(kw in prefix for kw in ["好的", "我知道了", "【", "[", "开始"]):
+                        full_story_response = full_story_response[zero_idx:]
+                else:
+                    # 如果根本没有 0️⃣，才执行常规的括号前缀擦除
+                    full_story_response = re.sub(r'^(?:好的|我知道了|现在我是|我明白|遵命|开始推演)[\s]*', '', full_story_response).strip()
+                    full_story_response = re.sub(r'^\[.*?\]', '', full_story_response).strip()
+                    full_story_response = re.sub(r'^【.*?】', '', full_story_response).strip()
+                # ===================================================
 
-                # ====== 整体替换为下方修改后的代码块 ======
                 with response_placeholder.container():
                     st.markdown(novel_text_formatter(full_story_response), unsafe_allow_html=True)
 
