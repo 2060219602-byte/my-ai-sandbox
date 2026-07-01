@@ -1817,9 +1817,8 @@ else:
                                     full_story_response += text_fragment
                                     
                                     # 保持你原本的排版预览渲染
-                                    display_view = novel_text_formatter(full_story_response)
                                     with response_placeholder.container():
-                                        st.markdown(display_view, unsafe_allow_html=True)
+                                        st.markdown(full_story_response)
 
                                 # C. 死死掐住每一个 chunk 丢出来的 finish_reason
                                 if hasattr(choice, 'finish_reason') and choice.finish_reason is not None:
