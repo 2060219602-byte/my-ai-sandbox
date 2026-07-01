@@ -1773,14 +1773,19 @@ else:
             try:
                 while loop_count < max_loops:
                     loop_count += 1
+                    # ✨ 【完美对齐官方文档】：利用 extra_body 绕过本地限制，把 thinking 拍平传给美团网关
                     response = client.chat.completions.create(
                         model=model_name,
                         messages=loop_payload,
                         stream=True,
-                        max_tokens=8192, 
+                        # 📢 注意：LongCat-2.0 的 max_tokens 最大支持 131072 (128K)，默认值是 32768！
+                        # 之前设 4000 太小了，这里调大到 16384，配合关闭思考，可以一次性喷出上万字的史诗级 RP 剧情
+                        max_tokens=16384, 
                         timeout=60.0,
                         temperature=0.85,  
-                        thinking={"type": "enabled"}
+                        extra_body={
+                            "thinking": {"type": "disabled"}  # ✨ 彻底关闭思维链，让 1.6T 的大猫直接高能直出网文正文
+                        }
                     )
 
                     finish_reason = None
