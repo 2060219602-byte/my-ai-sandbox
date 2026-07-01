@@ -1777,7 +1777,7 @@ else:
                         model=model_name,
                         messages=loop_payload,
                         stream=True,
-                        max_tokens=4000, 
+                        max_tokens=8192, 
                         timeout=60.0,
                         temperature=0.85,  
                         extra_body={"thinking": {"type": "disabled"}}
