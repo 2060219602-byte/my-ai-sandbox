@@ -10,20 +10,18 @@ import time
 
 # ☁️ 定义服务器本地保存数据的隐藏 JSON 文件路径
 DATA_FILE = "sandbox_private_db.json"
-# 🚀 默认模型修改为 qwen-plus-character
-model_name = st.sidebar.text_input("模型名称 (Model)", value="qwen-plus-character")
+model_name = st.sidebar.text_input("模型名称 (Model)", value="deepseek-v4-pro")
 
 # =========================================================
 # ✨ 修改后的初始化区域：完美的无感自动加载，极度干净！
 # =========================================================
-# 1. 自动加载 DeepSeek 聊天客户端（用于选项生成、摘要压缩等，保持原样）
+# 1. 自动加载 DeepSeek 聊天客户端
 ds_key = st.secrets["deepseek"]["api_key"] if "deepseek" in st.secrets else ""
 client = OpenAI(api_key=ds_key, base_url="https://api.deepseek.com")
 
-# 3. 🚀 使用 st.session_state 锁死专属给百炼对话回复用的独立接口，防止刷新时丢失
-if "ali_client_rp" not in st.session_state:
-    ali_key2 = st.secrets["aliyun"]["api_key2"] if "aliyun" in st.secrets else ""
-    st.session_state.ali_client_rp = OpenAI(api_key=ali_key2, base_url="https://dashscope.aliyuncs.com/compatible-mode/v1")
+# 2. 自动加载 阿里云百炼 RAG 客户端
+ali_key = st.secrets["aliyun"]["api_key2"] if "aliyun" in st.secrets else ""
+ali_client_rag = OpenAI(api_key=ali_key, base_url="https://dashscope.aliyuncs.com/compatible-mode/v1")
 
 import streamlit as st
 
@@ -1779,14 +1777,14 @@ else:
             try:
                 while loop_count < max_loops:
                     loop_count += 1
-                    # 🚀 加上 st.session_state. 前缀调用
-                    response = st.session_state.ali_client_rp.chat.completions.create(
+                    response = client.chat.completions.create(
                         model=model_name,
                         messages=loop_payload,
                         stream=True,
                         max_tokens=4000,
                         timeout=60.0,
-                        temperature=0.85
+                        temperature=0.85,
+                        extra_body={"thinking": {"type": "disabled"}}
                     )
 
                     finish_reason = None
@@ -1796,8 +1794,10 @@ else:
                         if chunk.choices and chunk.choices[0].delta:
                             delta = chunk.choices[0].delta
 
-                            # 🚀 剥离非通用模型的 reasoning_content 拦截，直接接收文本碎片
-                            if delta.content:
+                            if hasattr(delta, 'reasoning_content') and delta.reasoning_content:
+                                captured_formatted_thinking += delta.reasoning_content
+                                response_placeholder.markdown("⏳ *角色正在深度激活隐秘知觉与博弈心理...*")
+                            elif delta.content:
                                 text_fragment = delta.content
                                 loop_buffer.append(text_fragment)
                                 full_story_response += text_fragment
