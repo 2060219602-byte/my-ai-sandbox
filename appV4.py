@@ -20,9 +20,10 @@ model_name = st.sidebar.text_input("模型名称 (Model)", value="qwen-plus-char
 ds_key = st.secrets["deepseek"]["api_key"] if "deepseek" in st.secrets else ""
 client = OpenAI(api_key=ds_key, base_url="https://api.deepseek.com")
 
-# 2. 自动加载 阿里云百炼 RAG 客户端
-ali_key = st.secrets["aliyun"]["api_key2"] if "aliyun" in st.secrets else ""
-ali_client_rag = OpenAI(api_key=ali_key, base_url="https://dashscope.aliyuncs.com/compatible-mode/v1")
+# 3. 🚀 使用 st.session_state 锁死专属给百炼对话回复用的独立接口，防止刷新时丢失
+if "ali_client_rp" not in st.session_state:
+    ali_key2 = st.secrets["aliyun"]["api_key2"] if "aliyun" in st.secrets else ""
+    st.session_state.ali_client_rp = OpenAI(api_key=ali_key2, base_url="https://dashscope.aliyuncs.com/compatible-mode/v1")
 
 import streamlit as st
 
@@ -1778,8 +1779,8 @@ else:
             try:
                 while loop_count < max_loops:
                     loop_count += 1
-                    # 🚀 仅将单聊长流式对话生成切换为 ali_client_rp，并移除 extra_body
-                    response = ali_client_rp.chat.completions.create(
+                    # 🚀 加上 st.session_state. 前缀调用
+                    response = st.session_state.ali_client_rp.chat.completions.create(
                         model=model_name,
                         messages=loop_payload,
                         stream=True,
