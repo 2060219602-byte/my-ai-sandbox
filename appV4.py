@@ -10,30 +10,21 @@ import time
 
 # ☁️ 定义服务器本地保存数据的隐藏 JSON 文件路径
 DATA_FILE = "sandbox_private_db.json"
-# ✨ 将默认模型替换为 LongCat 2.0
-model_name = st.sidebar.text_input("模型名称 (Model)", value="LongCat-2.0")
+model_name = st.sidebar.text_input("模型名称 (Model)", value="deepseek-v4-pro")
 
 # =========================================================
 # ✨ 修改后的初始化区域：完美的无感自动加载，极度干净！
 # =========================================================
 # 1. 自动加载 DeepSeek 聊天客户端
-# 1. 自动加载美团 LongCat 聊天客户端
-# 优先从 secrets 读取，如果左下角接口配置区输入了新 key 则会动态覆盖
-if "api_key" in st.session_state and st.session_state["api_key"]:
-    lc_key = st.session_state["api_key"]
-else:
-    lc_key = st.secrets["deepseek"]["api_key"] if "deepseek" in st.secrets else ""
-
-client = OpenAI(
-    api_key=lc_key,
-    base_url="https://api.longcat.chat/openai"  # ✨ 完美修正后的 LongCat 网关
-)
+ds_key = st.secrets["deepseek"]["api_key"] if "deepseek" in st.secrets else ""
+client = OpenAI(api_key=ds_key, base_url="https://api.deepseek.com")
 
 # 2. 自动加载 阿里云百炼 RAG 客户端
 ali_key = st.secrets["aliyun"]["api_key"] if "aliyun" in st.secrets else ""
 ali_client_rag = OpenAI(api_key=ali_key, base_url="https://dashscope.aliyuncs.com/compatible-mode/v1")
 
 import streamlit as st
+
 
 def run_secure_generation(user_description: str):
     # 0. 提取 Secrets 中的 3万字范文小说与你抽取出的苏菲 txt 极致细颗粒度母本格式
@@ -42,7 +33,7 @@ def run_secure_generation(user_description: str):
             example_novel = st.secrets["novel_style"]["MY_PERFECT_NOVEL"]
         else:
             example_novel = "【未检测到预设3万字范本小说，请检查 secrets】"
-            
+
         if "novel_style" in st.secrets and "MY_PERFECT_EXAMPLE" in st.secrets["novel_style"]:
             example_template = st.secrets["novel_style"]["MY_PERFECT_EXAMPLE"]
         else:
@@ -487,6 +478,7 @@ def display_novel_with_bold_status(text: str):
             """
             st.markdown(status_html, unsafe_allow_html=True)
 
+
 def generate_single_turn_summary(client, user_text, assistant_text):
     """
     Localizing Summary Extractor
@@ -537,7 +529,7 @@ def generate_single_turn_summary(client, user_text, assistant_text):
     max_retries = 3
     attempt = 0
     current_temp = 0.4  # 初始较低温度，确保事实提取不容易胡说八道
-    
+
     # ❌ 内容阻尼拦截黑名单
     rejection_keywords = ["抱歉", "对不起", "不能生成", "无法提供", "安全策略", "违反", "敏感内容"]
 
@@ -548,25 +540,26 @@ def generate_single_turn_summary(client, user_text, assistant_text):
                 model="deepseek-v4-flash",  # ✨ 换成闪电模型
                 messages=[
                     {"role": "system", "content": narrator_prompt},
-                    {"role": "user", "content": f"请立刻切换为全知旁白官，解构整轮能量叠加后的最终大动作定格：\n玩家行动：{user_text}\n角色整轮响应：{clean_assistant}"}
+                    {"role": "user",
+                     "content": f"请立刻切换为全知旁白官，解构整轮能量叠加后的最终大动作定格：\n玩家行动：{user_text}\n角色整轮响应：{clean_assistant}"}
                 ],
                 stream=False,
                 temperature=current_temp,
                 max_tokens=1500,
-                reasoning_effort="high", # ✨ 开启 Max 思考模式
+                reasoning_effort="high",  # ✨ 开启 Max 思考模式
                 extra_body={"thinking": {"type": "enabled"}}
             )
             result_text = completion.choices[0].message.content.strip()
-            
+
             # 🔍 检测模型是否触发过度防御而拒绝概述
             if any(kw in result_text for kw in rejection_keywords):
                 print(f"🚨 旁白压缩器触发合规拒绝（第 {attempt} 次检测到敏感拦截），调整参数准备重试...")
-                current_temp = min(1.0, current_temp + 0.2) # 拉高随机性冲破过滤网
+                current_temp = min(1.0, current_temp + 0.2)  # 拉高随机性冲破过滤网
                 time.sleep(0.4)
-                continue # 重新循环
-                
+                continue  # 重新循环
+
             return result_text  # 🎉 成功抓取干净的大动作大纲，直接返回
-            
+
         except Exception as e:
             print(f"💥 旁白纪实官请求发生物理中断（第 {attempt} 次）: {str(e)}")
             time.sleep(0.5)
@@ -575,7 +568,9 @@ def generate_single_turn_summary(client, user_text, assistant_text):
     print("⚠️ 旁白压缩器已达最大重试次数，无法生成有效概述，返回空字符串。")
     return ""
 
+
 import numpy as np  # ✨ 引入矩阵计算（Streamlit 环境自带，用于高效计算余弦相似度）
+
 
 def get_text_embedding(text: str):
     """
@@ -593,6 +588,7 @@ def get_text_embedding(text: str):
         print(f"💥 阿里向量化请求失败: {str(e)}")
         return None
 
+
 def rag_retrieve_older_context(user_input: str, role_data, top_k=2):
     """
     🎬 工业级双轨制 RAG 检索中枢：
@@ -601,20 +597,20 @@ def rag_retrieve_older_context(user_input: str, role_data, top_k=2):
     summaries = role_data.get("summarized_history", [])
     embeddings = role_data.get("embeddings_history", [])
     chat_hist = role_data.get("chat_history", [])
-    
+
     # 如果总轮数太少（还没超过近景 7 轮），说明不需要触发 RAG
     if len(summaries) <= 7 or not user_input:
         return []
-        
+
     current_vector = get_text_embedding(user_input)
     if current_vector is None or not embeddings:
         return []
-        
+
     # 【核心安全锁】：我们只在“最近 7 轮以前”的久远历史中检索，绝对防止和当下的即时层时空重叠
     search_limit = len(summaries) - 7
     available_summaries = summaries[:search_limit]
     available_embeddings = embeddings[:search_limit]
-    
+
     scores = []
     A = np.array(current_vector)
     for idx, emb in enumerate(available_embeddings):
@@ -623,34 +619,34 @@ def rag_retrieve_older_context(user_input: str, role_data, top_k=2):
         # 余弦相似度矩阵计算
         similarity = np.dot(A, B) / (np.linalg.norm(A) * np.linalg.norm(B))
         scores.append((similarity, idx))
-        
+
     # 按照相似度从高到低排序，切出前 Top_K 个最相关的“回忆”
     scores.sort(key=lambda x: x[0], reverse=True)
     top_results = scores[:top_k]
-    
+
     # 🔥【灵魂排序】：把捞出来的回忆，按照【故事发生的时间先后顺序】重新排序，绝对防止时空认知颠倒！
     top_results.sort(key=lambda x: x[1])
-    
+
     formatted_memories = []
     for score, original_idx in top_results:
         # 相似度门槛设定（如果低于 0.35 说明这笔回忆不搭边，强行唤醒会打乱剧本呼吸感）
-        if score < 0.35: 
+        if score < 0.35:
             continue
-            
+
         # 关键的双轨反查：摘要的 Index 映射到 chat_history 里的详细用户输入和 AI 回复
         u_hist_idx = original_idx * 2
         ai_hist_idx = original_idx * 2 + 1
-        
+
         if ai_hist_idx < len(chat_hist):
             raw_user = chat_hist[u_hist_idx]["content"]
             raw_ai = chat_hist[ai_hist_idx]["content"]
-            
+
             # 清洗干净可能存在的物理印记
             if "🔒DATA_SPLIT_MARKER" in raw_ai:
                 raw_ai = raw_ai.split("🔒DATA_SPLIT_MARKER")[0].strip()
-                
+
             summary_text = available_summaries[original_idx]
-            
+
             # 铸造带有强烈暗示的深层潜意识 Payload 块
             memory_block = (
                 f"🎬 [潜意识尘封记忆事实]: {summary_text}\n"
@@ -659,11 +655,13 @@ def rag_retrieve_older_context(user_input: str, role_data, top_k=2):
                 f"   - 你当年的情感与细腻反应: {raw_ai}"
             )
             formatted_memories.append(memory_block)
-            
+
     return formatted_memories
+
 
 import json
 import time
+
 
 def generate_four_options(client, system_role, background_story, chat_history_view, assistant_text):
     """
@@ -769,6 +767,8 @@ def generate_four_options(client, system_role, background_story, chat_history_vi
         "C": {"tag": "角色主导", "action": "打破沉默，主动做出下一步的实质行动，并将一个全新的核心话题或具体诉求直接抛到对方面前。", "effect": "角色反客为主，强行推进进度。"},
         "D": {"tag": "外部扰动", "action": "当下的物理环境中突然产生了一个微小的客观变化，发出的动静强行打断了两人原有的状态。", "effect": "外部客观因素切入，打破当前定格。"}
     }
+
+
 # ==========================================
 # 0. 核心辅助函数：多群聊+多单聊数据库读取与保存
 # ==========================================
@@ -1372,7 +1372,7 @@ def render_options_and_status_in_chat(message_item):
                 else:
                     action_text = str(opt)
                     effect_text = "顺应前置推演局势延伸。"
-                
+
                 if action_text:
                     # 优雅排版打印行动与潜在效果
                     st.markdown(f"**🔴 选项 {key}**：{action_text}")
@@ -1385,6 +1385,7 @@ def render_options_and_status_in_chat(message_item):
                         st.session_state[f"chat_input_v_{st.session_state.clear_version}"] = str(action_text)
                         st.toast(f"选项 {key} 已成功注入下方输入框，可编辑或直接回车发送！")
                     st.write("")
+
 
 history_len = len(chat_history_view)
 DISPLAY_LIMIT = 4
@@ -1429,7 +1430,8 @@ if history_len > DISPLAY_LIMIT:
                 # 🧠 仅在前端展示思维链折叠框，完全隔离，不污染后续发给 AI 的上下文
                 if message.get("thinking"):
                     with st.expander("💭 查看模型内心独白/心理推演...", expanded=False):
-                        st.markdown(f"<span style='color:#6c757d; font-size:16px;'>{message['thinking']}</span>", unsafe_allow_html=True)
+                        st.markdown(f"<span style='color:#6c757d; font-size:16px;'>{message['thinking']}</span>",
+                                    unsafe_allow_html=True)
 
                 display_novel_with_bold_status(prefix + message["content"])
                 render_options_and_status_in_chat(message)
@@ -1454,7 +1456,8 @@ else:
                 # 🧠 仅在前端展示思维链折叠框，完全隔离，不污染后续发给 AI 的上下文
                 if message.get("thinking"):
                     with st.expander("💭 查看模型内心独白/心理推演...", expanded=False):
-                        st.markdown(f"<span style='color:#6c757d; font-size:16px;'>{message['thinking']}</span>", unsafe_allow_html=True)
+                        st.markdown(f"<span style='color:#6c757d; font-size:16px;'>{message['thinking']}</span>",
+                                    unsafe_allow_html=True)
 
                 display_novel_with_bold_status(prefix + message["content"])
                 render_options_and_status_in_chat(message)
@@ -1478,7 +1481,8 @@ input_key = f"chat_input_v_{st.session_state.clear_version}"
 # 🛡️ 强制类型洗涤防御：若历史残留或意外存入了非字符串数据（如旧版字典对象），立刻强转清洗，根除前端熔断
 if input_key in st.session_state:
     if not isinstance(st.session_state[input_key], str):
-        st.session_state[input_key] = str(st.session_state[input_key]) if st.session_state[input_key] is not None else ""
+        st.session_state[input_key] = str(st.session_state[input_key]) if st.session_state[
+                                                                              input_key] is not None else ""
 
 # 渲染输入框
 user_input = st.chat_input("在此处输入聊天内容...", key=input_key)
@@ -1615,15 +1619,15 @@ if is_group_chat:
                         client,
                         agent_db.get('system_role', ''),
                         agent_db.get('background_story', ''),  # 传入背景剧情
-                        chat_history_view,                      # 传入群聊历史切片
-                        full_story_response                     # 传入当前AI响应
+                        chat_history_view,  # 传入群聊历史切片
+                        full_story_response  # 传入当前AI响应
                     )
-                    
+
                 single_reply_id = f"reply_{int(time.time() * 1000)}_{random.randint(1000, 9999)}"
                 # 仅保存纯小说文本（追加绑定 options 选项）
                 agent_db["chat_history"].append({
-                    "role": "assistant", 
-                    "content": full_story_response, 
+                    "role": "assistant",
+                    "content": full_story_response,
                     "timestamp": time.time(),
                     "msg_id": single_reply_id,
                     "options": action_options  # ✨ 完美落库
@@ -1684,10 +1688,10 @@ else:
 
         if retrieved_memories:
             chronicle_content = (
-                "💡【潜意识深层长期记忆唤醒 · 戏剧回忆回溯协议】\n"
-                "受到玩家当下言行举止的猛烈刺激，你灵魂与脑海深处突然极其清晰地闪回过往纠缠过的经典历史画面。\n"
-                "请你潜意识全盘继承当时发生的这些【既定事实】、当年的【情感浓度】与【细腻香艳的文风笔触】，但绝对禁止一字不差地当复读机！\n\n" +
-                "\n\n-------------------- \n\n".join(retrieved_memories)
+                    "💡【潜意识深层长期记忆唤醒 · 戏剧回忆回溯协议】\n"
+                    "受到玩家当下言行举止的猛烈刺激，你灵魂与脑海深处突然极其清晰地闪回过往纠缠过的经典历史画面。\n"
+                    "请你潜意识全盘继承当时发生的这些【既定事实】、当年的【情感浓度】与【细腻香艳的文风笔触】，但绝对禁止一字不差地当复读机！\n\n" +
+                    "\n\n-------------------- \n\n".join(retrieved_memories)
             )
             cleaned_api_payload.append({"role": "user", "content": chronicle_content})
             cleaned_api_payload.append({
@@ -1712,13 +1716,13 @@ else:
             cleaned_api_payload.append({"role": "assistant", "content": "（调取灵魂深处的核心羁绊）……这些核心线索我绝不会忘。"})
 
         # 4️⃣ 放入【最近5轮详细对话回溯】（✨ 修复死循环硬伤，对齐近景镜头）
-        prev_history = role_data["chat_history"][:-1]  
+        prev_history = role_data["chat_history"][:-1]
         i = len(prev_history) - 1
         turns_found = []
         while i >= 0 and len(turns_found) < 5:
             if prev_history[i]["role"] == "assistant":
-                if i - 1 >= 0 and prev_history[i-1]["role"] == "user":
-                    turns_found.insert(0, (prev_history[i-1], prev_history[i]))
+                if i - 1 >= 0 and prev_history[i - 1]["role"] == "user":
+                    turns_found.insert(0, (prev_history[i - 1], prev_history[i]))
                     i -= 2
                     continue
             i -= 1  # ✨ 【核心修复】：防止不规整数据导致无限死循环白屏！
@@ -1726,16 +1730,16 @@ else:
         if turns_found:
             latest_detailed_prompt = f"🎬【📢 当前舞台近景回溯 · 最近{len(turns_found)}轮详细对话互动锚点】\n"
             latest_detailed_prompt += f"这是你与玩家在刚刚过去的{len(turns_found)}轮微观互动细节，请作为剧情承接的基础：\n\n"
-            
+
             for idx, (u_msg, a_msg) in enumerate(turns_found):
                 clean_ai_content = re.sub(r'\[.*?\][\s\S]*$', '', a_msg["content"]).strip()
                 if "🔒DATA_SPLIT_MARKER" in clean_ai_content:
                     clean_ai_content = clean_ai_content.split("🔒DATA_SPLIT_MARKER")[0].strip()
-                
+
                 latest_detailed_prompt += f"========================= [过往第 {len(turns_found) - idx} 轮近景接戏镜头] =========================\n"
                 latest_detailed_prompt += f"【玩家行动/台词】：\n{u_msg['content']}\n\n"
                 latest_detailed_prompt += f"【你（{target_girl}）剧情回应】：\n{clean_ai_content}\n"
-            
+
             latest_detailed_prompt += "=================================================================================\n"
             cleaned_api_payload.append({"role": "user", "content": latest_detailed_prompt})
             cleaned_api_payload.append({
@@ -1766,85 +1770,43 @@ else:
 
             full_story_response = ""
             captured_formatted_thinking = ""
-            max_loops = 3  
+            max_loops = 3
             loop_count = 0
             loop_payload = list(cleaned_api_payload)
 
             try:
                 while loop_count < max_loops:
                     loop_count += 1
-                    # ✨ 【完美对齐官方文档】：利用 extra_body 绕过本地限制，把 thinking 拍平传给美团网关
                     response = client.chat.completions.create(
                         model=model_name,
                         messages=loop_payload,
                         stream=True,
-                        # 📢 注意：LongCat-2.0 的 max_tokens 最大支持 131072 (128K)，默认值是 32768！
-                        # 之前设 4000 太小了，这里调大到 16384，配合关闭思考，可以一次性喷出上万字的史诗级 RP 剧情
-                        max_tokens=16384, 
+                        max_tokens=4000,
                         timeout=60.0,
-                        temperature=0.85,  
-                        extra_body={
-                            "thinking": {"type": "enabled"}  # ✨ 彻底关闭思维链，让 1.6T 的大猫直接高能直出网文正文
-                        }
+                        temperature=0.85,
+                        extra_body={"thinking": {"type": "disabled"}}
                     )
 
                     finish_reason = None
-                    loop_buffer = []  
+                    loop_buffer = []
 
-                    # ==================== DEBUG 增强版流式捕获开始 ====================
-                    finish_reason = None
-                    loop_buffer = []  # 仅记录当前这一个轮次生成的文本
+                    for chunk in response:
+                        if chunk.choices and chunk.choices[0].delta:
+                            delta = chunk.choices[0].delta
 
-                    # 1. 在侧边栏创建一个专属的 Debug 状态监控区
-                    debug_status = st.sidebar.empty()
-                    debug_status.markdown("🔍 **Debug 监控：正在建立流式连接...**")
+                            if hasattr(delta, 'reasoning_content') and delta.reasoning_content:
+                                captured_formatted_thinking += delta.reasoning_content
+                                response_placeholder.markdown("⏳ *角色正在深度激活隐秘知觉与博弈心理...*")
+                            elif delta.content:
+                                text_fragment = delta.content
+                                loop_buffer.append(text_fragment)
+                                full_story_response += text_fragment
+                                display_view = novel_text_formatter(full_story_response)
+                                with response_placeholder.container():
+                                    st.markdown(display_view, unsafe_allow_html=True)
 
-                    try:
-                        for chunk in response:
-                            if chunk.choices and len(chunk.choices) > 0:
-                                choice = chunk.choices[0]
-                                delta = choice.delta
-
-                                # A. 捕获思考内容（如果有）
-                                if hasattr(delta, 'reasoning_content') and delta.reasoning_content:
-                                    captured_formatted_thinking += delta.reasoning_content
-                                    response_placeholder.markdown("⏳ *角色正在深度激活隐秘知觉与博弈心理...*")
-                                
-                                # B. 实时捕获文本正文
-                                elif delta.content:
-                                    text_fragment = delta.content
-                                    loop_buffer.append(text_fragment)
-                                    full_story_response += text_fragment
-                                    
-                                    # 保持你原本的排版预览渲染
-                                    with response_placeholder.container():
-                                        st.markdown(full_story_response)
-
-                                # C. 死死掐住每一个 chunk 丢出来的 finish_reason
-                                if hasattr(choice, 'finish_reason') and choice.finish_reason is not None:
-                                    finish_reason = choice.finish_reason
-                                    # 一旦捕获到非空标识，立刻打印在侧边栏，防止中途断流抓不到状态
-                                    st.sidebar.code(f"⚡ 实时捕获到终止信号: {finish_reason}")
-
-                        # 2. 循环结束后，进行全状态强力审计与前端打印
-                        if finish_reason:
-                            if finish_reason == "length":
-                                debug_status.info(f"ℹ️ 诊断结果：内容因单次 `max_tokens` 限制截断。代码将自动触发续写。")
-                            elif finish_reason == "stop":
-                                debug_status.success(f"✅ 诊断结果：模型认为对话已完整，自发吐出结束符正常停机。")
-                            elif finish_reason == "content_filter":
-                                debug_status.error(f"❌ 诊断结果：触发了网关合规过滤器（content_filter）！内容在中途被服务商物理切断。")
-                            else:
-                                debug_status.warning(f"⚠️ 诊断结果：未知停机标识 [{finish_reason}]，请检查网关兼容性。")
-                        else:
-                            # 如果流结束了，却没有任何结束标识，说明在半路悄悄死掉了
-                            debug_status.error(f"🚨 诊断结果：流式传输异常中断！Finish Reason 为 None。可能遭遇网络丢包或接口超时。")
-
-                    except Exception as stream_error:
-                        # 捕获传输中途抛出的物理异常（如 422 格式错误、502 网关超时等）
-                        st.sidebar.error(f"💥 流传输中途发生物理崩溃: {str(stream_error)}")
-                        finish_reason = "exception_break"
-                    # ==================== DEBUG 增强版流式捕获结束 ====================
+                            if chunk.choices[0].finish_reason is not None:
+                                finish_reason = chunk.choices[0].finish_reason
 
                     if finish_reason == "length":
                         current_loop_text = "".join(loop_buffer)
@@ -1881,9 +1843,9 @@ else:
                     action_options = generate_four_options(
                         client,
                         role_data.get('system_role', ''),
-                        role_data.get('background_story', ''), 
-                        chat_history_view,                     
-                        full_story_response                    
+                        role_data.get('background_story', ''),
+                        chat_history_view,
+                        full_story_response
                     )
 
                 single_reply_id = f"reply_{int(time.time() * 1000)}_{random.randint(1000, 9999)}"
@@ -1891,7 +1853,7 @@ else:
                 mock_message_item = {
                     "role": "assistant",
                     "content": full_story_response,
-                    "thinking": captured_formatted_thinking,  
+                    "thinking": captured_formatted_thinking,
                     "timestamp": time.time(),
                     "msg_id": single_reply_id,
                     "options": action_options
@@ -1903,7 +1865,7 @@ else:
                     if "summarized_history" not in role_data:
                         role_data["summarized_history"] = []
                     role_data["summarized_history"].append(new_turn_summary)
-                    
+
                     # ✨ 【向量同步入库】：确保单聊存储绝对闭环
                     if "embeddings_history" not in role_data:
                         role_data["embeddings_history"] = []
@@ -1911,7 +1873,7 @@ else:
                     role_data["embeddings_history"].append(new_vector_data)
 
                 save_local_data()
-                st.rerun()  
+                st.rerun()
             except Exception as e:
                 st.error(f"📡 赛博空间发生 logic 折断：\n\n{str(e)}")
 
@@ -1923,4 +1885,3 @@ if __name__ == "__main__":
     if not Runtime.exists():
         sys.argv = ["streamlit", "run", __file__]
         sys.exit(stcli.main())
-
