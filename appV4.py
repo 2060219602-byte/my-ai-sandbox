@@ -1780,7 +1780,7 @@ else:
                         max_tokens=8192, 
                         timeout=60.0,
                         temperature=0.85,  
-                        extra_body={"thinking": {"type": "disabled"}}
+                        thinking={"type": "enabled"}
                     )
 
                     finish_reason = None
