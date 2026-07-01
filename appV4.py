@@ -10,14 +10,24 @@ import time
 
 # ☁️ 定义服务器本地保存数据的隐藏 JSON 文件路径
 DATA_FILE = "sandbox_private_db.json"
-model_name = st.sidebar.text_input("模型名称 (Model)", value="deepseek-v4-pro")
+# ✨ 将默认模型替换为 LongCat 2.0
+model_name = st.sidebar.text_input("模型名称 (Model)", value="LongCat-2.0")
 
 # =========================================================
 # ✨ 修改后的初始化区域：完美的无感自动加载，极度干净！
 # =========================================================
 # 1. 自动加载 DeepSeek 聊天客户端
-ds_key = st.secrets["deepseek"]["api_key"] if "deepseek" in st.secrets else ""
-client = OpenAI(api_key=ds_key, base_url="https://api.deepseek.com")
+# 1. 自动加载美团 LongCat 聊天客户端
+# 优先从 secrets 读取，如果左下角接口配置区输入了新 key 则会动态覆盖
+if "api_key" in st.session_state and st.session_state["api_key"]:
+    lc_key = st.session_state["api_key"]
+else:
+    lc_key = st.secrets["deepseek"]["api_key"] if "deepseek" in st.secrets else ""
+
+client = OpenAI(
+    api_key=lc_key,
+    base_url="https://api.longcat.chat/openai"  # ✨ 完美修正后的 LongCat 网关
+)
 
 # 2. 自动加载 阿里云百炼 RAG 客户端
 ali_key = st.secrets["aliyun"]["api_key"] if "aliyun" in st.secrets else ""
