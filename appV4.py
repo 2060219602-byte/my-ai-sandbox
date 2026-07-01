@@ -1763,11 +1763,10 @@ else:
                         model=model_name,
                         messages=loop_payload,
                         stream=True,
-                        max_tokens=8000,  # ① 建议调大，因为思考过程会消耗大量token
+                        max_tokens=4000,
                         timeout=60.0,
-                        # temperature=0.85,  # ② 思考模式开启后，此参数失效，建议删除或注释掉
-                        reasoning_effort="high",  # ③ 开启最大强度思考（low/medium/high）
-                        extra_body={"thinking": {"type": "enabled"}}  # ④ 将 disabled 改为 enabled
+                        temperature=0.85,
+                        extra_body={"thinking": {"type": "disabled"}}
                     )
 
                     finish_reason = None
