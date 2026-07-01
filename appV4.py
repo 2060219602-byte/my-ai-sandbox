@@ -1784,7 +1784,7 @@ else:
                         timeout=60.0,
                         temperature=0.85,  
                         extra_body={
-                            "thinking": {"type": "disabled"}  # ✨ 彻底关闭思维链，让 1.6T 的大猫直接高能直出网文正文
+                            "thinking": {"type": "enabled"}  # ✨ 彻底关闭思维链，让 1.6T 的大猫直接高能直出网文正文
                         }
                     )
 
