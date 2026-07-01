@@ -1791,23 +1791,61 @@ else:
                     finish_reason = None
                     loop_buffer = []  
 
-                    for chunk in response:
-                        if chunk.choices and chunk.choices[0].delta:
-                            delta = chunk.choices[0].delta
+                    # ==================== DEBUG 增强版流式捕获开始 ====================
+                    finish_reason = None
+                    loop_buffer = []  # 仅记录当前这一个轮次生成的文本
 
-                            if hasattr(delta, 'reasoning_content') and delta.reasoning_content:
-                                captured_formatted_thinking += delta.reasoning_content
-                                response_placeholder.markdown("⏳ *角色正在深度激活隐秘知觉与博弈心理...*")
-                            elif delta.content:
-                                text_fragment = delta.content
-                                loop_buffer.append(text_fragment)
-                                full_story_response += text_fragment
-                                display_view = novel_text_formatter(full_story_response)
-                                with response_placeholder.container():
-                                    st.markdown(display_view, unsafe_allow_html=True)
+                    # 1. 在侧边栏创建一个专属的 Debug 状态监控区
+                    debug_status = st.sidebar.empty()
+                    debug_status.markdown("🔍 **Debug 监控：正在建立流式连接...**")
 
-                            if chunk.choices[0].finish_reason is not None:
-                                finish_reason = chunk.choices[0].finish_reason
+                    try:
+                        for chunk in response:
+                            if chunk.choices and len(chunk.choices) > 0:
+                                choice = chunk.choices[0]
+                                delta = choice.delta
+
+                                # A. 捕获思考内容（如果有）
+                                if hasattr(delta, 'reasoning_content') and delta.reasoning_content:
+                                    captured_formatted_thinking += delta.reasoning_content
+                                    response_placeholder.markdown("⏳ *角色正在深度激活隐秘知觉与博弈心理...*")
+                                
+                                # B. 实时捕获文本正文
+                                elif delta.content:
+                                    text_fragment = delta.content
+                                    loop_buffer.append(text_fragment)
+                                    full_story_response += text_fragment
+                                    
+                                    # 保持你原本的排版预览渲染
+                                    display_view = novel_text_formatter(full_story_response)
+                                    with response_placeholder.container():
+                                        st.markdown(display_view, unsafe_allow_html=True)
+
+                                # C. 死死掐住每一个 chunk 丢出来的 finish_reason
+                                if hasattr(choice, 'finish_reason') and choice.finish_reason is not None:
+                                    finish_reason = choice.finish_reason
+                                    # 一旦捕获到非空标识，立刻打印在侧边栏，防止中途断流抓不到状态
+                                    st.sidebar.code(f"⚡ 实时捕获到终止信号: {finish_reason}")
+
+                        # 2. 循环结束后，进行全状态强力审计与前端打印
+                        if finish_reason:
+                            if finish_reason == "length":
+                                debug_status.info(f"ℹ️ 诊断结果：内容因单次 `max_tokens` 限制截断。代码将自动触发续写。")
+                            elif finish_reason == "stop":
+                                debug_status.success(f"✅ 诊断结果：模型认为对话已完整，自发吐出结束符正常停机。")
+                            elif finish_reason == "content_filter":
+                                debug_status.error(f"❌ 诊断结果：触发了网关合规过滤器（content_filter）！内容在中途被服务商物理切断。")
+                            else:
+                                debug_status.warning(f"⚠️ 诊断结果：未知停机标识 [{finish_reason}]，请检查网关兼容性。")
+                        else:
+                            # 如果流结束了，却没有任何结束标识，说明在半路悄悄死掉了
+                            debug_status.error(f"🚨 诊断结果：流式传输异常中断！Finish Reason 为 None。可能遭遇网络丢包或接口超时。")
+
+                    except Exception as stream_error:
+                        # 捕获传输中途抛出的物理异常（如 422 格式错误、502 网关超时等）
+                        st.sidebar.error(f"💥 流传输中途发生物理崩溃: {str(stream_error)}")
+                        finish_reason = "exception_break"
+                    # ==================== DEBUG 增强版流式捕获结束 ====================
 
                     if finish_reason == "length":
                         current_loop_text = "".join(loop_buffer)
