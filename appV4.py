@@ -1681,73 +1681,66 @@ else:
         # 1️⃣ 放入完全静态的 System Prompt
         cleaned_api_payload = [{"role": "system", "content": dynamic_system_prompt}]
 
-        # ==========================================
-        # 2️⃣ 【全新升级】：RAG 双轨深层长期记忆唤醒区
-        # ==========================================
-        retrieved_memories = rag_retrieve_older_context(active_user_text, role_data, top_k=2)
-
-        if retrieved_memories:
-            chronicle_content = (
-                    "💡【潜意识深层长期记忆唤醒 · 戏剧回忆回溯协议】\n"
-                    "受到玩家当下言行举止的猛烈刺激，你灵魂与脑海深处突然极其清晰地闪回过往纠缠过的经典历史画面。\n"
-                    "请你潜意识全盘继承当时发生的这些【既定事实】、当年的【情感浓度】与【细腻香艳的文风笔触】，但绝对禁止一字不差地当复读机！\n\n" +
-                    "\n\n-------------------- \n\n".join(retrieved_memories)
-            )
-            cleaned_api_payload.append({"role": "user", "content": chronicle_content})
-            cleaned_api_payload.append({
-                "role": "assistant",
-                "content": "（某些久远而深刻的回忆画面在脑海剧烈翻涌，咬了误红唇）……原来我们经历过这些。当时的感觉重新在浑身血液里复燃了，我不会忘记。我会顺着现在的局面继续应对他。"
-            })
-        else:
-            all_summaries = role_data.get("summarized_history", [])
-            if len(all_summaries) > 5:
-                older_summaries = all_summaries[-7:-5]
-                formatted_lines = [f"🎬 [前置局势既定事实]: {line}" for line in older_summaries]
-                chronicle_content = "💡【前置微观局势线性承接档案】：\n" + "\n".join(formatted_lines)
+        # ==========================================================
+        # 2️⃣ 🌟 全新重构：纯本地无害化长线记忆区（移除阿里 RAG，拥抱30轮无阉割细节）
+        # ==========================================================
+        all_summaries = role_data.get("summarized_history", [])
+        
+        if all_summaries:
+            # 🎬 核心提取：精准抓取最近 30 轮由后台生成的纯文本事件流水账概述
+            recent_30_summaries = all_summaries[-40:]
+            
+            formatted_lines = []
+            for idx, line in enumerate(recent_30_summaries):
+                if line.strip():
+                    formatted_lines.append(f"🎬 [历史故事回顾 · 前置第 {idx + 1} 幕定格事实]:\n{line}")
+            
+            if formatted_lines:
+                chronicle_content = (
+                    "💡【长期历史依赖数据加载：过往会话前 30 轮事实编年史】\n"
+                    "以下是你与玩家自本场剧本开局以来发生的核心事实链，这些细节已融于你的本能，请绝对承接其因果，无需在后续回复中复述它们：\n\n" +
+                    "\n\n-------------------- \n\n".join(formatted_lines)
+                )
                 cleaned_api_payload.append({"role": "user", "content": chronicle_content})
-                cleaned_api_payload.append({"role": "assistant", "content": "（默默将近期的局势承接并沉淀于本能中。）"})
+                cleaned_api_payload.append({
+                    "role": "assistant", 
+                    "content": "（将过往 30 幕发生的所有硬核肢体碰撞与剧情因果完全沉淀于本能中）……前尘往事我已悉数继承。我会死死咬定这些既定事实，绝不遗漏细节。现在回到当下的时空继续应对他。"
+                })
 
-        # 3️⃣ 放入核心个人记忆备忘录
+        # 3️⃣ 放入核心个人重要记忆备忘录（由你在侧边栏手动打上的铁钢印）
         if role_data.get("memory_events"):
-            memory_ledger_prompt = "📌【核心个人记忆备忘录】：\n"
+            memory_ledger_prompt = "📌【主宰级核心个人重要记忆备忘录 —— 绝对不能遗忘的钢印指令】\n"
             for idx, event in enumerate(role_data["memory_events"]):
-                memory_ledger_prompt += f"{idx + 1}. {event}\n"
+                if event.strip():
+                    memory_ledger_prompt += f"{idx + 1}. {event}\n"
             cleaned_api_payload.append({"role": "user", "content": memory_ledger_prompt})
-            cleaned_api_payload.append({"role": "assistant", "content": "（调取灵魂深处的核心羁绊）……这些核心线索我绝不会忘。"})
+            cleaned_api_payload.append({"role": "assistant", "content": "（调取灵魂深处的永恒钢印和核心羁绊）……这些最高优先级的物理线索已刻入我的核心。我绝不会忘。"})
 
-        # 4️⃣ 放入【最近5轮详细对话回溯】（✨ 修复死循环硬伤，对齐近景镜头）
+        # 4️⃣ 放入【最近 1 轮极其详细的无阉割接戏原文】（确保体位、穿搭细节完全连贯）
         prev_history = role_data["chat_history"][:-1]
-        i = len(prev_history) - 1
-        turns_found = []
-        while i >= 0 and len(turns_found) < 5:
-            if prev_history[i]["role"] == "assistant":
-                if i - 1 >= 0 and prev_history[i - 1]["role"] == "user":
-                    turns_found.insert(0, (prev_history[i - 1], prev_history[i]))
-                    i -= 2
-                    continue
-            i -= 1  # ✨ 【核心修复】：防止不规整数据导致无限死循环白屏！
+        if len(prev_history) >= 2:
+            # 剥离并拉取上一轮未经过任何删减、原始高密度的玩家输入和 AI 剧情回复
+            last_user = prev_history[-2]
+            last_ai = prev_history[-1]
+            
+            clean_ai_content = re.sub(r'\[.*?\][\s\S]*$', '', last_ai["content"]).strip()
+            if "🔒DATA_SPLIT_MARKER" in clean_ai_content:
+                clean_ai_content = clean_ai_content.split("🔒DATA_SPLIT_MARKER")[0].strip()
 
-        if turns_found:
-            latest_detailed_prompt = f"🎬【📢 当前舞台近景回溯 · 最近{len(turns_found)}轮详细对话互动锚点】\n"
-            latest_detailed_prompt += f"这是你与玩家在刚刚过去的{len(turns_found)}轮微观互动细节，请作为剧情承接的基础：\n\n"
-
-            for idx, (u_msg, a_msg) in enumerate(turns_found):
-                clean_ai_content = re.sub(r'\[.*?\][\s\S]*$', '', a_msg["content"]).strip()
-                if "🔒DATA_SPLIT_MARKER" in clean_ai_content:
-                    clean_ai_content = clean_ai_content.split("🔒DATA_SPLIT_MARKER")[0].strip()
-
-                latest_detailed_prompt += f"========================= [过往第 {len(turns_found) - idx} 轮近景接戏镜头] =========================\n"
-                latest_detailed_prompt += f"【玩家行动/台词】：\n{u_msg['content']}\n\n"
-                latest_detailed_prompt += f"【你（{target_girl}）剧情回应】：\n{clean_ai_content}\n"
-
-            latest_detailed_prompt += "=================================================================================\n"
+            latest_detailed_prompt = (
+                f"🎬【📢 当前舞台近景无缝交接 · 紧接上一轮全细节互动锚点】\n"
+                f"这是你与玩家在刚刚过去的【最后一轮】最原始、最细腻的微观细节交锋，请作为你这一轮动笔时【语气、衣服穿搭现状、动作惯性】的直接接戏镜头：\n\n"
+                f"【玩家上一轮行动/台词】：\n{last_user['content']}\n\n"
+                f"【你（{target_girl}）上一轮全量细腻剧情回应】：\n{clean_ai_content}\n"
+                f"=================================================================================\n"
+            )
             cleaned_api_payload.append({"role": "user", "content": latest_detailed_prompt})
             cleaned_api_payload.append({
-                "role": "assistant",
-                "content": "（将最近几轮发生的连续情节沉淀为前置连续镜头，等待接下来的现状显化）……剧情正在向下推演。最近一轮的对白已经收尾。）"
+                "role": "assistant", 
+                "content": f"（像素级继承上一秒自己身上衣服的状态、两人的物理体位、以及残存的情绪，眼神锁定对方）……呼，上一秒的剧场质感和细节拉满了。我已经完全接住这幕戏了，绝不让剧情出戏断层。来吧，继续。"
             })
 
-        cleaned_api_payload.append({"role": "user", "content": "💡【即时接戏演出令】：请全盘承接并无缝继承前文发生的所有剧情线索，继续向下展现你的即时行动与戏剧反应。"})
+        cleaned_api_payload.append({"role": "user", "content": "💡【即时接戏演出令】：请全盘承接并无缝继承前文发生的所有历史事实与上一秒的细节，继续向下展现你的即时行动与戏剧反应。"})
 
         # 6️⃣ 放入【最新行动拼接】
         if "继续推演" in active_user_text or "重算" in active_user_text:
@@ -1865,12 +1858,6 @@ else:
                     if "summarized_history" not in role_data:
                         role_data["summarized_history"] = []
                     role_data["summarized_history"].append(new_turn_summary)
-
-                    # ✨ 【向量同步入库】：确保单聊存储绝对闭环
-                    if "embeddings_history" not in role_data:
-                        role_data["embeddings_history"] = []
-                    new_vector_data = get_text_embedding(new_turn_summary)
-                    role_data["embeddings_history"].append(new_vector_data)
 
                 save_local_data()
                 st.rerun()
