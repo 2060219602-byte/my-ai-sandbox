@@ -1582,7 +1582,7 @@ if is_group_chat:
                     
                     # ✨ 昊哥专属专属：群聊同台竞技时，同样满 50 轮触发批量滑动，斩断最老 10 条！
                     if len(agent_db["summarized_history"]) > 50:
-                        agent_db["summarized_history"] = agent_db["summarized_history"][10:]
+                        agent_db["summarized_history"] = agent_db["summarized_history"][20:]
 
                 # 🚀 注入：在群聊落盒前同样唤醒 flash 模型全速规划群戏剧局势切片
 
@@ -1834,7 +1834,7 @@ else:
                     
                     # ✨ 满 50 轮触发批量滑动，删除最老的 10 条历史概述，强行锁死连续缓存！
                     if len(role_data["summarized_history"]) > 50:
-                        role_data["summarized_history"] = role_data["summarized_history"][10:]
+                        role_data["summarized_history"] = role_data["summarized_history"][20:]
 
                 save_local_data()
                 st.rerun()
