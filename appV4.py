@@ -263,6 +263,8 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 
+import re
+
 def novel_text_formatter(raw_text: str) -> str:
     """
     🎬 智能流式小说排版引擎 (安全保护 0️⃣ 幕心理输出并优雅渲染)
@@ -274,6 +276,10 @@ def novel_text_formatter(raw_text: str) -> str:
     raw_text = raw_text.strip()
     raw_text = re.sub(r'^(?:好的|我知道了|现在我是|我明白|遵命|开始推演|\[.*?\]|【.*?】)[\s]*', '', raw_text).strip()
 
+    # 🎯 昊哥，这里是新增的替换逻辑：自动将中文破折号替换为标准省略号
+    # 无论是连着的双破折号“————”还是单个“——”，都转化为标准的点点点
+    raw_text = raw_text.replace("——", "......")
+
     # 1. 规范化基础文本
     clean_stream = re.sub(r'\n+', ' ', raw_text).strip()
     # ✨ 允许 0️⃣ 参与分段标识扫描
@@ -284,7 +290,7 @@ def novel_text_formatter(raw_text: str) -> str:
     current_segment = []
 
     in_quote = False  # 双引号内部状态
-    paren_depth = 0  # 英文括号嵌套层级
+    paren_depth = 0   # 英文括号嵌套层级
     zh_paren_depth = 0  # 中文括号嵌套层级
 
     # 包含 0️⃣ 在内的所有目标符号
