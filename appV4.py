@@ -1573,9 +1573,18 @@ if is_group_chat:
                             st.markdown(display_view)
 
                 # ====== 整体替换为下方修改后的代码块 ======
+                # ====== 整体替换为下方修改后的代码块 ======
                 with st.spinner("⚡ 赛博冰冷核正在无感压缩当前轮次事实链..."):
                     new_turn_summary = generate_single_turn_summary(client, active_content, full_story_response)
+                    if "summarized_history" not in agent_db:
+                        agent_db["summarized_history"] = []
                     agent_db["summarized_history"].append(new_turn_summary)
+                    
+                    # ✨ 昊哥专属专属：群聊同台竞技时，同样满 50 轮触发批量滑动，斩断最老 10 条！
+                    if len(agent_db["summarized_history"]) > 50:
+                        agent_db["summarized_history"] = agent_db["summarized_history"][10:]
+
+                # 🚀 注入：在群聊落盒前同样唤醒 flash 模型全速规划群戏剧局势切片
 
                 # 🚀 注入：在群聊落盒前同样唤醒 flash 模型全速规划群戏剧局势切片
                 with st.spinner("⚡ 正在进行多人群戏局势切片推演..."):
@@ -1822,6 +1831,10 @@ else:
                     if "summarized_history" not in role_data:
                         role_data["summarized_history"] = []
                     role_data["summarized_history"].append(new_turn_summary)
+                    
+                    # ✨ 满 50 轮触发批量滑动，删除最老的 10 条历史概述，强行锁死连续缓存！
+                    if len(role_data["summarized_history"]) > 50:
+                        role_data["summarized_history"] = role_data["summarized_history"][10:]
 
                 save_local_data()
                 st.rerun()
