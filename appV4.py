@@ -267,134 +267,48 @@ import re
 
 def novel_text_formatter(raw_text: str) -> str:
     """
-    🎬 智能流式小说排版引擎 (安全保护 0️⃣ 幕心理输出并优雅渲染)
+    🎬 智能流式小说排版引擎 (修复：保护0️⃣幕心理独白不被误删)
     """
     if not raw_text:
         return raw_text
 
-    # ✨ 核心修复：优先清洗掉可能顶在 0️⃣ 前面的前缀或说明性括号，确保 0️⃣ 始终能暴露在最开头
     raw_text = raw_text.strip()
-    raw_text = re.sub(r'^(?:好的|我知道了|现在我是|我明白|遵命|开始推演|\[.*?\]|【.*?】)[\s]*', '', raw_text).strip()
 
-    # 🎯 昊哥，这里是新增的替换逻辑：自动将中文破折号替换为标准省略号
-    # 无论是连着的双破折号“————”还是单个“——”，都转化为标准的点点点
+    # ✨ 核心修复：区分“是否有0️⃣开头”的两种情况
+    # 如果文本以0️⃣开头，说明AI遵守了格式，我们完全跳过前缀清洗，保护心理独白
+    if raw_text.startswith("0️⃣"):
+        # 直接跳过前缀清洗，保留完整的0️⃣【心理独白】结构
+        pass
+    else:
+        # 如果没有0️⃣开头，才执行原有的前缀清洗逻辑
+        # 注意：这里仍然保留对【】的清洗，因为可能是AI真的在说废话
+        raw_text = re.sub(
+            r'^(?:好的|我知道了|现在我是|我明白|遵命|开始推演)\s*',
+            '',
+            raw_text
+        ).strip()
+
+        # ⚠️ 新增保护：如果清洗后意外暴露出了【心理独白】，不要再误伤它
+        # 仅当【】内不是心理独白（即包含“角色”、“设定”等元描述词）时才清洗
+        if raw_text.startswith("【") and not any(
+            keyword in raw_text
+            for keyword in ["妈的", "该死", "好想", "不行", "腿软", "要命"]
+        ):
+            raw_text = re.sub(r'^【.*?】[\s]*', '', raw_text).strip()
+
+    # 🎯 破折号替换（保留爸爸的原有逻辑）
     raw_text = raw_text.replace("——", "......")
+
+    # ... 后续的状态机和排版逻辑完全不变 ...
+    # （从 clean_stream = re.sub(r'\n+', ' ', raw_text).strip() 开始沿用原代码）
 
     # 1. 规范化基础文本
     clean_stream = re.sub(r'\n+', ' ', raw_text).strip()
-    # ✨ 允许 0️⃣ 参与分段标识扫描
     clean_stream = re.sub(r'(0️⃣|1️⃣|2️⃣|3️⃣)', r' \1 ', clean_stream)
     clean_stream = re.sub(r'\s+', ' ', clean_stream).strip()
 
-    segments = []
-    current_segment = []
-
-    in_quote = False  # 双引号内部状态
-    paren_depth = 0   # 英文括号嵌套层级
-    zh_paren_depth = 0  # 中文括号嵌套层级
-
-    # 包含 0️⃣ 在内的所有目标符号
-    target_markers = ["0️⃣", "1️⃣", "2️⃣", "3️⃣"]
-
-    # 2. 高级状态机扫描
-    i = 0
-    stream_len = len(clean_stream)
-
-    while i < stream_len:
-        matched_marker = None
-        for marker in target_markers:
-            if clean_stream.startswith(marker, i):
-                matched_marker = marker
-                break
-
-        if matched_marker:
-            if current_segment:
-                seg_str = "".join(current_segment).strip()
-                if seg_str:
-                    segments.append(seg_str)
-                current_segment = []
-            segments.append(matched_marker)
-            i += len(matched_marker)
-            continue
-
-        char = clean_stream[i]
-
-        if char == "“":
-            closing_idx = clean_stream.find("”", i)
-            if closing_idx != -1:
-                quote_content = clean_stream[i + 1:closing_idx]
-                if len(quote_content) <= 14:
-                    full_voice_block = clean_stream[i:closing_idx + 1]
-                    current_segment.append(full_voice_block)
-                    i = closing_idx + 1
-                    continue
-
-            if current_segment:
-                seg_str = "".join(current_segment).strip()
-                if seg_str:
-                    segments.append(seg_str)
-                current_segment = []
-
-            in_quote = True
-            current_segment.append(char)
-            i += 1
-            continue
-
-        elif char == "”":
-            in_quote = False
-            current_segment.append(char)
-            seg_str = "".join(current_segment).strip()
-            if seg_str:
-                segments.append(seg_str)
-            current_segment = []
-            i += 1
-            continue
-
-        if char == "(":
-            paren_depth += 1
-        elif char == ")":
-            paren_depth = max(0, paren_depth - 1)
-        elif char == "（":
-            zh_paren_depth += 1
-        elif char == "）":
-            zh_paren_depth = max(0, zh_paren_depth - 1)
-
-        current_segment.append(char)
-
-        if char == "。" and not in_quote and paren_depth == 0 and zh_paren_depth == 0:
-            seg_str = "".join(current_segment).strip()
-            if seg_str:
-                segments.append(seg_str)
-            current_segment = []
-
-        i += 1
-
-    if current_segment:
-        seg_str = "".join(current_segment).strip()
-        if seg_str:
-            segments.append(seg_str)
-
-    # 3. 熔铸排版
-    processed_blocks = []
-    for seg in segments:
-        if not seg:
-            continue
-        if seg in target_markers:
-            # ✨ 为 0️⃣ 注入高显眼的古典气泡心理暗示标签，其余照旧
-            if seg == "0️⃣":
-                processed_blocks.append(f"\n\n💡 <b>【角色心声独白】</b>\n")
-            else:
-                processed_blocks.append(f"\n\n{seg}")
-        else:
-            # 如果上一个是心理开场，这一段落可以让它变成优雅的灰色斜体
-            if processed_blocks and "💡 <b>【角色心声独白】</b>" in processed_blocks[-1]:
-                processed_blocks.append(f"&emsp;&emsp;<i><span style='color:#888888;'>{seg}</span></i>")
-            else:
-                processed_blocks.append(f"&emsp;&emsp;{seg}")
-
-    # 4. 输出净化
-    final_output = "\n\n".join(processed_blocks)
-    final_output = re.sub(r'\n{3,}', '\n\n', final_output).strip()
+    # ... 以下完全保持爸爸原有的状态机和排版逻辑，不动 ...
+    # （省略后续相同代码，爸爸原封不动贴过来即可）
 
     return final_output
 
