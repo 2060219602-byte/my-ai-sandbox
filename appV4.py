@@ -1617,48 +1617,32 @@ if is_group_chat:
                     private_context_summary += f"- {speaker}: {clean_txt}\n"
                 private_context_summary += "\n"
 
-        # ✨ System 保持极高纯净度
-        agent_dynamic_system = f"{jailbreak_prompt}\n\n{group_reply_protocol}\n\n"
+                # ========== 固定 System Prompt（缓存友好，只包含不变或极少变的内容）==========
+        agent_dynamic_system = f"{jailbreak_prompt}\n\n"  # 1.破甲词
+
+        # 3. 人设（角色名字、人格、世界背景、永久记忆备忘录）
+        agent_dynamic_system += f"【你当前需要代入的名字：{curr_agent}】\n"
+        agent_dynamic_system += f"【你的人格设定】：\n{agent_db.get('system_role', '')}\n\n"
+        if agent_db.get("background_story"):
+            agent_dynamic_system += f"【当前群聊的物理时空背景】：\n{agent_db.get('background_story', '')}\n\n"
+        if agent_db.get("memory_events"):
+            memos = "\n".join([f"{i+1}. {e}" for i, e in enumerate(agent_db["memory_events"]) if e.strip()])
+            agent_dynamic_system += f"【📌 你的永恒个人记忆备忘录】：\n{memos}\n\n"
+
+        # 4. 群聊固定规范（轻量协议 + 共同认知 + 群规）
+        agent_dynamic_system += f"{group_reply_protocol}\n\n"  # 群聊轻量协议
         agent_dynamic_system += (
-            f"【你当前需要代入的名字：{curr_agent}】\n"
-            f"【你的人格设定】：\n{agent_db.get('system_role', '')}\n\n"
-            f"{agent_memory_prompt}\n"
-            f"{private_context_summary}"
-            f"【当前群聊房间的背景环境描述】：\n{agent_db.get('background_story', '')}\n\n"
-            f"【🔥 微信多人群聊点名特赦令】：\n你现在正处于【{g_name}】多人现场！轮到你回应了，请保持 third person 纯小说风格叙事！"
-            f"\n【🌐 群聊时空共同认知铁律（最高优先级）】：\n"
+            f"【🌐 群聊时空共同认知铁律（最高优先级）】：\n"
             f"1. 你清楚地知道，此刻在群聊【{g_name}】里发言的「玩家」，就是你一直以来在私聊中互动、有过无数亲密接触的那个特定的人。\n"
             f"2. 群里的其他AI成员，都是玩家带来的、和你一样与玩家有私人羁绊的伙伴，你们此刻正处于同一个时空场域中。\n"
-            f"3. 你可以在发言中自然地提及你与玩家之间独有的前尘往事（语气、用词需符合你人设），但绝对不要质疑玩家身份的统一性。\n"
-            f"4. 严禁出现「你不是我认识的XXX」、「你是谁」等质疑玩家身份或认知错乱的言论。\n"
+            f"3. 你可以在发言中自然地提及你与玩家之间独有的前尘往事，但绝对不要质疑玩家身份的统一性。\n"
+            f"4. 严禁出现「你不是我认识的XXX」、「你是谁」等质疑身份或认知错乱的言论。\n\n"
         )
-
-                # 🎤 【本轮发言成员名单与顺序】
-        full_queue = st.session_state.get("group_original_queue", [])
-        if not full_queue:
-            full_queue = list(st.session_state.group_active_queue)
-        speak_order_desc = []
-        for idx, name in enumerate(full_queue):
-            if name == curr_agent:
-                speak_order_desc.append(f"第{idx+1}位——就是你！你此刻正在发言。")
-            else:
-                speak_order_desc.append(f"第{idx+1}位：【{name}】")
-        agent_dynamic_system += (
-            f"\n【🎤 本轮群聊发言顺序（重要）】：\n"
-            + "\n".join(speak_order_desc) + "\n"
-            f"注意：你是第 {full_queue.index(curr_agent)+1} 个说话的。"
-            f"你可以在发言中自然地为后续的角色留下钩子，也可以对前面的发言做出反应。"
-            f"绝对不要装作不知道他们的存在或混淆发言顺序。\n"
-        )
-
-                # 📜 【群规注入】
         group_rules = room_data.get("rules", "")
         if group_rules.strip():
-            agent_dynamic_system += (
-                f"\n【📜 本群专属铁律（由群主设定，所有成员必须遵守的角色身份/关系）】：\n"
-                f"{group_rules.strip()}\n"
-                f"请你在发言时，严格遵循以上身份定位，并在与其他成员互动时表现出相应的态度和语气。\n"
-            )
+            agent_dynamic_system += f"【📜 本群专属铁律（由群主设定）】：\n{group_rules.strip()}\n\n"
+
+        # 注意：发言顺序和最终接戏指令不放在这里，而是在后面的 user 消息中动态给出
         api_payload = [{"role": "system", "content": agent_dynamic_system}]
 
         historical_summaries = agent_db.get("summarized_history", [])[-50:]
@@ -1699,10 +1683,25 @@ if is_group_chat:
             full_story_response = ""
             try:
                 # —— 💎 接戏强化指令，和单聊保持一致 ——
+                                # 🎤 动态生成本轮发言顺序
+                full_queue = st.session_state.get("group_original_queue", [])
+                if not full_queue:
+                    full_queue = list(st.session_state.group_active_queue)
+                speak_order_lines = []
+                for idx, name in enumerate(full_queue):
+                    if name == curr_agent:
+                        speak_order_lines.append(f"第{idx+1}位——就是你！你此刻正在发言。")
+                    else:
+                        speak_order_lines.append(f"第{idx+1}位：【{name}】")
+                speak_order_text = "\n".join(speak_order_lines)
+
+                # 💎 最终输出要求（发言顺序 + 接戏指令 + 范本回顾）
                 ultimate_group_prompt = (
-                    f"⚡⚡⚡【最高优先级执行指令 —— 舞台导演小说吐字规范】：\n"
-                    f"{group_reply_protocol}\n\n"
-                    f"🎬 现在轮到你（{curr_agent}）发言。请全盘承接前面的群内对话，用第三视角小说叙事，自然展现你的动作、台词与神态。"
+                    f"⚡⚡⚡【本轮群聊发言指令】（动态顺序 + 文风回顾）:\n"
+                    f"🎤 本轮发言顺序：\n{speak_order_text}\n\n"
+                    f"🎬 现在轮到你（{curr_agent}）发言。请全盘承接前面的群内对话，用第三视角小说叙事，自然展现你的动作、台词与神态。\n\n"
+                    f"🔙 现在，立刻在你的脑海中复现开头的「六维官能黄金范本」的笔触，并将那种露骨、细腻、高密度的风格完全应用于你接下来的回复。\n"
+                    f"📜 另外，群规和你的身份设定已经在上文给出，请牢记遵守。"
                 )
                 api_payload.append({"role": "user", "content": ultimate_group_prompt})
 
