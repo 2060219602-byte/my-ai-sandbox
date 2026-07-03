@@ -1564,7 +1564,7 @@ if is_group_chat:
 
         api_payload.extend(cleaned_context)
 
-                with st.chat_message("assistant", avatar="💋"):
+        with st.chat_message("assistant", avatar="💋"):
             response_placeholder = st.empty()
             full_story_response = ""
             try:
