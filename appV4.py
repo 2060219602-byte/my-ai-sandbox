@@ -265,9 +265,9 @@ st.markdown("""
 
 import re
 
-def novel_text_formatter(raw_text: str) -> str:
+def _old_novel_formatter(raw_text: str) -> str:
     """
-    🎬 智能流式小说排版引擎 (安全保护 0️⃣ 幕心理输出并优雅渲染)
+    🎬 旧版四幕格式渲染器（兼容历史消息中可能出现的 0️⃣1️⃣2️⃣3️⃣ 符号）
     """
     if not raw_text:
         return raw_text
@@ -275,47 +275,37 @@ def novel_text_formatter(raw_text: str) -> str:
     raw_text = raw_text.strip()
 
     # ✨ 核心修复：如果AI输出已经乖乖以 0️⃣ 开头，说明格式正确，完全跳过前缀清洗
-    # 否则才执行原有的清洗逻辑，避免误删【内心独白】
     if raw_text.startswith("0️⃣"):
-        # 已经以 0️⃣ 开头，不做任何前缀清洗，直接进入后续处理
         pass
     else:
-        # 没有 0️⃣ 开头时，清洗掉常见的废话前缀，但保留所有【】和[]包裹的内容
-        # 原正则会误删 0️⃣ 后面的【心理独白】，因此这里仅删除明确引导词
         raw_text = re.sub(
             r'^(?:好的|我知道了|现在我是|我明白|遵命|开始推演)\s*',
             '',
             raw_text
         ).strip()
-        # 如果清洗后以【开头，且内容看起来像系统说明（不包含官能核心词），再尝试剥离一层
-        # 这是为了防止极少数情况AI输出类似“【角色设定】0️⃣”的模式
         if raw_text.startswith("【") and not any(
             keyword in raw_text
             for keyword in ["妈的", "该死", "好想", "不行", "腿软", "要命", "好爽", "住手"]
         ):
             raw_text = re.sub(r'^【.*?】[\s]*', '', raw_text).strip()
 
-    # 🎯 昊哥，这里是新增的替换逻辑：自动将中文破折号替换为标准省略号
-    # 无论是连着的双破折号“————”还是单个“——”，都转化为标准的点点点
+    # 中文破折号替换
     raw_text = raw_text.replace("——", "......")
 
     # 1. 规范化基础文本
     clean_stream = re.sub(r'\n+', ' ', raw_text).strip()
-    # ✨ 允许 0️⃣ 参与分段标识扫描
     clean_stream = re.sub(r'(0️⃣|1️⃣|2️⃣|3️⃣)', r' \1 ', clean_stream)
     clean_stream = re.sub(r'\s+', ' ', clean_stream).strip()
 
     segments = []
     current_segment = []
 
-    in_quote = False  # 双引号内部状态
-    paren_depth = 0   # 英文括号嵌套层级
-    zh_paren_depth = 0  # 中文括号嵌套层级
+    in_quote = False
+    paren_depth = 0
+    zh_paren_depth = 0
 
-    # 包含 0️⃣ 在内的所有目标符号
     target_markers = ["0️⃣", "1️⃣", "2️⃣", "3️⃣"]
 
-    # 2. 高级状态机扫描
     i = 0
     stream_len = len(clean_stream)
 
@@ -399,13 +389,11 @@ def novel_text_formatter(raw_text: str) -> str:
         if not seg:
             continue
         if seg in target_markers:
-            # ✨ 为 0️⃣ 注入高显眼的古典气泡心理暗示标签，其余照旧
             if seg == "0️⃣":
                 processed_blocks.append(f"\n\n💡 <b>【角色心声独白】</b>\n")
             else:
                 processed_blocks.append(f"\n\n{seg}")
         else:
-            # 如果上一个是心理开场，这一段落可以让它变成优雅的灰色斜体
             if processed_blocks and "💡 <b>【角色心声独白】</b>" in processed_blocks[-1]:
                 processed_blocks.append(
                     f"&emsp;&emsp;<i><span style='color:#888888;'>{seg}</span></i>"
@@ -413,11 +401,51 @@ def novel_text_formatter(raw_text: str) -> str:
             else:
                 processed_blocks.append(f"&emsp;&emsp;{seg}")
 
-    # 4. 输出净化
     final_output = "\n\n".join(processed_blocks)
     final_output = re.sub(r'\n{3,}', '\n\n', final_output).strip()
 
     return final_output
+
+
+def novel_text_formatter(raw_text: str) -> str:
+    """
+    🎬 智能排版引擎：自动识别新旧格式，旧格式用四幕渲染，新格式用自然段落渲染
+    """
+    if not raw_text:
+        return raw_text
+
+    raw_text = raw_text.strip()
+    raw_text = raw_text.replace("——", "......")
+
+    # 如果检测到旧格式符号，走旧版解析器（保证以前的历史聊天不崩）
+    if any(marker in raw_text for marker in ["0️⃣", "1️⃣", "2️⃣", "3️⃣"]):
+        return _old_novel_formatter(raw_text)
+
+    # ===== 新格式：纯自然段落渲染 =====
+    # 1. 清洗可能的废话前缀（防止模型偶尔多嘴）
+    raw_text = re.sub(r'^(?:好的|我知道了|现在我是|我明白|遵命|开始推演)\s*', '', raw_text).strip()
+    if raw_text.startswith("【") and not any(
+        keyword in raw_text
+        for keyword in ["妈的", "该死", "好想", "不行", "腿软", "要命", "好爽", "住手"]
+    ):
+        raw_text = re.sub(r'^【.*?】[\s]*', '', raw_text).strip()
+
+    # 2. 按空行（两个以上换行）拆成自然段落
+    raw_text = re.sub(r'\r\n?', '\n', raw_text)
+    paragraphs = re.split(r'\n{2,}', raw_text)
+
+    formatted = []
+    for para in paragraphs:
+        para = para.strip()
+        if not para:
+            continue
+        # 段落内部单换行视为空格，合并多余空白
+        para = re.sub(r'\n', ' ', para)
+        para = re.sub(r'\s+', ' ', para).strip()
+        # 首行缩进
+        formatted.append(f"&emsp;&emsp;{para}")
+
+    return "\n\n".join(formatted)
 
 
 def display_novel_with_bold_status(text: str):
