@@ -973,6 +973,8 @@ if not is_group_chat:
 else:
     g_name = curr_sk.replace("💬 群聊：", "")
     room_data = st.session_state.all_sessions_db["group_rooms"][g_name]
+    if "background_story" not in room_data:
+        room_data["background_story"] = st.session_state.all_sessions_db["roles"][st.session_state.group_members_list[0]]["background_story"]
     st.session_state.group_members_list = room_data["members"]
 
     # ✨ 群聊专属轻量级叙事协议（不套用单聊的四幕大法，保持微信群的自然节奏）
@@ -1020,6 +1022,7 @@ if st.sidebar.button("🚀 创立并无缝切入该群聊", use_container_width=
     else:
         save_local_data()
         st.session_state.all_sessions_db["group_rooms"][clean_room_name] = {"members": pulled_members}
+        st.session_state.all_sessions_db["group_rooms"][clean_room_name]["background_story"] = st.session_state.all_sessions_db["roles"][pulled_members[0]]["background_story"]
         st.session_state.current_session_key = f"💬 群聊：{clean_room_name}"
         st.session_state.group_active_agent = ""
         st.session_state.group_active_queue = []
@@ -1468,8 +1471,11 @@ else:
         render_message_controls_by_id(message["msg_id"], is_last, fallback_name)
 
 # 群聊回合结束后显示共同行动选项
-if is_group_chat and st.session_state.get("group_round_options"):
-    opts = st.session_state.group_round_options
+# 群聊回合选项展示（不自动删除，直到新消息发送）
+if is_group_chat and "group_round_options" in st.session_state:
+    opts_data = st.session_state.group_round_options
+    opts = opts_data.get("options", {})
+    round_id = opts_data.get("round_id", "default")
     st.markdown("---")
     st.markdown("🧭 **本群回合后续行动分支**")
     for key in ["A", "B", "C", "D"]:
@@ -1478,11 +1484,10 @@ if is_group_chat and st.session_state.get("group_round_options"):
             action_text = opt if isinstance(opt, str) else opt.get("action", "")
             if action_text:
                 st.markdown(f"**🔴 选项 {key}**：{action_text}")
-                if st.button(f"📋 选定选项 {key}", key=f"grp_opt_{key}_{int(time.time())}"):
-                    st.session_state[f"chat_input_v_{st.session_state.clear_version}"] = action_text
+                btn_key = f"grp_opt_{round_id}_{key}"
+                if st.button(f"📋 选定选项 {key}", key=btn_key):
+                    st.session_state[f"chat_input_v_{st.session_state.clear_version}"] = str(action_text)
                     st.toast(f"选项 {key} 已注入输入框～")
-    # 展示完后清除，防止重复渲染
-    del st.session_state.group_round_options
 
 st.write("---")
 col_action1, _ = st.columns([0.2, 0.8])
@@ -1516,6 +1521,9 @@ if is_group_chat:
     room_data = st.session_state.all_sessions_db["group_rooms"][g_name]
 
     if user_input or is_continue_mode:
+        if "group_round_options" in st.session_state:
+            del st.session_state.group_round_options
+
         msg_id = f"msg_{int(time.time() * 1000)}_{random.randint(1000, 9999)}"
         timestamp = time.time()
         active_content = f"（玩家 —— 也就是你私下互动的那个人，在群聊【{g_name}】里发了一条消息）：\n{user_input}" if user_input else f"（玩家点击了继续推演，请所有人顺着当前的时间线，自发向下演绎精彩剧本）"
@@ -1571,25 +1579,41 @@ if is_group_chat:
                     if len(agent_db["summarized_history"]) > 50:
                         agent_db["summarized_history"] = agent_db["summarized_history"][20:]
 
-        # 基于最后发言人生成后续分支选项
+                # 基于本轮全体发言生成后续分支选项
         with st.spinner("🎯 正在推演后续行动分支..."):
-            last_agent = respondents[-1] if respondents else ""
-            last_db = st.session_state.all_sessions_db["roles"].get(last_agent, {})
-            final_text = ""
-            if last_db:
-                last_replies = [m["content"] for m in last_db["chat_history"] if m.get("agent_name") == last_agent]
-                if last_replies:
-                    final_text = last_replies[-1]
+            # 收集本轮所有发言人的回答（取最后一条发言）
+            all_replies = []
+            for agent_name in respondents:
+                agent_db = st.session_state.all_sessions_db["roles"].get(agent_name)
+                if agent_db:
+                    agent_msgs = [m for m in agent_db["chat_history"] if m.get("agent_name") == agent_name]
+                    if agent_msgs:
+                        all_replies.append(f"【{agent_name}】：\n{agent_msgs[-1]['content']}")
+            combined_replies = "\n\n".join(all_replies)
+            combined_assistant_text = f"以下是本轮群聊中各位角色的发言：\n{combined_replies}\n\n请基于以上所有发言，生成四个可能的后续行动选项（可以是任何角色发起的行动或环境变化）。"
+
+            # 获取群聊背景：优先使用房间数据中保存的群聊背景，否则取第一个角色的背景
+            group_bg = room_data.get("background_story", "")
+            if not group_bg and respondents:
+                first_db = st.session_state.all_sessions_db["roles"].get(respondents[0], {})
+                group_bg = first_db.get("background_story", "")
+            # system_role 用通用描述
+            group_sys_role = f"群聊【{g_name}】中的多位角色：{', '.join(respondents)}"
 
             action_options = generate_four_options(
                 client,
-                last_db.get("system_role", ""),
-                last_db.get("background_story", ""),
+                group_sys_role,
+                group_bg,
                 chat_history_view,
-                final_text
+                combined_assistant_text
             )
 
-        st.session_state.group_round_options = action_options
+        # 生成一个唯一的回合 ID，用于稳定按钮 key
+        round_id = f"round_{int(time.time())}_{random.randint(100,999)}"
+        st.session_state.group_round_options = {
+            "options": action_options,
+            "round_id": round_id
+        }
         st.session_state.group_round_ended = False
         save_local_data()
         st.rerun()
