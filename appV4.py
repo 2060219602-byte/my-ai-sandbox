@@ -973,9 +973,13 @@ if not is_group_chat:
 else:
     g_name = curr_sk.replace("💬 群聊：", "")
     room_data = st.session_state.all_sessions_db["group_rooms"][g_name]
-    if "background_story" not in room_data:
-        room_data["background_story"] = st.session_state.all_sessions_db["roles"][st.session_state.group_members_list[0]]["background_story"]
+    # 👇 这行提前赋值，避免后续访问时键不存在
     st.session_state.group_members_list = room_data["members"]
+
+    if "background_story" not in room_data:
+        # 使用本地变量，不依赖 session_state
+        first_member = room_data["members"][0]
+        room_data["background_story"] = st.session_state.all_sessions_db["roles"][first_member]["background_story"]
 
     group_output_template = """
 【🎬 本轮群聊发言格式（轻量级五步法，适合群聊快节奏）】
