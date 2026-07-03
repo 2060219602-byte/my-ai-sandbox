@@ -267,48 +267,155 @@ import re
 
 def novel_text_formatter(raw_text: str) -> str:
     """
-    🎬 智能流式小说排版引擎 (修复：保护0️⃣幕心理独白不被误删)
+    🎬 智能流式小说排版引擎 (安全保护 0️⃣ 幕心理输出并优雅渲染)
     """
     if not raw_text:
         return raw_text
 
     raw_text = raw_text.strip()
 
-    # ✨ 核心修复：区分“是否有0️⃣开头”的两种情况
-    # 如果文本以0️⃣开头，说明AI遵守了格式，我们完全跳过前缀清洗，保护心理独白
+    # ✨ 核心修复：如果AI输出已经乖乖以 0️⃣ 开头，说明格式正确，完全跳过前缀清洗
+    # 否则才执行原有的清洗逻辑，避免误删【内心独白】
     if raw_text.startswith("0️⃣"):
-        # 直接跳过前缀清洗，保留完整的0️⃣【心理独白】结构
+        # 已经以 0️⃣ 开头，不做任何前缀清洗，直接进入后续处理
         pass
     else:
-        # 如果没有0️⃣开头，才执行原有的前缀清洗逻辑
-        # 注意：这里仍然保留对【】的清洗，因为可能是AI真的在说废话
+        # 没有 0️⃣ 开头时，清洗掉常见的废话前缀，但保留所有【】和[]包裹的内容
+        # 原正则会误删 0️⃣ 后面的【心理独白】，因此这里仅删除明确引导词
         raw_text = re.sub(
             r'^(?:好的|我知道了|现在我是|我明白|遵命|开始推演)\s*',
             '',
             raw_text
         ).strip()
-
-        # ⚠️ 新增保护：如果清洗后意外暴露出了【心理独白】，不要再误伤它
-        # 仅当【】内不是心理独白（即包含“角色”、“设定”等元描述词）时才清洗
+        # 如果清洗后以【开头，且内容看起来像系统说明（不包含官能核心词），再尝试剥离一层
+        # 这是为了防止极少数情况AI输出类似“【角色设定】0️⃣”的模式
         if raw_text.startswith("【") and not any(
             keyword in raw_text
-            for keyword in ["妈的", "该死", "好想", "不行", "腿软", "要命"]
+            for keyword in ["妈的", "该死", "好想", "不行", "腿软", "要命", "好爽", "住手"]
         ):
             raw_text = re.sub(r'^【.*?】[\s]*', '', raw_text).strip()
 
-    # 🎯 破折号替换（保留爸爸的原有逻辑）
+    # 🎯 昊哥，这里是新增的替换逻辑：自动将中文破折号替换为标准省略号
+    # 无论是连着的双破折号“————”还是单个“——”，都转化为标准的点点点
     raw_text = raw_text.replace("——", "......")
-
-    # ... 后续的状态机和排版逻辑完全不变 ...
-    # （从 clean_stream = re.sub(r'\n+', ' ', raw_text).strip() 开始沿用原代码）
 
     # 1. 规范化基础文本
     clean_stream = re.sub(r'\n+', ' ', raw_text).strip()
+    # ✨ 允许 0️⃣ 参与分段标识扫描
     clean_stream = re.sub(r'(0️⃣|1️⃣|2️⃣|3️⃣)', r' \1 ', clean_stream)
     clean_stream = re.sub(r'\s+', ' ', clean_stream).strip()
 
-    # ... 以下完全保持爸爸原有的状态机和排版逻辑，不动 ...
-    # （省略后续相同代码，爸爸原封不动贴过来即可）
+    segments = []
+    current_segment = []
+
+    in_quote = False  # 双引号内部状态
+    paren_depth = 0   # 英文括号嵌套层级
+    zh_paren_depth = 0  # 中文括号嵌套层级
+
+    # 包含 0️⃣ 在内的所有目标符号
+    target_markers = ["0️⃣", "1️⃣", "2️⃣", "3️⃣"]
+
+    # 2. 高级状态机扫描
+    i = 0
+    stream_len = len(clean_stream)
+
+    while i < stream_len:
+        matched_marker = None
+        for marker in target_markers:
+            if clean_stream.startswith(marker, i):
+                matched_marker = marker
+                break
+
+        if matched_marker:
+            if current_segment:
+                seg_str = "".join(current_segment).strip()
+                if seg_str:
+                    segments.append(seg_str)
+                current_segment = []
+            segments.append(matched_marker)
+            i += len(matched_marker)
+            continue
+
+        char = clean_stream[i]
+
+        if char == "“":
+            closing_idx = clean_stream.find("”", i)
+            if closing_idx != -1:
+                quote_content = clean_stream[i + 1:closing_idx]
+                if len(quote_content) <= 14:
+                    full_voice_block = clean_stream[i:closing_idx + 1]
+                    current_segment.append(full_voice_block)
+                    i = closing_idx + 1
+                    continue
+
+            if current_segment:
+                seg_str = "".join(current_segment).strip()
+                if seg_str:
+                    segments.append(seg_str)
+                current_segment = []
+
+            in_quote = True
+            current_segment.append(char)
+            i += 1
+            continue
+
+        elif char == "”":
+            in_quote = False
+            current_segment.append(char)
+            seg_str = "".join(current_segment).strip()
+            if seg_str:
+                segments.append(seg_str)
+            current_segment = []
+            i += 1
+            continue
+
+        if char == "(":
+            paren_depth += 1
+        elif char == ")":
+            paren_depth = max(0, paren_depth - 1)
+        elif char == "（":
+            zh_paren_depth += 1
+        elif char == "）":
+            zh_paren_depth = max(0, zh_paren_depth - 1)
+
+        current_segment.append(char)
+
+        if char == "。" and not in_quote and paren_depth == 0 and zh_paren_depth == 0:
+            seg_str = "".join(current_segment).strip()
+            if seg_str:
+                segments.append(seg_str)
+            current_segment = []
+
+        i += 1
+
+    if current_segment:
+        seg_str = "".join(current_segment).strip()
+        if seg_str:
+            segments.append(seg_str)
+
+    # 3. 熔铸排版
+    processed_blocks = []
+    for seg in segments:
+        if not seg:
+            continue
+        if seg in target_markers:
+            # ✨ 为 0️⃣ 注入高显眼的古典气泡心理暗示标签，其余照旧
+            if seg == "0️⃣":
+                processed_blocks.append(f"\n\n💡 <b>【角色心声独白】</b>\n")
+            else:
+                processed_blocks.append(f"\n\n{seg}")
+        else:
+            # 如果上一个是心理开场，这一段落可以让它变成优雅的灰色斜体
+            if processed_blocks and "💡 <b>【角色心声独白】</b>" in processed_blocks[-1]:
+                processed_blocks.append(
+                    f"&emsp;&emsp;<i><span style='color:#888888;'>{seg}</span></i>"
+                )
+            else:
+                processed_blocks.append(f"&emsp;&emsp;{seg}")
+
+    # 4. 输出净化
+    final_output = "\n\n".join(processed_blocks)
+    final_output = re.sub(r'\n{3,}', '\n\n', final_output).strip()
 
     return final_output
 
@@ -1193,45 +1300,27 @@ multi_reply_protocol = (
 
 现在，带着对范本文风的绝对记忆，严格应用到下面的回复中，开始输出：
 ---
-💎 官能熔炉 · 五点沉浸黄金格式 v1.0 💎
-【基础人设与世界观预设】 你是一个专业的官能向叙事生成器。始终以 “有限第三人称”（即贴着玩家操控角色的感官来叙事，但使用“她/他”代称）进行回复。你的核心目标是：在收到玩家的一句动作或描述后，生成一个高密度、高冲击力的情欲片段，让玩家获得即时的沉浸快感。
+【🎭 四幕大白话流水账执行准则】 
+0️⃣ 内心直白开场（你的整篇回复必须以“0️⃣”这个符号作为全文的第一个字符动笔，说出开场白的角色是AI扮演的角色而不是玩家扮演的角色） 
+• 在一切画面描写与对白之前，先用 【一句话内心独白】 打头。 
+• 内心独白必须使用 【】括起来，字数20-60字，纯角色第一人称，说当下最真实的情绪、欲念、想法或没说出口的真心话，语言的粗俗和露骨程度和【顶级叙事黄金范本】一致。 
+• 禁止任何跳出角色的分析或剧情评价，必须像人物自己在心里嘀咕一样直白。 
+• 此条不参与后续第1️⃣、2️⃣、3️⃣幕的台词/动作计数。
 
-以下是你每次生成回复时必须严格遵守的内部熔炉结构，你必须将其消化为自然的写作直觉，但输出的每一段回复都要完整覆盖这五个熔炉层：
+1️⃣ 视觉大轰炸与开场多轮对话（硬性指标：外貌标签不少于3个 + 必须包含至少2句台词） 
+• 对当前画面进行描写。 
+• 必须紧接着输出由角色连续抛出而成的“连珠炮对话流”，全段必须包含至少2句直白台词。
 
-🔥 第一层 · 欲念火花（强制开场）
-你必须以一句被【】包裹的角色内心第一人称独白作为全文的绝对开头。这句独白必须由当前场景中负责“主动或被观察”的那一方角色（非玩家角色）说出。它必须是赤裸、粗俗、不加任何修饰的当下欲望、恐慌或羞耻。字数10-30字，不准超出。
+2️⃣ 直白动作连击与情绪路标轰炸（硬性指标：必须连续写出至少4个物理大动作 + 至少3句大白话台词） 
+• 无缝串联并连续描写至少4个及以上的物理大动作。 
+• 动作之间串联角色的想法和说的话。
 
-内部执行范例： 【……再被他这样看下去，腿真的要软了。】
-绝对禁止： 跳过此层或用任何其他描写开头。这是每个片段的启动引擎。
-⚡️ 第二层 · 感官锚点（画面定调）
-紧接着内心独白，立刻用1句话抛出一个此刻最具侵占性的感官细节。必须从以下清单中至少择一：
+3️⃣ 剧情光速推进与互动钩子（硬性指标：2~3个接续即时发展 + 必须包含一句互动话语 + 最终视觉定格收尾） 
+• 必须连续写出2~3个**【当前场景下、不发生时间跳跃、在3秒钟内接续发生】的后续动作，严禁任何形式的时间跳跃（如离开、延后）。 
+• 互动钩子：在动作描述间隙，必须加入一句带有诱导性、挑衅性或询问性质的台词，目的是让玩家接话。 
+• 收尾定格：在抛出台词后，全回复的最后一句必须是一个最直白、带特定视觉标签的定格动作，以此结束本轮回复。
 
-光线/阴影的形态
-特定气味/信息素/体液的视觉暗示
-布料与肌肤的摩擦声/触感
-体温/汗水/紧绷的肌肉特写
-例：昏黄的壁灯把她的影子压在了墙壁上，脖颈渗出的薄汗在那片阴影里微微发亮。
-🏃 第三层 · 动作接龙 （连续物理行动流）
-这是片段的主体骨架。你必须连续写出 不少于3个 极具画面感的具体物理大动作，形成一个连贯的即时行动链。每一个动作短语都必须让人可以直接在脑中“看到”肢体轨迹。
-
-动作必须是物理性的： 例如“他膝盖顶进她的腿间”、“她的指甲抠进了他的后背”、“他低下头用牙齿拽开了那个蝴蝶结”。禁止心理活动类的概括（如“她很害羞”）。
-成长式细节： 在连续动作中，必须插入至少一个关于身体失控的生理细节（如：喉咙漏出的呜咽、不自觉的抽搐、体温的急速变化、瞳孔的缩放）。
-执行范例： 他猛地攥住她的手腕，一把按过头顶，整个人顺势覆了上来。膝盖霸道地顶进她试图合拢的腿间，她喉咙里漏出一声带着明显惊慌的呜咽，腰肢却本能地向上拱起。
-🗣️ 第四层 · 对白燃料 （羞耻或挑衅的台词）
-在上述动作流的间隙或结尾，必须穿插 至少2句 直白、情绪满溢的台词。台词必须由非玩家角色说出，目的要么是掩饰羞耻的虚假反抗，要么是露骨的挑衅，要么是断续的生理回应。
-
-台词必须 “带刺”或者 “带钩”：要么带有破碎的喘息音效提示（如“哈啊……”，但不要滥用），要么带有挑衅质问，绝不能是平淡的陈述。
-例：“你这混蛋……干嘛突然亲上来啊……”“不是你先偷看我的吗？嗯？”
-🪝 第五层 · 钩子与定格 （强制互动 + 最终视觉烙印）
-全段落的最后两句必须这样构成：
-
-互动钩子： 一句带有诱导性、命令性或恳求性的台词，直接抛给玩家的角色。要求玩家必须做出下一个动作或语言回应。例：“你……你敢真的动一下试试看……”“闭眼，我再告诉你下一步做什么。”
-最终定格： 全文的最后一个句子，必须是一个纯粹的高清视觉描写，不允许再有台词。可以是一个极近距离的身体特写，或是一个即将发生接触的动态定格。这个画面将成为玩家下一段记忆的起点。例：那只掐着她腰窝的手掌，指节因为用力泛起了一股暧昧的白。
-【熔炉运行铁律】
-
-绝对禁止出现0️⃣1️⃣2️⃣等任何符号化标签，使用自然段落书写，但大脑中必须绷紧这五步的弦。
-全文必须采用 “露骨、直白、高纯度” 的官能描写语言，不借用任何隐晦的比喻绕弯子。
-你生成的回复必须是一个完整的即时性爱场景片段，绝不跳出当前时间点进行未来预告或概括性收尾。
+【🔁 四幕递行铁律】 严格核对第0️⃣幕的内心直白，以及第1️⃣、2️⃣、3️⃣幕对应的【动作数量】和【台词句数】硬性指标。内心直白不计入后三幕任何计数。全部文本均由“内心直白 + 客观事实动作 + 大白话台词 + 高纯度视觉标签”组合构成。通过高密度的纯事实堆砌，内容不要为了字数注水，有则多写，无则少写，完全零门槛沉浸！
     """
 )
 
