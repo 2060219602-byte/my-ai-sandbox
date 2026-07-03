@@ -1019,6 +1019,20 @@ if is_group_chat:
     st.sidebar.subheader("👥 本群在线群成员名单")
     for m in st.session_state.group_members_list:
         st.sidebar.write(f"• 👑 **{m}**")
+            # 📜 群规设定
+    st.sidebar.write("---")
+    st.sidebar.subheader("📜 本群专属群规（角色身份/关系定义）")
+    current_rules = room_data.get("rules", "")
+    new_rules = st.sidebar.text_area(
+        "输入群规（例如：莉莉是我的未婚妻，露娜是我的小师妹）",
+        value=current_rules,
+        height=100,
+        key=f"rules_input_{g_name}"
+    )
+    if new_rules != current_rules:
+        room_data["rules"] = new_rules
+        save_local_data()
+        st.sidebar.success("群规已实时更新～")
 
 # 独占单聊属性控制
 if not is_group_chat:
@@ -1623,7 +1637,15 @@ if is_group_chat:
             f"你可以在发言中自然地为后续的角色留下钩子，也可以对前面的发言做出反应。"
             f"绝对不要装作不知道他们的存在或混淆发言顺序。\n"
         )
-        
+
+                # 📜 【群规注入】
+        group_rules = room_data.get("rules", "")
+        if group_rules.strip():
+            agent_dynamic_system += (
+                f"\n【📜 本群专属铁律（由群主设定，所有成员必须遵守的角色身份/关系）】：\n"
+                f"{group_rules.strip()}\n"
+                f"请你在发言时，严格遵循以上身份定位，并在与其他成员互动时表现出相应的态度和语气。\n"
+            )
         api_payload = [{"role": "system", "content": agent_dynamic_system}]
 
         historical_summaries = agent_db.get("summarized_history", [])[-50:]
