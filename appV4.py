@@ -1491,7 +1491,7 @@ if is_group_chat:
     if user_input or is_continue_mode:
         msg_id = f"msg_{int(time.time() * 1000)}_{random.randint(1000, 9999)}"
         timestamp = time.time()
-        active_content = f"（玩家在群聊【{g_name}】里发了一条消息）：\n{user_input}" if user_input else f"（玩家点击了继续推演，请所有人顺着当前的时间线，自发向下演绎精彩剧本）"
+        active_content = f"（玩家 —— 也就是你私下互动的那个人，在群聊【{g_name}】里发了一条消息）：\n{user_input}" if user_input else f"（玩家点击了继续推演，请所有人顺着当前的时间线，自发向下演绎精彩剧本）"
         st.session_state.active_content = active_content    # 🔑 存入跨 run 存储
 
         for agent in st.session_state.group_members_list:
@@ -1583,7 +1583,7 @@ if is_group_chat:
         if private_history:
             recent_private = [m for m in private_history if not m.get("from_group")][-6:]
             if recent_private:
-                private_context_summary = "【📌 你与用户在单人私聊中的最新互动快照】:\n"
+                private_context_summary = "【📌 你与「玩家」（也就是这个群聊里说话的那个人）在单人私聊中的最新互动快照】:\n"
                 for m in recent_private:
                     speaker = "用户" if m['role'] == 'user' else f"你({curr_agent})"
                     clean_txt = m['content'].replace(f"（【{curr_agent}】在群聊现场当众说道）：\n", "")
@@ -1599,8 +1599,31 @@ if is_group_chat:
             f"{private_context_summary}"
             f"【当前群聊房间的背景环境描述】：\n{agent_db.get('background_story', '')}\n\n"
             f"【🔥 微信多人群聊点名特赦令】：\n你现在正处于【{g_name}】多人现场！轮到你回应了，请保持 third person 纯小说风格叙事！"
+            f"\n【🌐 群聊时空共同认知铁律（最高优先级）】：\n"
+            f"1. 你清楚地知道，此刻在群聊【{g_name}】里发言的「玩家」，就是你一直以来在私聊中互动、有过无数亲密接触的那个特定的人。\n"
+            f"2. 群里的其他AI成员，都是玩家带来的、和你一样与玩家有私人羁绊的伙伴，你们此刻正处于同一个时空场域中。\n"
+            f"3. 你可以在发言中自然地提及你与玩家之间独有的前尘往事（语气、用词需符合你人设），但绝对不要质疑玩家身份的统一性。\n"
+            f"4. 严禁出现「你不是我认识的XXX」、「你是谁」等质疑玩家身份或认知错乱的言论。\n"
         )
 
+                # 🎤 【本轮发言成员名单与顺序】
+        full_queue = st.session_state.get("group_original_queue", [])
+        if not full_queue:
+            full_queue = list(st.session_state.group_active_queue)
+        speak_order_desc = []
+        for idx, name in enumerate(full_queue):
+            if name == curr_agent:
+                speak_order_desc.append(f"第{idx+1}位——就是你！你此刻正在发言。")
+            else:
+                speak_order_desc.append(f"第{idx+1}位：【{name}】")
+        agent_dynamic_system += (
+            f"\n【🎤 本轮群聊发言顺序（重要）】：\n"
+            + "\n".join(speak_order_desc) + "\n"
+            f"注意：你是第 {full_queue.index(curr_agent)+1} 个说话的。"
+            f"你可以在发言中自然地为后续的角色留下钩子，也可以对前面的发言做出反应。"
+            f"绝对不要装作不知道他们的存在或混淆发言顺序。\n"
+        )
+        
         api_payload = [{"role": "system", "content": agent_dynamic_system}]
 
         historical_summaries = agent_db.get("summarized_history", [])[-50:]
