@@ -932,6 +932,8 @@ if "gen_role_res" not in st.session_state: st.session_state.gen_role_res = ""
 if "gen_running" not in st.session_state: st.session_state.gen_running = False
 if "regenerate_trigger" not in st.session_state: st.session_state.regenerate_trigger = False
 if "continue_trigger" not in st.session_state: st.session_state.continue_trigger = False
+if "group_round_ended" not in st.session_state: st.session_state.group_round_ended = False
+if "group_original_queue" not in st.session_state: st.session_state.group_original_queue = []
 
 # ==========================================
 # 2. 侧边栏控制台
@@ -1438,6 +1440,23 @@ else:
         fallback_name = message.get("agent_name", "")
         render_message_controls_by_id(message["msg_id"], is_last, fallback_name)
 
+# 群聊回合结束后显示共同行动选项
+if is_group_chat and st.session_state.get("group_round_options"):
+    opts = st.session_state.group_round_options
+    st.markdown("---")
+    st.markdown("🧭 **本群回合后续行动分支**")
+    for key in ["A", "B", "C", "D"]:
+        opt = opts.get(key)
+        if opt:
+            action_text = opt if isinstance(opt, str) else opt.get("action", "")
+            if action_text:
+                st.markdown(f"**🔴 选项 {key}**：{action_text}")
+                if st.button(f"📋 选定选项 {key}", key=f"grp_opt_{key}_{int(time.time())}"):
+                    st.session_state[f"chat_input_v_{st.session_state.clear_version}"] = action_text
+                    st.toast(f"选项 {key} 已注入输入框～")
+    # 展示完后清除，防止重复渲染
+    del st.session_state.group_round_options
+
 st.write("---")
 col_action1, _ = st.columns([0.2, 0.8])
 with col_action1:
@@ -1494,6 +1513,7 @@ if is_group_chat:
                 0] if st.session_state.group_active_queue else ""
 
         save_local_data()
+        st.session_state.group_original_queue = list(st.session_state.group_active_queue)  # 保存原名单
         st.rerun()
 
         # 🔚 群聊回合收尾：所有人发言完毕后统一存档并生成选项
