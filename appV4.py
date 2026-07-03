@@ -1357,7 +1357,6 @@ multi_reply_protocol = (
 - 最终成文必须像一篇高质量网文片段，不得带有任何提示词或格式指令的残留。
     """
 )
-)
 
 # 电影运镜剪辑卡尺
 lazy_insurance_prompt = {
