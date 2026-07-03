@@ -974,6 +974,19 @@ else:
     g_name = curr_sk.replace("💬 群聊：", "")
     room_data = st.session_state.all_sessions_db["group_rooms"][g_name]
     st.session_state.group_members_list = room_data["members"]
+
+    # ✨ 群聊专属轻量级叙事协议（不套用单聊的四幕大法，保持微信群的自然节奏）
+    group_reply_protocol = """
+【🎬 群聊轻量级叙事协议】
+你现在处于多人群聊现场，请用**简洁的第三人称小说风格**直接回复。只需自然地描写你的动作、台词和神态，并可以承接其他成员的发言或发起互动。
+
+⚠️ 关键要求：
+- 不要使用 0️⃣、1️⃣、2️⃣、3️⃣ 等分幕符号，直接以连贯的段落输出。
+- 不需要严格计数动作或台词句数，以剧情流畅为首要目标。
+- 长度保持中等，避免单次回复过分冗长（除非剧情需要密集冲突）。
+- 保持与单聊相同的人设和文风，但节奏更快、更即兴。
+    """
+    
     chat_history_view = synthesize_group_chat_history(g_name, st.session_state.group_members_list)
 
 # 群内点名小圆点
@@ -1605,7 +1618,7 @@ if is_group_chat:
                 private_context_summary += "\n"
 
         # ✨ System 保持极高纯净度
-        agent_dynamic_system = f"{jailbreak_prompt}\n\n{multi_reply_protocol}\n\n"
+        agent_dynamic_system = f"{jailbreak_prompt}\n\n{group_reply_protocol}\n\n"
         agent_dynamic_system += (
             f"【你当前需要代入的名字：{curr_agent}】\n"
             f"【你的人格设定】：\n{agent_db.get('system_role', '')}\n\n"
@@ -1688,7 +1701,7 @@ if is_group_chat:
                 # —— 💎 接戏强化指令，和单聊保持一致 ——
                 ultimate_group_prompt = (
                     f"⚡⚡⚡【最高优先级执行指令 —— 舞台导演小说吐字规范】：\n"
-                    f"{multi_reply_protocol}\n\n"
+                    f"{group_reply_protocol}\n\n"
                     f"🎬 现在轮到你（{curr_agent}）发言。请全盘承接前面的群内对话，用第三视角小说叙事，自然展现你的动作、台词与神态。"
                 )
                 api_payload.append({"role": "user", "content": ultimate_group_prompt})
