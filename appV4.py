@@ -1473,6 +1473,7 @@ if is_group_chat:
         msg_id = f"msg_{int(time.time() * 1000)}_{random.randint(1000, 9999)}"
         timestamp = time.time()
         active_content = f"（玩家在群聊【{g_name}】里发了一条消息）：\n{user_input}" if user_input else f"（玩家点击了继续推演，请所有人顺着当前的时间线，自发向下演绎精彩剧本）"
+        st.session_state.active_content = active_content    # 🔑 存入跨 run 存储
 
         for agent in st.session_state.group_members_list:
             st.session_state.all_sessions_db["roles"][agent]["chat_history"].append({
@@ -1563,62 +1564,103 @@ if is_group_chat:
 
         api_payload.extend(cleaned_context)
 
-        with st.chat_message("assistant", avatar="💋"):
+                with st.chat_message("assistant", avatar="💋"):
             response_placeholder = st.empty()
             full_story_response = ""
             try:
-                response = client.chat.completions.create(
-                    model=model_name, messages=api_payload, stream=True, temperature=0.95, max_tokens=3000,
-                    presence_penalty=0.3, frequency_penalty=0.1, timeout=60.0
+                # =========================================================
+                # 💎 群聊豪华接戏包：向单聊看齐的最终指令强化
+                # =========================================================
+                # 在已有 api_payload 末尾追加强化接戏令
+                ultimate_group_prompt = (
+                    f"⚡⚡⚡【最高优先级执行指令 —— 舞台导演小说吐字规范】：\n"
+                    f"{multi_reply_protocol}\n\n"
+                    f"🎬 现在轮到你（{curr_agent}）发言。请全盘承接前面的群内对话，用第三视角小说叙事，自然展现你的动作、台词与神态。不要跳出角色进行任何分析或评价，直接输出小说正文。"
                 )
-                for chunk in response:
-                    if chunk.choices[0].delta.content:
-                        full_story_response += chunk.choices[0].delta.content
-                        display_view = novel_text_formatter(full_story_response)
-                        with response_placeholder.container():
-                            st.markdown(display_view)
+                api_payload.append({"role": "user", "content": ultimate_group_prompt})
 
-                # ====== 整体替换为下方修改后的代码块 ======
-                # ====== 整体替换为下方修改后的代码块 ======
-                with st.spinner("⚡ 赛博冰冷核正在无感压缩当前轮次事实链..."):
-                    new_turn_summary = generate_single_turn_summary(client, active_content, full_story_response)
-                    if "summarized_history" not in agent_db:
-                        agent_db["summarized_history"] = []
-                    agent_db["summarized_history"].append(new_turn_summary)
-                    
-                    # ✨ 昊哥专属专属：群聊同台竞技时，同样满 50 轮触发批量滑动，斩断最老 10 条！
-                    if len(agent_db["summarized_history"]) > 50:
-                        agent_db["summarized_history"] = agent_db["summarized_history"][20:]
+                max_loops = 3
+                loop_count = 0
+                loop_payload = list(api_payload)  # 拷贝一份用于续写迭代
 
-                # 🚀 注入：在群聊落盒前同样唤醒 flash 模型全速规划群戏剧局势切片
+                while loop_count < max_loops:
+                    loop_count += 1
+                    response = client.chat.completions.create(
+                        model=model_name,
+                        messages=loop_payload,
+                        stream=True,
+                        max_tokens=4000,
+                        timeout=60.0,
+                        temperature=0.85,
+                        extra_body={"thinking": {"type": "disabled"}}
+                    )
 
-                # 🚀 注入：在群聊落盒前同样唤醒 flash 模型全速规划群戏剧局势切片
+                    finish_reason = None
+                    loop_buffer = []
+
+                    for chunk in response:
+                        if chunk.choices and chunk.choices[0].delta:
+                            delta = chunk.choices[0].delta
+                            if delta.content:
+                                text_fragment = delta.content
+                                loop_buffer.append(text_fragment)
+                                full_story_response += text_fragment
+                                display_view = novel_text_formatter(full_story_response)
+                                with response_placeholder.container():
+                                    st.markdown(display_view, unsafe_allow_html=True)
+                            if chunk.choices[0].finish_reason is not None:
+                                finish_reason = chunk.choices[0].finish_reason
+
+                    # 自动续写逻辑
+                    if finish_reason == "length":
+                        current_loop_text = "".join(loop_buffer)
+                        loop_payload.append({"role": "assistant", "content": current_loop_text})
+                        loop_payload.append({
+                            "role": "user",
+                            "content": "【系统提示：因篇幅限制小说正文内容被截断，请紧接上文的最后一个字，继续无缝输出后续的剧情。注意：绝对不要重复前面写过的内容、已有的大标题或开场白，直接往下续写直至戏剧定格结束！】"
+                        })
+                    else:
+                        break
+
+                # 生成选项
                 with st.spinner("⚡ 正在进行多人群戏局势切片推演..."):
                     action_options = generate_four_options(
                         client,
                         agent_db.get('system_role', ''),
-                        agent_db.get('background_story', ''),  # 传入背景剧情
-                        chat_history_view,  # 传入群聊历史切片
-                        full_story_response  # 传入当前AI响应
+                        agent_db.get('background_story', ''),
+                        chat_history_view,
+                        full_story_response
                     )
 
                 single_reply_id = f"reply_{int(time.time() * 1000)}_{random.randint(1000, 9999)}"
-                # 仅保存纯小说文本（追加绑定 options 选项）
                 agent_db["chat_history"].append({
                     "role": "assistant",
                     "content": full_story_response,
                     "timestamp": time.time(),
                     "msg_id": single_reply_id,
-                    "options": action_options  # ✨ 完美落库
+                    "options": action_options
                 })
-                # ========================================
+
+                # 无感压缩摘要
+                with st.spinner("⚡ 赛博冰冷核正在无感压缩当前轮次事实链..."):
+                    new_turn_summary = generate_single_turn_summary(
+                        client,
+                        st.session_state.active_content,   # 🔑 已安全跨 run 存储
+                        full_story_response
+                    )
+                    if "summarized_history" not in agent_db:
+                        agent_db["summarized_history"] = []
+                    agent_db["summarized_history"].append(new_turn_summary)
+                    if len(agent_db["summarized_history"]) > 50:
+                        agent_db["summarized_history"] = agent_db["summarized_history"][20:]
 
                 save_local_data()
                 st.rerun()
+
             except Exception as e:
                 st.session_state.group_active_agent = ""
                 st.session_state.group_active_queue = []
-                st.error(f"📡 拓扑折断：{str(e)}")
+                st.error(f"📡 赛博空间发生 logic 折断：\n\n{str(e)}")
 
 else:
     if user_input or st.session_state.regenerate_trigger or is_continue_mode:
