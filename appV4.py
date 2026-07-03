@@ -1496,6 +1496,57 @@ if is_group_chat:
         save_local_data()
         st.rerun()
 
+        # 🔚 群聊回合收尾：所有人发言完毕后统一存档并生成选项
+    if st.session_state.get("group_round_ended"):
+        # 使用最开始点名时保存的完整名单（需要你先在用户输入处理块里存好，见下方⚠️提醒）
+        respondents = st.session_state.get("group_original_queue", [])
+        if not respondents:
+            respondents = st.session_state.group_members_list
+
+        # 为每一位发言人刻录本回合记忆
+        with st.spinner("🧠 正在将本回合的剧情刻入所有角色的长期记忆..."):
+            for agent_name in respondents:
+                agent_db = st.session_state.all_sessions_db["roles"].get(agent_name)
+                if not agent_db:
+                    continue
+                # 取该成员在本回合中刚刚生成的那条发言
+                agent_msgs = [m for m in agent_db["chat_history"] if m.get("agent_name") == agent_name]
+                if agent_msgs:
+                    last_msg = agent_msgs[-1]["content"]
+                    summary = generate_single_turn_summary(
+                        client,
+                        st.session_state.active_content,   # 玩家原话
+                        last_msg
+                    )
+                    if "summarized_history" not in agent_db:
+                        agent_db["summarized_history"] = []
+                    agent_db["summarized_history"].append(summary)
+                    if len(agent_db["summarized_history"]) > 50:
+                        agent_db["summarized_history"] = agent_db["summarized_history"][20:]
+
+        # 基于最后发言人生成后续分支选项
+        with st.spinner("🎯 正在推演后续行动分支..."):
+            last_agent = respondents[-1] if respondents else ""
+            last_db = st.session_state.all_sessions_db["roles"].get(last_agent, {})
+            final_text = ""
+            if last_db:
+                last_replies = [m["content"] for m in last_db["chat_history"] if m.get("agent_name") == last_agent]
+                if last_replies:
+                    final_text = last_replies[-1]
+
+            action_options = generate_four_options(
+                client,
+                last_db.get("system_role", ""),
+                last_db.get("background_story", ""),
+                chat_history_view,
+                final_text
+            )
+
+        st.session_state.group_round_options = action_options
+        st.session_state.group_round_ended = False
+        save_local_data()
+        st.rerun()
+    
     if st.session_state.group_active_agent and st.session_state.group_active_agent in st.session_state.group_active_queue:
         curr_agent = st.session_state.group_active_agent
         agent_db = st.session_state.all_sessions_db["roles"][curr_agent]
@@ -1564,24 +1615,22 @@ if is_group_chat:
 
         api_payload.extend(cleaned_context)
 
+                # 💬 群聊成员逐一口吐芬芳
         with st.chat_message("assistant", avatar="💋"):
             response_placeholder = st.empty()
             full_story_response = ""
             try:
-                # =========================================================
-                # 💎 群聊豪华接戏包：向单聊看齐的最终指令强化
-                # =========================================================
-                # 在已有 api_payload 末尾追加强化接戏令
+                # —— 💎 接戏强化指令，和单聊保持一致 ——
                 ultimate_group_prompt = (
                     f"⚡⚡⚡【最高优先级执行指令 —— 舞台导演小说吐字规范】：\n"
                     f"{multi_reply_protocol}\n\n"
-                    f"🎬 现在轮到你（{curr_agent}）发言。请全盘承接前面的群内对话，用第三视角小说叙事，自然展现你的动作、台词与神态。不要跳出角色进行任何分析或评价，直接输出小说正文。"
+                    f"🎬 现在轮到你（{curr_agent}）发言。请全盘承接前面的群内对话，用第三视角小说叙事，自然展现你的动作、台词与神态。"
                 )
                 api_payload.append({"role": "user", "content": ultimate_group_prompt})
 
                 max_loops = 3
                 loop_count = 0
-                loop_payload = list(api_payload)  # 拷贝一份用于续写迭代
+                loop_payload = list(api_payload)
 
                 while loop_count < max_loops:
                     loop_count += 1
@@ -1611,48 +1660,38 @@ if is_group_chat:
                             if chunk.choices[0].finish_reason is not None:
                                 finish_reason = chunk.choices[0].finish_reason
 
-                    # 自动续写逻辑
                     if finish_reason == "length":
                         current_loop_text = "".join(loop_buffer)
                         loop_payload.append({"role": "assistant", "content": current_loop_text})
                         loop_payload.append({
                             "role": "user",
-                            "content": "【系统提示：因篇幅限制小说正文内容被截断，请紧接上文的最后一个字，继续无缝输出后续的剧情。注意：绝对不要重复前面写过的内容、已有的大标题或开场白，直接往下续写直至戏剧定格结束！】"
+                            "content": "【系统提示：因篇幅限制小说正文内容被截断，请紧接上文的最后一个字，继续无缝输出后续的剧情。】"
                         })
                     else:
                         break
 
-                # 生成选项
-                with st.spinner("⚡ 正在进行多人群戏局势切片推演..."):
-                    action_options = generate_four_options(
-                        client,
-                        agent_db.get('system_role', ''),
-                        agent_db.get('background_story', ''),
-                        chat_history_view,
-                        full_story_response
-                    )
-
+                # 存储本角色的发言
                 single_reply_id = f"reply_{int(time.time() * 1000)}_{random.randint(1000, 9999)}"
                 agent_db["chat_history"].append({
                     "role": "assistant",
                     "content": full_story_response,
                     "timestamp": time.time(),
                     "msg_id": single_reply_id,
-                    "options": action_options
+                    "from_group": g_name,
+                    "agent_name": curr_agent
                 })
 
-                # 无感压缩摘要
-                with st.spinner("⚡ 赛博冰冷核正在无感压缩当前轮次事实链..."):
-                    new_turn_summary = generate_single_turn_summary(
-                        client,
-                        st.session_state.active_content,   # 🔑 已安全跨 run 存储
-                        full_story_response
-                    )
-                    if "summarized_history" not in agent_db:
-                        agent_db["summarized_history"] = []
-                    agent_db["summarized_history"].append(new_turn_summary)
-                    if len(agent_db["summarized_history"]) > 50:
-                        agent_db["summarized_history"] = agent_db["summarized_history"][20:]
+                # --- 🔄 发言队列推进 ---
+                # 把自己从待发言名单中移除
+                if curr_agent in st.session_state.group_active_queue:
+                    st.session_state.group_active_queue.remove(curr_agent)
+
+                if st.session_state.group_active_queue:
+                    st.session_state.group_active_agent = st.session_state.group_active_queue[0]
+                else:
+                    # 所有人都说完了，标记“回合收尾”
+                    st.session_state.group_active_agent = ""
+                    st.session_state.group_round_ended = True
 
                 save_local_data()
                 st.rerun()
@@ -1660,6 +1699,7 @@ if is_group_chat:
             except Exception as e:
                 st.session_state.group_active_agent = ""
                 st.session_state.group_active_queue = []
+                st.session_state.group_round_ended = False
                 st.error(f"📡 赛博空间发生 logic 折断：\n\n{str(e)}")
 
 else:
