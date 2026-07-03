@@ -1110,10 +1110,17 @@ if not is_group_chat:
         status_val = st.text_area("角色的当前状态", value=role_data.get("character_status", ""), height=120)
         sys_val = st.text_area("基本人设设定 (System Role)", value=role_data.get("system_role", ""), height=120)
 
+        # ✨ 修改头像
+        uploaded_avatar_edit = st.file_uploader("修改角色头像 (png/jpg)", type=["png","jpg","jpeg"], key=f"avatar_{target_girl}")
+
         if st.form_submit_button("💾 统一保存并应用当前设定", use_container_width=True):
             role_data["background_story"] = bg_val
             role_data["character_status"] = status_val
             role_data["system_role"] = sys_val
+            # ✨ 若上传了新头像则更新
+            if uploaded_avatar_edit is not None:
+                import base64
+                role_data["avatar"] = base64.b64encode(uploaded_avatar_edit.read()).decode("utf-8")
             save_local_data()
             st.toast("⚙️ 剧本环境参数覆写成功！")
             st.rerun()
@@ -1190,11 +1197,21 @@ with st.sidebar.container():
 
     init_bg = st.text_area("初始背景剧情设定：", value="")
 
+    # ✨ 新增：上传头像（可选）
+    uploaded_avatar_new = st.file_uploader("上传角色头像（可选）", type=["png","jpg","jpeg"], key="new_role_avatar")
+
     if st.button("✨ 确认创造该全新角色联系人", use_container_width=True):
         clean_name = new_role_name.strip()
         if clean_name == "" or clean_name in available_roles_list:
             st.error("❌ 名字不能为空或联系人已存在！")
         else:
+            # ✨ 处理头像转base64
+            avatar_base64 = ""
+            if uploaded_avatar_new is not None:
+                import base64
+                avatar_bytes = uploaded_avatar_new.read()
+                avatar_base64 = base64.b64encode(avatar_bytes).decode("utf-8")
+
             st.session_state.all_sessions_db["roles"][clean_name] = {
                 "chat_history": [],
                 "summarized_history": [],
@@ -1202,7 +1219,8 @@ with st.sidebar.container():
                 "background_story": init_bg.strip(),
                 "character_status": f"[{clean_name}]\n阴道：干燥紧闭。\n乳头：平软未勃起。\n大腿内侧：皮肤处于常温状态。",
                 "favorability": 0,
-                "memory_events": []
+                "memory_events": [],
+                "avatar": avatar_base64   # ✨ 头像存这里
             }
             st.session_state.current_session_key = f"👤 单聊：{clean_name}"
             st.session_state.gen_role_desc = ""
@@ -1452,8 +1470,21 @@ if history_len > DISPLAY_LIMIT:
             if "msg_id" not in message:
                 message["msg_id"] = f"backfill_{i}_{hash(message['content'])}"
 
-            avatar_icon = "💋" if message["role"] == "assistant" else "😎"
-            with st.chat_message(message["role"], avatar=avatar_icon):
+            # --- ✨ 动态头像计算 ---
+            if message["role"] == "user":
+                avatar = "😎"
+            else:
+                avatar_b64 = ""
+                if not is_group_chat:   # 单聊直接用当前角色
+                    avatar_b64 = role_data.get("avatar", "")
+                else:                   # 群聊根据 agent_name 取
+                    agent = message.get("agent_name")
+                    if agent and agent in st.session_state.all_sessions_db["roles"]:
+                        avatar_b64 = st.session_state.all_sessions_db["roles"][agent].get("avatar", "")
+                avatar = f"data:image/png;base64,{avatar_b64}" if avatar_b64 else "💋"
+            # --- 结束 ---
+
+            with st.chat_message(message["role"], avatar=avatar):
                 p_name = message.get("agent_name", "")
                 prefix = f"💬 **【{p_name}】**：\n\n" if p_name else ""
                 if message["role"] == "assistant":
@@ -1469,23 +1500,34 @@ if history_len > DISPLAY_LIMIT:
             message["msg_id"] = f"backfill_{actual_idx}_{hash(message['content'])}"
 
         is_last = (actual_idx == history_len - 1) and (message["role"] == "assistant")
-        avatar_icon = "💋" if message["role"] == "assistant" else "😎"
-        with st.chat_message(message["role"], avatar=avatar_icon):
+        # --- ✨ 动态头像计算 ---
+        if message["role"] == "user":
+            avatar = "😎"
+        else:
+            # 尝试获取该角色头像
+            avatar_b64 = ""
+            if not is_group_chat:   # 单聊直接用当前角色
+                avatar_b64 = role_data.get("avatar", "")
+            else:                   # 群聊根据 agent_name 取
+                agent = message.get("agent_name")
+                if agent and agent in st.session_state.all_sessions_db["roles"]:
+                    avatar_b64 = st.session_state.all_sessions_db["roles"][agent].get("avatar", "")
+            # 有 base64 就用真实图片，否则用兜底 emoji
+            avatar = f"data:image/png;base64,{avatar_b64}" if avatar_b64 else "💋"
+        # --- 结束 ---
+        with st.chat_message(message["role"], avatar=avatar):
             p_name = message.get("agent_name", "")
             prefix = f"💬 **【{p_name}】**：\n\n" if p_name else ""
             if message["role"] == "assistant":
-                # 🧠 仅在前端展示思维链折叠框，完全隔离，不污染后续发给 AI 的上下文
                 if message.get("thinking"):
                     with st.expander("💭 查看模型内心独白/心理推演...", expanded=False):
                         st.markdown(f"<span style='color:#6c757d; font-size:16px;'>{message['thinking']}</span>",
                                     unsafe_allow_html=True)
-
                 display_novel_with_bold_status(prefix + message["content"])
                 render_options_and_status_in_chat(message)
             else:
                 st.markdown(prefix + novel_text_formatter(message["content"]), unsafe_allow_html=True)
 
-        # ✨ 严格位置对齐传参，根除 NameError
         fallback_name = message.get("agent_name", "")
         render_message_controls_by_id(message["msg_id"], is_last, fallback_name)
 else:
@@ -1495,23 +1537,33 @@ else:
             message["msg_id"] = f"backfill_{i}_{hash(message['content'])}"
 
         is_last = (i == history_len - 1) and (message["role"] == "assistant")
-        avatar_icon = "💋" if message["role"] == "assistant" else "😎"
-        with st.chat_message(message["role"], avatar=avatar_icon):
+        # --- ✨ 动态头像计算 ---
+        if message["role"] == "user":
+            avatar = "😎"
+        else:
+            avatar_b64 = ""
+            if not is_group_chat:
+                avatar_b64 = role_data.get("avatar", "")
+            else:
+                agent = message.get("agent_name")
+                if agent and agent in st.session_state.all_sessions_db["roles"]:
+                    avatar_b64 = st.session_state.all_sessions_db["roles"][agent].get("avatar", "")
+            avatar = f"data:image/png;base64,{avatar_b64}" if avatar_b64 else "💋"
+        # --- 结束 ---
+
+        with st.chat_message(message["role"], avatar=avatar):
             p_name = message.get("agent_name", "")
             prefix = f"💬 **【{p_name}】**：\n\n" if p_name else ""
             if message["role"] == "assistant":
-                # 🧠 仅在前端展示思维链折叠框，完全隔离，不污染后续发给 AI 的上下文
                 if message.get("thinking"):
                     with st.expander("💭 查看模型内心独白/心理推演...", expanded=False):
                         st.markdown(f"<span style='color:#6c757d; font-size:16px;'>{message['thinking']}</span>",
                                     unsafe_allow_html=True)
-
                 display_novel_with_bold_status(prefix + message["content"])
                 render_options_and_status_in_chat(message)
             else:
                 st.markdown(prefix + novel_text_formatter(message["content"]), unsafe_allow_html=True)
 
-        # ✨ 严格位置对齐传参，根除 NameError
         fallback_name = message.get("agent_name", "")
         render_message_controls_by_id(message["msg_id"], is_last, fallback_name)
 
