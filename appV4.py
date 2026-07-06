@@ -277,19 +277,14 @@ def novel_text_formatter(raw_text: str) -> str:
 
     # ✨ 核心修复：如果AI输出已经乖乖以 0️⃣ 开头，说明格式正确，完全跳过前缀清洗
     # 否则才执行原有的清洗逻辑，避免误删【内心独白】
-    if raw_text.startswith("0️⃣"):
-        # 已经以 0️⃣ 开头，不做任何前缀清洗，直接进入后续处理
-        pass
-    else:
+    if not raw_text.startswith("0️⃣"):
         # 没有 0️⃣ 开头时，清洗掉常见的废话前缀，但保留所有【】和[]包裹的内容
-        # 原正则会误删 0️⃣ 后面的【心理独白】，因此这里仅删除明确引导词
         raw_text = re.sub(
             r'^(?:好的|我知道了|现在我是|我明白|遵命|开始推演)\s*',
             '',
             raw_text
         ).strip()
         # 如果清洗后以【开头，且内容看起来像系统说明（不包含官能核心词），再尝试剥离一层
-        # 这是为了防止极少数情况AI输出类似“【角色设定】0️⃣”的模式
         if raw_text.startswith("【") and not any(
                 keyword in raw_text
                 for keyword in ["妈的", "该死", "好想", "不行", "腿软", "要命", "好爽", "住手"]
@@ -297,12 +292,11 @@ def novel_text_formatter(raw_text: str) -> str:
             raw_text = re.sub(r'^【.*?】[\s]*', '', raw_text).strip()
 
     # 🎯 昊哥，这里是新增的替换逻辑：自动将中文破折号替换为标准省略号
-    # 无论是连着的双破折号“————”还是单个“——”，都转化为标准的点点点
     raw_text = raw_text.replace("——", "......")
 
     # 1. 规范化基础文本
     clean_stream = re.sub(r'\n+', ' ', raw_text).strip()
-    # ✨ 允许 0️⃣ 参与分段标识扫描
+    # 为所有标记（包括 0️⃣）两边加空格，确保扫描时能准确识别
     clean_stream = re.sub(r'(0️⃣|1️⃣|2️⃣|3️⃣)', r' \1 ', clean_stream)
     clean_stream = re.sub(r'\s+', ' ', clean_stream).strip()
 
@@ -310,10 +304,9 @@ def novel_text_formatter(raw_text: str) -> str:
     current_segment = []
 
     in_quote = False  # 双引号内部状态
-    paren_depth = 0  # 英文括号嵌套层级
-    zh_paren_depth = 0  # 中文括号嵌套层级
+    paren_depth = 0   # 英文括号嵌套层级
+    zh_paren_depth = 0 # 中文括号嵌套层级
 
-    # 包含 0️⃣ 在内的所有目标符号
     target_markers = ["0️⃣", "1️⃣", "2️⃣", "3️⃣"]
 
     # 2. 高级状态机扫描
@@ -328,27 +321,35 @@ def novel_text_formatter(raw_text: str) -> str:
                 break
 
         if matched_marker:
+            # 先保存当前累积的文本为一个段落
             if current_segment:
                 seg_str = "".join(current_segment).strip()
                 if seg_str:
                     segments.append(seg_str)
                 current_segment = []
-            segments.append(matched_marker)
+
+            # 关键改动：仅保留 0️⃣ 作为实际显示的标记，其余标记隐身
+            if matched_marker == "0️⃣":
+                segments.append(matched_marker)
+            # 1️⃣ 2️⃣ 3️⃣ 不加入 segments，仅作为分段节点使用
+
             i += len(matched_marker)
             continue
 
         char = clean_stream[i]
 
+        # ---------- 双引号短语音块处理（维持原逻辑） ----------
         if char == "“":
             closing_idx = clean_stream.find("”", i)
             if closing_idx != -1:
                 quote_content = clean_stream[i + 1:closing_idx]
-                if len(quote_content) <= 14:
+                if len(quote_content) <= 14:  # 短语音整体保留
                     full_voice_block = clean_stream[i:closing_idx + 1]
                     current_segment.append(full_voice_block)
                     i = closing_idx + 1
                     continue
 
+            # 长语音：先保存之前的段落，然后进入引号内状态
             if current_segment:
                 seg_str = "".join(current_segment).strip()
                 if seg_str:
@@ -370,6 +371,7 @@ def novel_text_formatter(raw_text: str) -> str:
             i += 1
             continue
 
+        # ---------- 括号层级追踪 ----------
         if char == "(":
             paren_depth += 1
         elif char == ")":
@@ -379,16 +381,13 @@ def novel_text_formatter(raw_text: str) -> str:
         elif char == "）":
             zh_paren_depth = max(0, zh_paren_depth - 1)
 
+        # 💡 原先这里有一段以“。”分行的代码，已按爸爸要求移除
+        # 现在只依靠标记和引号来分段，文本会自然连成较长的段落
+
         current_segment.append(char)
-
-        if char == "。" and not in_quote and paren_depth == 0 and zh_paren_depth == 0:
-            seg_str = "".join(current_segment).strip()
-            if seg_str:
-                segments.append(seg_str)
-            current_segment = []
-
         i += 1
 
+    # 处理最后剩余的文本
     if current_segment:
         seg_str = "".join(current_segment).strip()
         if seg_str:
@@ -400,13 +399,13 @@ def novel_text_formatter(raw_text: str) -> str:
         if not seg:
             continue
         if seg in target_markers:
-            # ✨ 为 0️⃣ 注入高显眼的古典气泡心理暗示标签，其余照旧
+            # 这里只会匹配到 0️⃣，因为 1️⃣2️⃣3️⃣ 已经从 segments 中移除了
             if seg == "0️⃣":
                 processed_blocks.append(f"\n\n💡 <b>【角色心声独白】</b>\n")
             else:
                 processed_blocks.append(f"\n\n{seg}")
         else:
-            # 如果上一个是心理开场，这一段落可以让它变成优雅的灰色斜体
+            # 如果上一个是心理开场，这一段落让它变成优雅的灰色斜体
             if processed_blocks and "💡 <b>【角色心声独白】</b>" in processed_blocks[-1]:
                 processed_blocks.append(
                     f"&emsp;&emsp;<i><span style='color:#888888;'>{seg}</span></i>"
