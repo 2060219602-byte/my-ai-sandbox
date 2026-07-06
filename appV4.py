@@ -190,6 +190,7 @@ if "app_password" in st.secrets:
 # ==========================================
 # 🎨 极致前端美化：注入全局高级小说气泡与古典宋体样式
 # ==========================================
+st.markdown("""
 <style>
     /* ========== 全局基底：温暖的纸张气息 + 呼吸感 ========== */
     html, body, [data-testid="stAppViewContainer"], .stMarkdown {
@@ -363,6 +364,8 @@ if "app_password" in st.secrets:
         }
     }
 </style>
+</style>
+""", unsafe_allow_html=True)
 
 import re
 
