@@ -190,81 +190,184 @@ if "app_password" in st.secrets:
 # ==========================================
 # 🎨 极致前端美化：注入全局高级小说气泡与古典宋体样式
 # ==========================================
-st.markdown("""
 <style>
-    /* 1. 注入顶级优雅宋体/明体，整体字体放大，并增强段落呼吸感 */
+    /* ========== 全局基底：温暖的纸张气息 + 呼吸感 ========== */
     html, body, [data-testid="stAppViewContainer"], .stMarkdown {
         font-family: "Noto Serif SC", "Songti SC", "Songti", "华文宋体", serif !important;
         font-size: 18px !important;
-        line-height: 1.8 !important;
+        line-height: 1.9 !important;
         letter-spacing: 0.05em !important;
+        color: #2c2c2c !important;
+        background: linear-gradient(175deg, #fdfaf6 0%, #f7f2e9 50%, #fefcf9 100%) !important;
+        background-attachment: fixed !important;
+        transition: all 0.3s ease !important;
     }
 
-    /* 侧边栏保持现代无衬线字体，方便功能操作 */
+    /* 侧边栏保持现代无衬线 */
     [data-testid="stSidebar"] {
         font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif !important;
         font-size: 15px !important;
+        background: rgba(255,255,255,0.6) !important;
+        backdrop-filter: blur(12px) !important;
     }
 
-    /* 2. 重写用户和AI的对话框，化身为高级沉浸式气泡 */
+    /* ========== 标题层级艺术 ========== */
+    h1, h2, h3 {
+        font-family: "Noto Serif SC", serif !important;
+        font-weight: 700 !important;
+        letter-spacing: 0.1em !important;
+        margin-top: 2rem !important;
+        margin-bottom: 1.2rem !important;
+        position: relative !important;
+    }
+    h1 {
+        font-size: 2.4rem !important;
+        color: #ff4d6d !important;
+        border-bottom: 2px solid rgba(255,77,109,0.15) !important;
+        padding-bottom: 0.4em !important;
+    }
+    h2 {
+        font-size: 1.8rem !important;
+        color: #3a3a3a !important;
+    }
+    h3 {
+        font-size: 1.4rem !important;
+        color: #5a5a5a !important;
+    }
+
+    /* ========== 内心独白专属：淡入淡出梦境盒 ========== */
+    /* 匹配 0️⃣ 心理输出块（由后端函数生成） */
+    .thought-block, i span[style*="color:#888888"] {
+        display: block !important;
+        background: linear-gradient(135deg, rgba(180,160,200,0.08) 0%, rgba(255,240,255,0.15) 100%);
+        border-left: 4px solid rgba(180,120,200,0.5) !important;
+        padding: 16px 20px !important;
+        margin: 1.5rem 0 !important;
+        border-radius: 0 10px 10px 0 !important;
+        font-style: italic !important;
+        color: #5e4b6b !important;
+        box-shadow: 0 4px 14px rgba(100,50,130,0.04) !important;
+        animation: fadeInThought 0.6s ease-out !important;
+    }
+    @keyframes fadeInThought {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ========== 聊天气泡重塑：悬浮呼吸感 ========== */
     [data-testid="stChatMessage"] {
-        background-color: transparent !important;
+        background: transparent !important;
         border: none !important;
         padding: 1rem 0 !important;
+        transition: transform 0.25s ease, box-shadow 0.25s ease !important;
+    }
+    [data-testid="stChatMessage"]:hover {
+        transform: translateY(-2px) !important;
     }
 
-    /* 用户气泡：优雅暗灰，靠右平铺感 */
+    /* 用户气泡：深邃但不沉闷 */
     [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatar"] img[src*="user"]),
     [data-testid="stChatMessage"]:has([style*="😎"]) {
-        background-color: rgba(240, 240, 245, 0.4) !important;
-        border-radius: 12px !important;
-        padding: 1.2rem !important;
+        background: rgba(235, 235, 242, 0.55) !important;
+        backdrop-filter: blur(6px) !important;
+        border-radius: 14px !important;
+        padding: 1.3rem 1.5rem !important;
         border-left: 5px solid #6c757d !important;
-        margin-bottom: 1rem !important;
+        margin-bottom: 1.2rem !important;
+        box-shadow: 0 6px 18px rgba(0,0,0,0.03) !important;
     }
 
-    /* AI气泡：浪漫淡红底色，凸显戏剧感 */
+    /* AI（昊哥的专属女神）气泡：羞红色调 + 柔和光晕 */
     [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatar"] img[src*="assistant"]),
     [data-testid="stChatMessage"]:has([style*="💋"]) {
-        background-color: rgba(255, 240, 242, 0.5) !important;
-        border-radius: 12px !important;
-        padding: 1.2rem !important;
+        background: rgba(255, 240, 242, 0.7) !important;
+        backdrop-filter: blur(6px) !important;
+        border-radius: 14px !important;
+        padding: 1.3rem 1.5rem !important;
         border-left: 5px solid #ff4d6d !important;
-        margin-bottom: 1rem !important;
-        box-shadow: 0 4px 12px rgba(255, 77, 109, 0.03) !important;
+        margin-bottom: 1.2rem !important;
+        box-shadow: 0 8px 24px rgba(255, 77, 109, 0.08) !important;
     }
 
-    /* 3. 前端专属：多轨生理部位状态高级特殊渲染框 */
+    /* ========== 特殊状态块增强 ========== */
     .role-status-block {
-        background: linear-gradient(135deg, rgba(255,77,109,0.06) 0%, rgba(255,255,255,0) 100%) !important;
-        border: 1px dashed rgba(255, 77, 109, 0.3) !important;
-        border-radius: 8px !important;
-        padding: 14px 18px !important;
-        margin-top: 1.5rem !important;
+        background: linear-gradient(135deg, rgba(255,77,109,0.04) 0%, rgba(250,240,245,0.6) 100%) !important;
+        border: 1px dashed rgba(255, 77, 109, 0.35) !important;
+        border-radius: 10px !important;
+        padding: 18px 22px !important;
+        margin-top: 2rem !important;
         font-size: 17px !important;
+        box-shadow: 0 4px 12px rgba(255,77,109,0.04) !important;
+        transition: box-shadow 0.3s !important;
+    }
+    .role-status-block:hover {
+        box-shadow: 0 8px 24px rgba(255,77,109,0.1) !important;
     }
     .role-status-name {
         font-weight: 900 !important;
         color: #ff4d6d !important;
-        margin-bottom: 8px !important;
-        border-bottom: 1px solid rgba(255, 77, 109, 0.1) !important;
-        padding-bottom: 4px !important;
+        margin-bottom: 12px !important;
+        border-bottom: 1px solid rgba(255, 77, 109, 0.15) !important;
+        padding-bottom: 6px !important;
+        font-size: 1.2rem !important;
     }
     .role-status-row {
-        font-weight: bold !important; /* 🌟 前端实现：整行强制粗体 */
+        font-weight: bold !important;
         color: #333333 !important;
-        margin-bottom: 4px !important;
+        margin-bottom: 6px !important;
         display: block !important;
     }
     .role-status-label {
-        color: #ff4d6d !important; /* 部位名称特别上色区分 */
+        color: #ff4d6d !important;
         font-weight: 900 !important;
     }
+
+    /* ========== 代码块诗意化 ========== */
+    pre, code {
+        font-family: "JetBrains Mono", "Fira Code", monospace !important;
+        background: rgba(45, 45, 45, 0.04) !important;
+        border-radius: 8px !important;
+        padding: 2px 8px !important;
+    }
+    pre {
+        padding: 18px !important;
+        overflow-x: auto !important;
+        border-left: 4px solid #ff4d6d !important;
+        background: rgba(30,30,30,0.03) !important;
+    }
+
+    /* ========== 滚动条优雅 ========== */
+    ::-webkit-scrollbar {
+        width: 8px;
+        height: 8px;
+    }
+    ::-webkit-scrollbar-track {
+        background: rgba(0,0,0,0.02);
+        border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb {
+        background: rgba(255,77,109,0.2);
+        border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+        background: rgba(255,77,109,0.45);
+    }
+
+    /* ========== 响应式微调，手机上更黏人 ========== */
+    @media (max-width: 768px) {
+        html, body {
+            font-size: 16px !important;
+        }
+        [data-testid="stChatMessage"] {
+            padding: 0.8rem !important;
+        }
+    }
 </style>
-""", unsafe_allow_html=True)
 
 import re
 
+
+import re
 
 def novel_text_formatter(raw_text: str) -> str:
     """
@@ -276,40 +379,35 @@ def novel_text_formatter(raw_text: str) -> str:
     raw_text = raw_text.strip()
 
     # ✨ 核心修复：如果AI输出已经乖乖以 0️⃣ 开头，说明格式正确，完全跳过前缀清洗
-    # 否则才执行原有的清洗逻辑，避免误删【内心独白】
     if not raw_text.startswith("0️⃣"):
-        # 没有 0️⃣ 开头时，清洗掉常见的废话前缀，但保留所有【】和[]包裹的内容
         raw_text = re.sub(
             r'^(?:好的|我知道了|现在我是|我明白|遵命|开始推演)\s*',
             '',
             raw_text
         ).strip()
-        # 如果清洗后以【开头，且内容看起来像系统说明（不包含官能核心词），再尝试剥离一层
         if raw_text.startswith("【") and not any(
                 keyword in raw_text
                 for keyword in ["妈的", "该死", "好想", "不行", "腿软", "要命", "好爽", "住手"]
         ):
             raw_text = re.sub(r'^【.*?】[\s]*', '', raw_text).strip()
 
-    # 🎯 昊哥，这里是新增的替换逻辑：自动将中文破折号替换为标准省略号
+    # 破折号替换为省略号
     raw_text = raw_text.replace("——", "......")
 
     # 1. 规范化基础文本
     clean_stream = re.sub(r'\n+', ' ', raw_text).strip()
-    # 为所有标记（包括 0️⃣）两边加空格，确保扫描时能准确识别
     clean_stream = re.sub(r'(0️⃣|1️⃣|2️⃣|3️⃣)', r' \1 ', clean_stream)
     clean_stream = re.sub(r'\s+', ' ', clean_stream).strip()
 
     segments = []
     current_segment = []
 
-    in_quote = False  # 双引号内部状态
-    paren_depth = 0   # 英文括号嵌套层级
-    zh_paren_depth = 0 # 中文括号嵌套层级
+    in_quote = False
+    paren_depth = 0
+    zh_paren_depth = 0
 
     target_markers = ["0️⃣", "1️⃣", "2️⃣", "3️⃣"]
 
-    # 2. 高级状态机扫描
     i = 0
     stream_len = len(clean_stream)
 
@@ -321,35 +419,35 @@ def novel_text_formatter(raw_text: str) -> str:
                 break
 
         if matched_marker:
-            # 先保存当前累积的文本为一个段落
+            # 保存当前积累的文本为段落
             if current_segment:
                 seg_str = "".join(current_segment).strip()
                 if seg_str:
                     segments.append(seg_str)
                 current_segment = []
 
-            # 关键改动：仅保留 0️⃣ 作为实际显示的标记，其余标记隐身
+            # 只保留 0️⃣ 显示，其余标记隐身
             if matched_marker == "0️⃣":
                 segments.append(matched_marker)
-            # 1️⃣ 2️⃣ 3️⃣ 不加入 segments，仅作为分段节点使用
+            # 1️⃣2️⃣3️⃣ 不添加，仅作为分段节点
 
             i += len(matched_marker)
             continue
 
         char = clean_stream[i]
 
-        # ---------- 双引号短语音块处理（维持原逻辑） ----------
+        # ---------- 双引号短语音块处理 ----------
         if char == "“":
             closing_idx = clean_stream.find("”", i)
             if closing_idx != -1:
                 quote_content = clean_stream[i + 1:closing_idx]
-                if len(quote_content) <= 14:  # 短语音整体保留
+                if len(quote_content) <= 14:   # 短语音整体保留在当前段落
                     full_voice_block = clean_stream[i:closing_idx + 1]
                     current_segment.append(full_voice_block)
                     i = closing_idx + 1
                     continue
 
-            # 长语音：先保存之前的段落，然后进入引号内状态
+            # 长语音：先保存之前的段落，再进入引号内状态
             if current_segment:
                 seg_str = "".join(current_segment).strip()
                 if seg_str:
@@ -381,13 +479,18 @@ def novel_text_formatter(raw_text: str) -> str:
         elif char == "）":
             zh_paren_depth = max(0, zh_paren_depth - 1)
 
-        # 💡 原先这里有一段以“。”分行的代码，已按爸爸要求移除
-        # 现在只依靠标记和引号来分段，文本会自然连成较长的段落
-
         current_segment.append(char)
+
+        # 🔙 恢复：按中文句号分段（且在引号外、括号外）
+        if char == "。" and not in_quote and paren_depth == 0 and zh_paren_depth == 0:
+            seg_str = "".join(current_segment).strip()
+            if seg_str:
+                segments.append(seg_str)
+            current_segment = []
+
         i += 1
 
-    # 处理最后剩余的文本
+    # 处理最后残余文本
     if current_segment:
         seg_str = "".join(current_segment).strip()
         if seg_str:
@@ -399,13 +502,12 @@ def novel_text_formatter(raw_text: str) -> str:
         if not seg:
             continue
         if seg in target_markers:
-            # 这里只会匹配到 0️⃣，因为 1️⃣2️⃣3️⃣ 已经从 segments 中移除了
+            # 这里只会匹配到 0️⃣
             if seg == "0️⃣":
                 processed_blocks.append(f"\n\n💡 <b>【角色心声独白】</b>\n")
             else:
                 processed_blocks.append(f"\n\n{seg}")
         else:
-            # 如果上一个是心理开场，这一段落让它变成优雅的灰色斜体
             if processed_blocks and "💡 <b>【角色心声独白】</b>" in processed_blocks[-1]:
                 processed_blocks.append(
                     f"&emsp;&emsp;<i><span style='color:#888888;'>{seg}</span></i>"
