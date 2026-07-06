@@ -381,7 +381,6 @@ def novel_text_formatter(raw_text: str) -> str:
 
     raw_text = raw_text.strip()
 
-    # ✨ 核心修复：如果AI输出已经乖乖以 0️⃣ 开头，说明格式正确，完全跳过前缀清洗
     if not raw_text.startswith("0️⃣"):
         raw_text = re.sub(
             r'^(?:好的|我知道了|现在我是|我明白|遵命|开始推演)\s*',
@@ -394,7 +393,6 @@ def novel_text_formatter(raw_text: str) -> str:
         ):
             raw_text = re.sub(r'^【.*?】[\s]*', '', raw_text).strip()
 
-    # 破折号替换为省略号
     raw_text = raw_text.replace("——", "......")
 
     # 1. 规范化基础文本
@@ -422,17 +420,15 @@ def novel_text_formatter(raw_text: str) -> str:
                 break
 
         if matched_marker:
-            # 保存当前积累的文本为段落
             if current_segment:
                 seg_str = "".join(current_segment).strip()
                 if seg_str:
                     segments.append(seg_str)
                 current_segment = []
 
-            # 只保留 0️⃣ 显示，其余标记隐身
             if matched_marker == "0️⃣":
                 segments.append(matched_marker)
-            # 1️⃣2️⃣3️⃣ 不添加，仅作为分段节点
+            # 1️⃣ 2️⃣ 3️⃣ 不加入显示
 
             i += len(matched_marker)
             continue
@@ -450,7 +446,7 @@ def novel_text_formatter(raw_text: str) -> str:
                     i = closing_idx + 1
                     continue
 
-            # 长语音：先保存之前的段落，再进入引号内状态
+            # 长语音：先保存前面的段落，再进入引号内状态（和原来一样）
             if current_segment:
                 seg_str = "".join(current_segment).strip()
                 if seg_str:
@@ -463,12 +459,10 @@ def novel_text_formatter(raw_text: str) -> str:
             continue
 
         elif char == "”":
+            # 🔧 修复点：不再在这里强制切段，只关闭引号状态
             in_quote = False
             current_segment.append(char)
-            seg_str = "".join(current_segment).strip()
-            if seg_str:
-                segments.append(seg_str)
-            current_segment = []
+            # 注意：不执行 segments.append，也不清空 current_segment
             i += 1
             continue
 
@@ -484,7 +478,7 @@ def novel_text_formatter(raw_text: str) -> str:
 
         current_segment.append(char)
 
-        # 🔙 恢复：按中文句号分段（且在引号外、括号外）
+        # 按中文句号分段（在引号外、括号外）
         if char == "。" and not in_quote and paren_depth == 0 and zh_paren_depth == 0:
             seg_str = "".join(current_segment).strip()
             if seg_str:
@@ -505,7 +499,6 @@ def novel_text_formatter(raw_text: str) -> str:
         if not seg:
             continue
         if seg in target_markers:
-            # 这里只会匹配到 0️⃣
             if seg == "0️⃣":
                 processed_blocks.append(f"\n\n💡 <b>【角色心声独白】</b>\n")
             else:
