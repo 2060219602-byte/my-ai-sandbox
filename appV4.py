@@ -1398,7 +1398,7 @@ style_options = {
 
 # ✨【新增】首次启动时，从云端数据库加载上次保存的偏好，并注入到 st.session_state 中
 if "style_selector_widget" not in st.session_state:
-    saved_pref = st.session_state.all_sessions_db.get("style_preference", "processed_1")  # 默认 processed_1
+    saved_pref = st.session_state.all_sessions_db.get("style_preference", "processed_2")  # 默认 processed_1
     # 把类似 "processed_1" 的值翻译成下拉框里的中文名字
     reverse_map = {v: k for k, v in style_options.items()}
     default_name = reverse_map.get(saved_pref, list(style_options.keys())[0])
