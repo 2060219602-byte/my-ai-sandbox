@@ -1393,7 +1393,8 @@ st.sidebar.write("---")
 st.sidebar.header("🎨 文风选择")
 style_options = {
     "被催眠暴奸的冷艳美母文风": "processed_1",
-    "公务员妈妈的非洲之旅文风": "processed_2"
+    "公务员妈妈的非洲之旅文风": "processed_2",
+    "红象文风": "processed_3"
 }
 
 # ✨【新增】首次启动时，从云端数据库加载上次保存的偏好，并注入到 st.session_state 中
@@ -2209,6 +2210,8 @@ else:
         # 根据文风选择，取用对应的写作协议
         if st.session_state.get("selected_style_key") == "processed_2":
             active_protocol = multi_reply_protocol_2
+        elif st.session_state.get("selected_style_key") == "processed_3":
+            active_protocol = multi_reply_protocol_3
         else:
             active_protocol = multi_reply_protocol_1
 
