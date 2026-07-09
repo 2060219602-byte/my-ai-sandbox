@@ -908,6 +908,7 @@ def get_default_data():
     return {
         "global_user_name": "玩家",
         "current_session_key": "👤 单聊：赛博贩子-丽莎",
+        "style_preference": "processed_2",   # ✨ 新增这一行
         "group_rooms": {},
         "roles": {
             "赛博贩子-丽莎": {
@@ -939,6 +940,8 @@ def load_cloud_data():
         try:
             with open(DATA_FILE, "r", encoding="utf-8") as f:
                 saved_data = json.load(f)
+                if "style_preference" not in saved_data:
+                    saved_data["style_preference"] = "processed_2"
                 if "roles" in saved_data:
                     if "group_rooms" not in saved_data:
                         saved_data["group_rooms"] = {}
@@ -1392,14 +1395,31 @@ style_options = {
     "被催眠暴奸的冷艳美母文风": "processed_1",
     "公务员妈妈的非洲之旅文风": "processed_2"
 }
+
+# ✨【新增】首次启动时，从云端数据库加载上次保存的偏好，并注入到 st.session_state 中
+if "style_selector_widget" not in st.session_state:
+    saved_pref = st.session_state.all_sessions_db.get("style_preference", "processed_1")  # 默认 processed_1
+    # 把类似 "processed_1" 的值翻译成下拉框里的中文名字
+    reverse_map = {v: k for k, v in style_options.items()}
+    default_name = reverse_map.get(saved_pref, list(style_options.keys())[0])
+    st.session_state.style_selector_widget = default_name
+
+# 原来的 selectbox 保持不变（它会自动读取上面注入的初始值）
 selected_style_name = st.sidebar.selectbox(
     "选择文风范例",
     list(style_options.keys()),
-    index=0,
-    key="style_selector_widget"   # 👈 加上这一行
+    index=0,    # 这个 index 在有 session_state 值的情况下会被忽略，保留没问题
+    key="style_selector_widget"
 )
-# 将选中的键名存入 session_state，供后续使用
+
+# 将选中文风的英文键存储
 st.session_state.selected_style_key = style_options[selected_style_name]
+
+# ✨【新增】一旦用户做出新的选择，立刻更新到本地数据库并保存
+pref_key = style_options[selected_style_name]
+if pref_key != st.session_state.all_sessions_db.get("style_preference"):
+    st.session_state.all_sessions_db["style_preference"] = pref_key
+    save_local_data()   # 这个函数你已经提前定义好了，直接调用即可
 
 st.sidebar.write("---")
 st.sidebar.header("🔑 接口配置")
