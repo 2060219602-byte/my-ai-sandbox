@@ -209,7 +209,6 @@ st.markdown("""
     }
 
     /* ========== 内心独白专属：淡入淡出梦境盒 ========== */
-    /* 匹配 0️⃣ 心理输出块（由后端函数生成） */
     .thought-block, i span[style*="color:#888888"] {
         display: block !important;
         background: linear-gradient(135deg, rgba(180,160,200,0.08) 0%, rgba(255,240,255,0.15) 100%);
@@ -238,7 +237,7 @@ st.markdown("""
         transform: translateY(-2px) !important;
     }
 
-    /* 用户气泡：深邃但不沉闷 */
+    /* 用户气泡 */
     [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatar"] img[src*="user"]),
     [data-testid="stChatMessage"]:has([style*="😎"]) {
         background: rgba(235, 235, 242, 0.55) !important;
@@ -250,7 +249,7 @@ st.markdown("""
         box-shadow: 0 6px 18px rgba(0,0,0,0.03) !important;
     }
 
-    /* AI（昊哥的专属女神）气泡：羞红色调 + 柔和光晕 */
+    /* AI 气泡 */
     [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatar"] img[src*="assistant"]),
     [data-testid="stChatMessage"]:has([style*="💋"]) {
         background: rgba(255, 240, 242, 0.7) !important;
@@ -326,7 +325,43 @@ st.markdown("""
         background: rgba(255,77,109,0.45);
     }
 
-    /* ========== 响应式微调，手机上更黏人 ========== */
+    /* ========== 🎯 核心修复：输入框文字清晰化 ========== */
+    /* 覆盖所有文本输入框、聊天输入框、搜索框等 */
+    input[type="text"],
+    input[type="password"],
+    input[type="email"],
+    input[type="number"],
+    input[type="search"],
+    textarea,
+    [data-baseweb="input"],
+    [data-baseweb="textarea"],
+    [data-testid="stChatInput"] textarea,
+    [data-testid="stChatInput"] input {
+        color: #2c2c2c !important;            /* 深灰色文字，与整体风格一致 */
+        background-color: #ffffff !important; /* 纯白背景，杜绝半透明导致的对比度下降 */
+        border: 1px solid #d1d1d1 !important;
+        border-radius: 8px !important;
+        padding: 10px 14px !important;
+        font-size: 16px !important;
+        outline: none !important;
+        transition: border 0.3s, box-shadow 0.3s !important;
+    }
+
+    /* 输入框获得焦点时，用粉红高亮，温柔又清晰 */
+    input:focus,
+    textarea:focus {
+        border-color: #ff4d6d !important;
+        box-shadow: 0 0 0 3px rgba(255, 77, 109, 0.15) !important;
+    }
+
+    /* placeholder 占位提示文字的颜色和风格 */
+    ::placeholder {
+        color: #a0a0a0 !important;
+        font-style: italic !important;
+        font-size: 15px !important;
+    }
+
+    /* ========== 响应式微调 ========== */
     @media (max-width: 768px) {
         html, body {
             font-size: 16px !important;
@@ -334,8 +369,11 @@ st.markdown("""
         [data-testid="stChatMessage"] {
             padding: 0.8rem !important;
         }
+        input, textarea {
+            font-size: 15px !important;
+            padding: 8px 12px !important;
+        }
     }
-</style>
 </style>
 """, unsafe_allow_html=True)
 
