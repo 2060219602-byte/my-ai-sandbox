@@ -1534,7 +1534,7 @@ st.sidebar.write("---")
 st.sidebar.header("🎨 文风选择")
 style_options = {
     "夏舒兰-被催眠暴奸的冷艳美母文风": "processed_1",
-    "公务员妈妈的非洲之旅文风": "processed_2",
+    "白叶茹-公务员妈妈的非洲之旅文风": "processed_2",
     "女帝-小马仙侠": "processed_3",
     "妈妈娼馆文风": "processed_4",
     "颖儿-被催眠暴奸的冷艳美母文风": "processed_5",
