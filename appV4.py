@@ -1050,6 +1050,154 @@ def perform_dreaming(client, role_data, target_girl):
     else:
         st.error("内心整合失败，未保存任何结果。")
 
+def update_pm_options(role_data, client, chat_history):
+    """刷新导演选项并同步 st.session_state"""
+    pm = generate_pm_options(client, role_data, chat_history)
+    if pm:
+        role_data["current_scene"] = pm.get("current_scene", role_data.get("current_scene", 1))
+        st.session_state.latest_pm_options = {
+            "options": pm.get("options", {}),
+            "current_scene": role_data["current_scene"],
+            "scene_completed": pm.get("scene_completed", False)
+        }
+
+def generate_pm_options(client, role_data, chat_history_view):
+    """
+    导演AI：基于话剧剧本 + 闪回总结 + 近期对话，生成3个引导选项。
+    若剧本不存在或已演完最后一幕，返回 None。
+    """
+    script = role_data.get("story_script", "")
+    if not script:
+        return None
+
+    current_scene = role_data.get("current_scene", 1)
+    dream_result = role_data.get("dream_result", "")
+
+    # 提取最近6轮对话（用户+助手）
+    recent = []
+    for msg in chat_history_view[-6:]:
+        role = "玩家" if msg["role"] == "user" else "角色"
+        content = msg["content"].split("🔒DATA_SPLIT_MARKER")[0].strip()
+        recent.append(f"{role}: {content}")
+    recent_text = "\n".join(recent)
+
+    # 解析剧本，统计总幕数
+    scenes = re.split(r'【场景\d+】', script)
+    if scenes and not scenes[0].strip():
+        scenes = scenes[1:]
+    total_scenes = len(scenes)
+    if total_scenes == 0:
+        return None
+
+    # 如果当前幕数超过总幕数，剧本结束
+    if current_scene > total_scenes:
+        return None
+
+    # 当前幕的文本（用于导演判断）
+    current_scene_text = scenes[min(current_scene - 1, total_scenes - 1)].strip()
+
+    prompt = f"""
+你是一位手拿总剧本的话剧导演。下方是完整台本和当前演出进度。你需要判断当前这一幕是否已经在舞台上完成，并给演员（玩家）提供3个下一步的行动建议。
+
+【完整台本】
+{script}
+
+【当前幕数】：{current_scene}/{total_scenes}
+【当前幕事件】：
+{current_scene_text}
+
+【近期舞台演出记录】
+{recent_text}
+
+【角色内心整合（如有）】
+{dream_result}
+
+【任务】
+1. 根据近期演出记录，判断当前幕的核心事件是否已发生完毕。
+2. 生成3个选项（A/B/C），每个选项是玩家可以采取的具体行动或台词，必须符合台本的发展方向：
+   - 如果当前幕未完成，选项应聚焦于推动完成本幕事件。
+   - 如果当前幕已完成且还有下一幕，选项应自然地引导过渡到下一幕的场景（例如建议离开当前地点、开启新话题等）。
+   - 如果当前幕已完成且是最后一幕，三个选项可以是对剧情的自然收尾或自由延续，但需符合整体故事基调。
+3. 输出严格 JSON：
+{{
+  "current_scene": {current_scene},
+  "scene_completed": true/false,
+  "options": {{
+    "A": {{"action": "...", "effect": "..."}},
+    "B": {{"action": "...", "effect": "..."}},
+    "C": {{"action": "...", "effect": "..."}}
+  }}
+}}
+如果当前幕已完成，请将 scene_completed 设为 true，并将 current_scene 自增1（若未结束）。
+"""
+    try:
+        resp = client.chat.completions.create(
+            model="deepseek-v4-flash",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.7,
+            max_tokens=2048,
+            response_format={"type": "json_object"},
+            extra_body={"thinking": {"type": "disabled"}}
+        )
+        data = json.loads(resp.choices[0].message.content.strip())
+        if all(k in data for k in ["current_scene", "scene_completed", "options"]):
+            # 自动推进场景编号
+            if data["scene_completed"] and data["current_scene"] < total_scenes:
+                data["current_scene"] += 1
+            return data
+    except Exception as e:
+        print(f"导演AI错误: {e}")
+    return None
+
+def generate_story_script(client, role_data):
+    """
+    使用 deepseek-v4-pro 将大纲改写为话剧式分幕剧本。
+    输出格式：
+    【场景1】
+    地点：...
+    出场人物：...
+    事件：纯客观事件描述（无心理、无修辞、无对话引号）
+    """
+    outline = role_data.get("story_outline", "")
+    system_role = role_data.get("system_role", "")
+    # 尝试提取角色名
+    char_name = "主要角色"
+    # 从人设中提取一个名字（粗略）
+    if "你是一位" in system_role:
+        char_name = system_role.split("你是一位")[1].split("，")[0].strip()
+    elif "你是一个" in system_role:
+        char_name = system_role.split("你是一个")[1].split("，")[0].strip()
+    if not char_name or len(char_name) > 10:
+        char_name = "主要角色"
+
+    prompt = f"""
+你是一位专业的话剧导演。请根据以下角色人设和零碎故事大纲，创作一部完整的话剧演出台本。台本必须以一幕一幕的方式呈现，每一幕都是一个独立的起承转合单元。
+
+【角色人设】
+{system_role}
+
+【用户大纲】
+{outline}
+
+【台本格式要求】
+- 每一幕以“【场景N】”开头（N从1开始）。
+- 每一幕包含：
+  地点：具体的环境场所
+  出场人物：列出这一幕中出现的人物（除玩家外，主要角色是{char_name}）
+  事件：用纯客观的陈述句描述这一幕中发生的故事。只写“谁做了什么，发生了什么情节”，不使用任何形容词、心理描写、环境氛围渲染，也不要用引号写出完整的对话内容。对话可以概括为“她询问了他的病情”而不需要写出具体句子。
+- 整个台本应完整覆盖大纲中的故事走向，幕数根据故事需要自由设置（通常建议5-10幕）。
+- 直接输出台本，不要任何前言后语。
+"""
+    response = client.chat.completions.create(
+        model=model_name,  # 使用 pro 模型
+        messages=[{"role": "user", "content": prompt}],
+        temperature=0.8,
+        max_tokens=8196,
+        stream=False,
+        extra_body={"thinking": {"type": "disabled"}}
+    )
+    return response.choices[0].message.content.strip()
+
 # ==========================================
 # 0. 核心辅助函数：多群聊+多单聊数据库读取与保存
 # ==========================================
@@ -1404,6 +1552,57 @@ if not is_group_chat:
             st.toast("⚙️ 剧本环境参数覆写成功！")
             st.rerun()
 
+        # ========== 🎬 导演模式：大纲输入与剧本管理 ==========
+    st.sidebar.write("---")
+    st.sidebar.subheader("🎬 导演模式（PMAI）")
+    st.caption("编写故事大纲，生成话剧式剧本，导演AI将引导剧情按幕推进。")
+
+    outline_val = st.sidebar.text_area(
+        "📝 零碎大纲",
+        value=role_data.get("story_outline", ""),
+        height=120,
+        key=f"outline_{target_girl}"
+    )
+    col_out1, col_out2 = st.sidebar.columns(2)
+    with col_out1:
+        if st.button("💾 保存大纲", key=f"save_outline_{target_girl}", use_container_width=True):
+            role_data["story_outline"] = outline_val
+            save_local_data()
+            st.toast("大纲已保存")
+    with col_out2:
+        if st.button("🗑️ 清空大纲", key=f"clear_outline_{target_girl}", use_container_width=True):
+            role_data["story_outline"] = ""
+            save_local_data()
+            st.rerun()
+
+    st.sidebar.write("---")
+    col_gen1, col_gen2 = st.sidebar.columns(2)
+    with col_gen1:
+        if st.button("✍️ 生成完整剧本", key=f"gen_script_{target_girl}", use_container_width=True):
+            if not role_data.get("story_outline"):
+                st.sidebar.error("请先保存大纲！")
+            else:
+                with st.spinner("导演正在编写话剧剧本..."):
+                    script = generate_story_script(client, role_data)
+                    role_data["story_script"] = script
+                    role_data["current_scene"] = 1   # 从第一幕开始
+                    save_local_data()
+                    st.sidebar.success("剧本已生成，导演模式激活！")
+                    st.rerun()
+    with col_gen2:
+        if st.button("🗑️ 清空剧本", key=f"clear_script_{target_girl}", use_container_width=True):
+            role_data["story_script"] = ""
+            role_data["current_scene"] = 0
+            save_local_data()
+            st.sidebar.success("剧本已清空，导演模式关闭")
+            st.rerun()
+
+    # 显示状态
+    if role_data.get("story_script"):
+        st.sidebar.success(f"📜 剧本就绪 | 当前第 {role_data.get('current_scene',1)} 幕")
+    else:
+        st.sidebar.caption("⚠️ 尚未生成剧本")
+        
     # 📌 核心事件备忘录
     st.sidebar.write("---")
     st.sidebar.subheader("📌 核心事件备忘录（永久记忆）")
@@ -2084,10 +2283,16 @@ def render_message_controls_by_id(msg_id, is_last_msg, agent_name_fallback=""):
 
 
 def render_options_and_status_in_chat(message_item):
-    """
-    📋 渲染 A, B, C, D 四维选项，点击一键填充动作至 st.chat_input
-    """
+    # 如果当前角色处于导演模式，不再渲染原有的自由选项（由导演区域接管）
+    if not is_group_chat:
+        curr_role = st.session_state.current_session_key.replace("👤 单聊：", "")
+        if curr_role in st.session_state.all_sessions_db["roles"]:
+            role_ref = st.session_state.all_sessions_db["roles"][curr_role]
+            if role_ref.get("story_script"):
+                return   # 导演模式激活，跳过
+
     if "options" in message_item and message_item["options"]:
+        # ... 原有渲染逻辑不变
         opts = message_item["options"]
         st.markdown("---")
         st.markdown("🧭 **次轮可选行动分支预测（第三人称描述）：**")
@@ -2247,6 +2452,29 @@ if is_group_chat and "group_round_options" in st.session_state:
                 if st.button(f"📋 选定选项 {key}", key=btn_key):
                     st.session_state[f"chat_input_v_{st.session_state.clear_version}"] = str(action_text)
                     st.toast(f"选项 {key} 已注入输入框～")
+
+# ========== 🎬 导演建议选项（独立显示） ==========
+if not is_group_chat and "latest_pm_options" in st.session_state:
+    pm_data = st.session_state.latest_pm_options
+    opts = pm_data.get("options", {})
+    current = pm_data.get("current_scene", "?")
+    done = pm_data.get("scene_completed", False)
+    if opts:
+        st.markdown("---")
+        st.markdown(f"🎬 **导演建议**（当前第{current}幕 | {'本幕已完成' if done else '推进当前剧情'}）")
+        for key in ["A", "B", "C"]:
+            opt = opts.get(key)
+            if opt:
+                action = opt.get("action", "")
+                effect = opt.get("effect", "")
+                st.markdown(f"**{key}**：{action}")
+                if effect:
+                    st.caption(f"💡 {effect}")
+                # 点击填入输入框
+                if st.button(f"📋 选 {key}", key=f"pmbtn_{key}_{hash(action)}"):
+                    st.session_state[f"chat_input_v_{st.session_state.clear_version}"] = str(action)
+                    st.toast(f"{key} 已加载")
+# ===================================================
 
 st.write("---")
 col_action1, col_action2, col_action3 = st.columns([0.2, 0.2, 0.2])
@@ -2817,7 +3045,7 @@ else:
                 }
 
                 role_data["chat_history"].append(mock_message_item)
-
+                update_pm_options(role_data, client, role_data["chat_history"])
                 save_local_data()
                 st.rerun()
             except Exception as e:
