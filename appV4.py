@@ -2249,15 +2249,20 @@ if is_group_chat and "group_round_options" in st.session_state:
                     st.toast(f"选项 {key} 已注入输入框～")
 
 st.write("---")
-col_action1, col_action2 = st.columns([0.2, 0.2])
+col_action1, col_action2, col_action3 = st.columns([0.2, 0.2, 0.2])
 with col_action1:
-    if st.button("💭 闪回（深度记忆整合）", use_container_width=True):
+    if st.button("💭 闪回", use_container_width=True):
         st.session_state.dream_trigger = True
         st.rerun()
 with col_action2:
     if not is_group_chat:
         if st.button("🚿 洗澡", use_container_width=True):
             st.session_state["bath_prompt"] = "身体状态：你刚刚去洗了个澡换了新的衣服，浑身上下干干净净清清爽爽"
+            st.rerun()
+with col_action3:
+    if not is_group_chat:
+        if st.button("▶️ 继续", use_container_width=True):
+            st.session_state.continue_trigger = True
             st.rerun()
 
 # ====== 替换为下方安全渲染组件 ======
@@ -2569,12 +2574,13 @@ else:
         perform_dreaming(client, role_data, target_girl)
         st.rerun()
 
-    if user_input or st.session_state.regenerate_trigger:
+    if user_input or st.session_state.get("regenerate_trigger") or st.session_state.get("continue_trigger"):
         if not api_key:
             st.error("请先在左侧输入你的 DeepSeek API Key！")
             st.stop()
 
         active_user_text = ""
+        # ---- 处理三种触发来源 ----
         if user_input:
             with st.chat_message("user", avatar="😎"):
                 st.markdown(user_input)
@@ -2583,19 +2589,28 @@ else:
             role_data["chat_history"].append(
                 {"role": "user", "content": user_input, "timestamp": time.time(), "msg_id": single_msg_id})
             save_local_data()
-        else:
+        elif st.session_state.get("continue_trigger"):
+            st.session_state.continue_trigger = False
+            with st.chat_message("user", avatar="😎"):
+                st.markdown("⏩ 继续深化当前剧情...")
+            # 👇 下面的提示会作为“用户发言”发给 AI，你可以随时修改这句话
+            active_user_text = "（你和他之间的动作在沉默中愈发深入，身体的本能反应取代了语言，刚才未完成的亲密接触正在自然而然地向下延续，肢体的摩擦和呼吸的节奏循着本能继续滑行）"
+            single_msg_id = f"continue_{int(time.time() * 1000)}_{random.randint(1000, 9999)}"
+            role_data["chat_history"].append(
+                {"role": "user", "content": active_user_text, "timestamp": time.time(), "msg_id": single_msg_id})
+            save_local_data()
+        elif st.session_state.get("regenerate_trigger"):
+            st.session_state.regenerate_trigger = False
             # 如果是重发触发，取最后一条用户消息作为文本
             if role_data["chat_history"] and role_data["chat_history"][-1]["role"] == "user":
                 active_user_text = role_data["chat_history"][-1]["content"]
             else:
                 active_user_text = "（玩家发起了剧情重算/推演，请基于前置物理背景继续展现你的即时行动与反应）"
 
-        st.session_state.regenerate_trigger = False
-
-       # 🔥 一次性洗澡提示附加（不存历史，用完即焚）
+        # >>> 一次性洗澡状态附加（对继续和重发也生效） <<<
         if "bath_prompt" in st.session_state:
             active_user_text = st.session_state.pop("bath_prompt") + "\n\n" + active_user_text
-        
+
         dynamic_system_prompt = f"{jailbreak_prompt}\n\n"
         dynamic_system_prompt += (
             f"【当前扮演的AI角色名字】：{target_girl}\n"
