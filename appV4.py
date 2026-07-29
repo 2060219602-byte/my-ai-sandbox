@@ -2254,6 +2254,11 @@ with col_action1:
     if st.button("💭 闪回（深度记忆整合）", use_container_width=True):
         st.session_state.dream_trigger = True
         st.rerun()
+with col_action2:
+    if not is_group_chat:
+        if st.button("🚿 洗澡", use_container_width=True):
+            st.session_state["bath_prompt"] = "身体状态：你刚刚去洗了个澡换了新的睡衣，浑身上下干干净净清清爽爽"
+            st.rerun()
 
 # ====== 替换为下方安全渲染组件 ======
 input_key = f"chat_input_v_{st.session_state.clear_version}"
@@ -2587,6 +2592,10 @@ else:
 
         st.session_state.regenerate_trigger = False
 
+        # >>> 一次性洗澡状态附加（不存入聊天记录） <<<
+        if "bath_prompt" in st.session_state:
+            active_user_text = st.session_state.pop("bath_prompt") + "\n\n" + active_user_text
+        
         dynamic_system_prompt = f"{jailbreak_prompt}\n\n"
         dynamic_system_prompt += (
             f"【当前扮演的AI角色名字】：{target_girl}\n"
