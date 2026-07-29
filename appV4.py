@@ -2257,7 +2257,7 @@ with col_action1:
 with col_action2:
     if not is_group_chat:
         if st.button("🚿 洗澡", use_container_width=True):
-            st.session_state["bath_prompt"] = "身体状态：你刚刚去洗了个澡换了新的睡衣，浑身上下干干净净清清爽爽"
+            st.session_state["bath_prompt"] = "身体状态：你刚刚去洗了个澡换了新的衣服，浑身上下干干净净清清爽爽"
             st.rerun()
 
 # ====== 替换为下方安全渲染组件 ======
@@ -2592,7 +2592,7 @@ else:
 
         st.session_state.regenerate_trigger = False
 
-        # >>> 一次性洗澡状态附加（不存入聊天记录） <<<
+       # 🔥 一次性洗澡提示附加（不存历史，用完即焚）
         if "bath_prompt" in st.session_state:
             active_user_text = st.session_state.pop("bath_prompt") + "\n\n" + active_user_text
         
