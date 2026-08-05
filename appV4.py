@@ -2702,7 +2702,7 @@ else:
                         stream=True,
                         max_tokens=4000,
                         timeout=60.0,
-                        temperature=1.2,
+                        temperature=1.0,
                         presence_penalty=0.1,
                         frequency_penalty=0.1,
                         extra_body={"thinking": {"type": "disabled"}}
