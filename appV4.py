@@ -1188,7 +1188,7 @@ def generate_scene_script(client, role_data, chat_history):
         resp = client.chat.completions.create(
             model="deepseek-v4-flash",
             messages=[{"role": "user", "content": prompt}],
-            temperature=0.7,
+            temperature=7,
             max_tokens=2048,
             stream=False,
             extra_body={"thinking": {"type": "disabled"}}
@@ -2702,7 +2702,7 @@ else:
                         stream=True,
                         max_tokens=4000,
                         timeout=60.0,
-                        temperature=0.85,
+                        temperature=1.2,
                         extra_body={"thinking": {"type": "disabled"}}
                     )
 
