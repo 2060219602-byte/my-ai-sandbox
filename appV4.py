@@ -2802,7 +2802,7 @@ else:
         elif st.session_state.get("selected_style_key") == "processed_6":
             active_protocol = multi_reply_protocol_6
         elif st.session_state.get("selected_style_key") == "processed_10":
-            active_protocol = multi_reply_protocol_999
+            active_protocol = multi_reply_protocol_10
         else:
             active_protocol = multi_reply_protocol
 
