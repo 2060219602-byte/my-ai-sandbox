@@ -546,7 +546,14 @@ def novel_text_formatter(raw_text: str) -> str:
         else:
             # 以 ( 开头的括号段：额外缩进一层
             is_paren_block = seg.startswith(("(", "（"))
-            indent = "&emsp;&emsp;&emsp;&emsp;" if is_paren_block else "&emsp;&emsp;"
+            # 以引号开头的段落：引号前只留一个全角空格，让引号内的正文起点与其他段落对齐
+            is_quote_block = seg.startswith(("“", "‘"))
+            if is_paren_block:
+                indent = "&emsp;&emsp;&emsp;&emsp;"
+            elif is_quote_block:
+                indent = "&emsp;"
+            else:
+                indent = "&emsp;&emsp;"
             if processed_blocks and "💡 <b>【角色心声独白】</b>" in processed_blocks[-1]:
                 processed_blocks.append(
                     f"{indent}<i><span style='color:#888888;'>{seg}</span></i>"
