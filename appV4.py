@@ -2038,6 +2038,11 @@ multi_reply_protocol_10 = (
     """
 )
 
+multi_reply_protocol_999 = (
+    """
+根据你的人设，之前聊天的上下文，按照【六维官能黄金范本】的【官能对话】、【官能动作】、【官能画面】、【感官描写】、【神态描写】、【内心描写】的教学进行回复，多用【常用词/短句库】的词语，回复文风模仿六个维度的描写范例，现在开始：
+    """
+)
 
 # ==========================================
 # 3. 主界面渲染与历史切片折叠机制（🔥 彻底修复：对齐关键字参数与动态按钮渲染）
@@ -2749,7 +2754,7 @@ else:
         elif st.session_state.get("selected_style_key") == "processed_6":
             active_protocol = multi_reply_protocol_6
         elif st.session_state.get("selected_style_key") == "processed_10":
-            active_protocol = multi_reply_protocol_10
+            active_protocol = multi_reply_protocol_999
         else:
             active_protocol = multi_reply_protocol
 
