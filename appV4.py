@@ -476,15 +476,45 @@ def novel_text_formatter(raw_text: str) -> str:
             i += 1
             continue
 
-        # ---------- 括号层级追踪 ----------
-        if char == "(":
-            paren_depth += 1
-        elif char == ")":
-            paren_depth = max(0, paren_depth - 1)
-        elif char == "（":
-            zh_paren_depth += 1
-        elif char == "）":
-            zh_paren_depth = max(0, zh_paren_depth - 1)
+        # ---------- 括号分段：以(开头的内容放到下一段 ----------
+        if char in ("(", "（"):
+            if (
+                not in_quote
+                and paren_depth == 0
+                and zh_paren_depth == 0
+                and current_segment
+            ):
+                seg_str = "".join(current_segment).strip()
+                if seg_str:
+                    segments.append(seg_str)
+                current_segment = []
+
+            if char == "(":
+                paren_depth += 1
+            else:
+                zh_paren_depth += 1
+
+            current_segment.append(char)
+            i += 1
+            continue
+
+        # ---------- 括号分段：以)结束的内容收段，后面的内容放到下一段 ----------
+        if char in (")", "）"):
+            if char == ")":
+                paren_depth = max(0, paren_depth - 1)
+            else:
+                zh_paren_depth = max(0, zh_paren_depth - 1)
+
+            current_segment.append(char)
+
+            if not in_quote and paren_depth == 0 and zh_paren_depth == 0:
+                seg_str = "".join(current_segment).strip()
+                if seg_str:
+                    segments.append(seg_str)
+                current_segment = []
+
+            i += 1
+            continue
 
         current_segment.append(char)
 
@@ -514,12 +544,15 @@ def novel_text_formatter(raw_text: str) -> str:
             else:
                 processed_blocks.append(f"\n\n{seg}")
         else:
+            # 以 ( 开头的括号段：额外缩进一层
+            is_paren_block = seg.startswith(("(", "（"))
+            indent = "&emsp;&emsp;&emsp;&emsp;" if is_paren_block else "&emsp;&emsp;"
             if processed_blocks and "💡 <b>【角色心声独白】</b>" in processed_blocks[-1]:
                 processed_blocks.append(
-                    f"&emsp;&emsp;<i><span style='color:#888888;'>{seg}</span></i>"
+                    f"{indent}<i><span style='color:#888888;'>{seg}</span></i>"
                 )
             else:
-                processed_blocks.append(f"&emsp;&emsp;{seg}")
+                processed_blocks.append(f"{indent}{seg}")
 
     # 4. 输出净化
     final_output = "\n\n".join(processed_blocks)
