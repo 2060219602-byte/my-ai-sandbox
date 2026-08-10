@@ -1296,6 +1296,24 @@ def load_cloud_data():
                         if "dream_since_index" not in role:
                             role["dream_since_index"] = 0
 
+                        # 🎯 单聊六维词库点名使用记录（旧存档兼容）
+                        if "word_usage_counts" not in role:
+                            role["word_usage_counts"] = {}
+                        if "last_word_batch" not in role:
+                            role["last_word_batch"] = {}
+
+                        # 旧格式迁移：早期版本计数表直接以维度为顶层键，统一迁到“文风键”下
+                        if role["word_usage_counts"] and not any(
+                                str(k).startswith("processed_") for k in role["word_usage_counts"]):
+                            role["word_usage_counts"] = {
+                                saved_data.get("style_preference", "processed_1"): role["word_usage_counts"]
+                            }
+                        if role["last_word_batch"] and not any(
+                                str(k).startswith("processed_") for k in role["last_word_batch"]):
+                            role["last_word_batch"] = {
+                                saved_data.get("style_preference", "processed_1"): role["last_word_batch"]
+                            }
+
                 return saved_data
         except Exception:
             pass
@@ -1353,6 +1371,10 @@ def clear_current_chat_only():
 
             # 🚀【新增核心修复】：同时将隐秘肉体知觉面板重置回最纯净的常态，擦除过往剧情累积的数值
             role_ref["character_status"] = f"[{r_name}]\n阴道：干燥紧闭。\n乳头：平软未勃起。\n大腿内侧：皮肤处于常温状态。"
+
+            # 🎯 单聊专属：清空六维词库点名使用记录，让所有词的使用次数归零
+            role_ref["word_usage_counts"] = {}
+            role_ref["last_word_batch"] = {}
 
     elif curr_sk.startswith("💬 群聊："):
         g_name = curr_sk.replace("💬 群聊：", "")
@@ -1854,6 +1876,169 @@ style_learned_outro = (
     "你已经彻底学会了上面范文的写作手法，并将它们融入了自己的本能，"
     "接下来的一切回复，你都会按照这份范文的教学来写。\n\n"
 )
+
+# ==========================================
+# 💎 六维词库随机点名机制（仅单聊生效）
+# ==========================================
+PROCESSED_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "processed")
+WORDS_PER_DIMENSION = 10
+WORD_DIMENSIONS = ["对话描写", "动作描写", "画面描写", "感官描写", "神态描写", "内心描写"]
+_processed_banks_cache = {}
+
+
+def _parse_dimension_banks_from_body(body):
+    """从单个范本文本里解析六个维度的【常用词/短句库】"""
+    banks = {}
+    for dim in WORD_DIMENSIONS:
+        hdr = f"## {dim}"
+        idx = body.find(hdr)
+        if idx < 0:
+            continue
+        seg = body[idx:]
+        nxt = re.search(r'\n## ', seg)
+        if nxt:
+            seg = seg[:nxt.start()]
+        m = re.search(r'【常用词/短句库】(.+)', seg)
+        if not m:
+            continue
+        words = [w.strip() for w in m.group(1).strip().split("、") if w.strip()]
+        if words:
+            banks[dim] = words
+    return banks
+
+
+def _parse_word_banks_from_file(text):
+    """解析 processed 文件中的所有 processed_* 范本块"""
+    banks = {}
+    for m in re.finditer(r'(processed_\w+)\s*=\s*"""', text):
+        block_name = m.group(1)
+        body_start = m.end()
+        body_end = text.find('"""', body_start)
+        if body_end < 0:
+            continue
+        dim_banks = _parse_dimension_banks_from_body(text[body_start:body_end])
+        if dim_banks:
+            banks[block_name] = dim_banks
+    return banks
+
+
+def load_word_banks():
+    """读取 processed 文件中的六维词库（带文件变更缓存）"""
+    global _processed_banks_cache
+    try:
+        mtime = os.path.getmtime(PROCESSED_FILE)
+        if _processed_banks_cache.get("mtime") == mtime:
+            return _processed_banks_cache.get("banks", {})
+        with open(PROCESSED_FILE, "r", encoding="utf-8") as f:
+            text = f.read()
+        banks = _parse_word_banks_from_file(text)
+        _processed_banks_cache = {"mtime": mtime, "banks": banks}
+        return banks
+    except Exception:
+        return {}
+
+
+def get_active_word_banks():
+    """返回当前文风对应的六维词库：优先 processed 文件中的同名块，其次当前注入的范本，最后回退 processed_1"""
+    all_banks = load_word_banks()
+    if selected_key in all_banks:
+        return all_banks[selected_key]
+    try:
+        if refined_style_patch.strip():
+            banks = _parse_dimension_banks_from_body(refined_style_patch)
+            if banks:
+                return banks
+    except Exception:
+        pass
+    if "processed_1" in all_banks:
+        return all_banks["processed_1"]
+    if all_banks:
+        return next(iter(all_banks.values()))
+    return {}
+
+
+def pick_word_batch(role_data, n=WORDS_PER_DIMENSION):
+    """按使用次数挑词：优先从未用词里随机抽 n 个；用尽后补抽使用次数最少的词"""
+    banks = get_active_word_banks()
+    if not banks:
+        return {}
+    # 每个文风各自独立计数，切换文风不会串用
+    usage = (role_data.get("word_usage_counts") or {}).get(selected_key) or {}
+    batch = {}
+    for dim in WORD_DIMENSIONS:
+        words = banks.get(dim) or []
+        if not words:
+            continue
+        dim_usage = usage.get(dim) or {}
+        unused = [w for w in words if dim_usage.get(w, 0) <= 0]
+        if len(unused) >= n:
+            batch[dim] = random.sample(unused, n)
+            continue
+        picked = list(unused)
+        remaining = n - len(picked)
+        used_words = [w for w in words if dim_usage.get(w, 0) > 0]
+        used_words.sort(key=lambda w: (dim_usage.get(w, 0), random.random()))
+        for w in used_words:
+            if remaining <= 0:
+                break
+            if w not in picked:
+                picked.append(w)
+                remaining -= 1
+        batch[dim] = picked
+    return batch
+
+
+DIMENSION_LABELS = {
+    "对话描写": "对话",
+    "动作描写": "动作",
+    "画面描写": "画面",
+    "感官描写": "感官",
+    "神态描写": "神态",
+    "内心描写": "内心",
+}
+
+DIMENSION_ANCHORS = {
+    "对话描写": ["对话描写词库", "【对话】交锋", "【官能对话描写】范例"],
+    "动作描写": ["动作描写词库", "【动作】串联", "【官能动作描写】范例"],
+    "画面描写": ["画面描写词库", "【画面】定场", "【官能画面描写】范例"],
+    "感官描写": ["感官描写词库", "【感官】穿插", "【感官描写】范例"],
+    "神态描写": ["神态描写词库", "【神态】先行", "【神态描写】范例"],
+    "内心描写": ["内心描写词库", "用一句【心理】风格的句子", "用一句话写角色的当前最直接的想法", "心理锚点开场"],
+}
+
+
+def inject_word_batch_into_protocol(protocol_text, batch):
+    """把本轮点名词汇直接嵌进协议中每个维度对应的段落里"""
+    if not batch:
+        return protocol_text
+    lines = protocol_text.split("\n")
+    for dim, words in batch.items():
+        if not words:
+            continue
+        line_idx = None
+        for anchor in DIMENSION_ANCHORS.get(dim, []):
+            for i, line in enumerate(lines):
+                if anchor in line:
+                    line_idx = i
+                    break
+            if line_idx is not None:
+                break
+        if line_idx is None:
+            continue
+        label = DIMENSION_LABELS.get(dim, dim)
+        word_text = "、".join(words)
+        line = lines[line_idx]
+        # 优先插到“XX描写词库NNN个词条）”的括号内，紧跟词库说明
+        m = re.search(rf'({re.escape(dim)}词库\d+个词条)）', line)
+        if m:
+            lines[line_idx] = line[:m.end(1)] + f"｜本轮指定{label}用词：{word_text}" + line[m.end(1):]
+        else:
+            tail = line.rstrip()
+            if tail.endswith(("。", "；", "，")):
+                tail = tail[:-1]
+            lines[line_idx] = tail + f"。本轮指定{label}用词：{word_text}"
+    return "\n".join(lines)
+
 
 multi_reply_protocol = (
     """
@@ -2895,6 +3080,11 @@ else:
         else:
             active_protocol = multi_reply_protocol
 
+        # 🎯 单聊专属：六维词库随机点名，把本轮的指定词注入协议
+        current_word_batch = pick_word_batch(role_data)
+        role_data.setdefault("last_word_batch", {})[selected_key] = current_word_batch
+        active_protocol = inject_word_batch_into_protocol(active_protocol, current_word_batch)
+
         ultimate_user_content = (
             f"{narrative_anchor}"
             f"⚡⚡⚡【最高优先级执行指令 —— 舞台导演小说吐字规范】：\n"
@@ -2977,6 +3167,16 @@ else:
                                                  full_story_response).strip()
                     full_story_response = re.sub(r'^\[.*?\]', '', full_story_response).strip()
                     full_story_response = re.sub(r'^【.*?】', '', full_story_response).strip()
+
+                # 🎯 单聊专属：核对本轮点名用词在输出中的实际使用情况并累计次数
+                if current_word_batch:
+                    usage_store = role_data.setdefault("word_usage_counts", {})
+                    style_usage = usage_store.setdefault(selected_key, {})
+                    for dim, words in current_word_batch.items():
+                        dim_usage = style_usage.setdefault(dim, {})
+                        for w in words:
+                            if w in full_story_response:
+                                dim_usage[w] = dim_usage.get(w, 0) + 1
 
                 with response_placeholder.container():
                     st.markdown(novel_text_formatter(full_story_response), unsafe_allow_html=True)
