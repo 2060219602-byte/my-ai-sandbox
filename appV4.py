@@ -1301,6 +1301,8 @@ def load_cloud_data():
                             role["word_usage_counts"] = {}
                         if "last_word_batch" not in role:
                             role["last_word_batch"] = {}
+                        if "word_miss_counts" not in role:
+                            role["word_miss_counts"] = {}
 
                         # 旧格式迁移：早期版本计数表直接以维度为顶层键，统一迁到“文风键”下
                         if role["word_usage_counts"] and not any(
@@ -1374,6 +1376,7 @@ def clear_current_chat_only():
 
             # 🎯 单聊专属：清空六维词库点名使用记录，让所有词的使用次数归零
             role_ref["word_usage_counts"] = {}
+            role_ref["word_miss_counts"] = {}
             role_ref["last_word_batch"] = {}
 
     elif curr_sk.startswith("💬 群聊："):
@@ -1957,34 +1960,36 @@ def get_active_word_banks():
     return {}
 
 
+# ========== 自适应点名词降权：AI 连续不用就自动移出推荐池 ==========
+# 每个词记录“连续被点名但 AI 没用”的次数；满 3 次后自动降权，
+# 只有该维度可用词不足 10 个时，降权词才会按“3 次一档”的低分先放回来。
+# AI 一旦实际用到某个词，它的连续未用次数立刻清零，重新回到推荐池。
+MISS_EXCLUDE_THRESHOLD = 3
+
+
 def pick_word_batch(role_data, n=WORDS_PER_DIMENSION):
-    """按使用次数挑词：优先从未用词里随机抽 n 个；用尽后补抽使用次数最少的词"""
+    """按使用次数挑词：优先未用词；AI 连续 3 次不用的词自动降权；用尽后补抽使用次数最少的词"""
     banks = get_active_word_banks()
     if not banks:
         return {}
     # 每个文风各自独立计数，切换文风不会串用
     usage = (role_data.get("word_usage_counts") or {}).get(selected_key) or {}
+    miss = (role_data.get("word_miss_counts") or {}).get(selected_key) or {}
     batch = {}
     for dim in WORD_DIMENSIONS:
         words = banks.get(dim) or []
         if not words:
             continue
         dim_usage = usage.get(dim) or {}
-        unused = [w for w in words if dim_usage.get(w, 0) <= 0]
-        if len(unused) >= n:
-            batch[dim] = random.sample(unused, n)
-            continue
-        picked = list(unused)
-        remaining = n - len(picked)
-        used_words = [w for w in words if dim_usage.get(w, 0) > 0]
-        used_words.sort(key=lambda w: (dim_usage.get(w, 0), random.random()))
-        for w in used_words:
-            if remaining <= 0:
-                break
-            if w not in picked:
-                picked.append(w)
-                remaining -= 1
-        batch[dim] = picked
+        dim_miss = miss.get(dim) or {}
+        low_miss = [w for w in words if dim_miss.get(w, 0) < MISS_EXCLUDE_THRESHOLD]
+        high_miss = [w for w in words if dim_miss.get(w, 0) >= MISS_EXCLUDE_THRESHOLD]
+        # 正常词：未用优先（随机），其次使用次数少；同一档内随机打散
+        low_miss.sort(key=lambda w: (dim_usage.get(w, 0), random.random()))
+        # 降权词：按“连续未用次数/3”的档位从低到高，档位相同随机
+        high_miss.sort(key=lambda w: (dim_miss.get(w, 0) // MISS_EXCLUDE_THRESHOLD,
+                                     dim_usage.get(w, 0), random.random()))
+        batch[dim] = (low_miss + high_miss)[:n]
     return batch
 
 
@@ -2031,12 +2036,12 @@ def inject_word_batch_into_protocol(protocol_text, batch):
         # 优先插到“XX描写词库NNN个词条）”的括号内，紧跟词库说明
         m = re.search(rf'({re.escape(dim)}词库\d+个词条)）', line)
         if m:
-            lines[line_idx] = line[:m.end(1)] + f"｜本轮指定{label}用词：{word_text}" + line[m.end(1):]
+            lines[line_idx] = line[:m.end(1)] + f"｜本轮参考{label}用词（按场景合理使用，不强行凑词）：{word_text}" + line[m.end(1):]
         else:
             tail = line.rstrip()
             if tail.endswith(("。", "；", "，")):
                 tail = tail[:-1]
-            lines[line_idx] = tail + f"。本轮指定{label}用词：{word_text}"
+            lines[line_idx] = tail + f"。本轮参考{label}用词（按场景合理使用，不强行凑词）：{word_text}"
     return "\n".join(lines)
 
 
@@ -3168,15 +3173,22 @@ else:
                     full_story_response = re.sub(r'^\[.*?\]', '', full_story_response).strip()
                     full_story_response = re.sub(r'^【.*?】', '', full_story_response).strip()
 
-                # 🎯 单聊专属：核对本轮点名用词在输出中的实际使用情况并累计次数
+                # 🎯 单聊专属：核对本轮点名用词的实际使用情况并累计次数；
+                #    用到的词 +1 并清零连续未用次数，没用到的词连续未用次数 +1（满 3 次自动降权）
                 if current_word_batch:
                     usage_store = role_data.setdefault("word_usage_counts", {})
                     style_usage = usage_store.setdefault(selected_key, {})
+                    miss_store = role_data.setdefault("word_miss_counts", {})
+                    style_miss = miss_store.setdefault(selected_key, {})
                     for dim, words in current_word_batch.items():
                         dim_usage = style_usage.setdefault(dim, {})
+                        dim_miss = style_miss.setdefault(dim, {})
                         for w in words:
                             if w in full_story_response:
                                 dim_usage[w] = dim_usage.get(w, 0) + 1
+                                dim_miss[w] = 0
+                            else:
+                                dim_miss[w] = dim_miss.get(w, 0) + 1
 
                 with response_placeholder.container():
                     st.markdown(novel_text_formatter(full_story_response), unsafe_allow_html=True)
