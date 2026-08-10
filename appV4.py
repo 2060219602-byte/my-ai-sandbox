@@ -1819,7 +1819,7 @@ st.sidebar.header("🎨 文风选择")
 style_options = {
     "夏舒兰-被催眠暴奸的冷艳美母文风": "processed_1",
     "白叶茹-公务员妈妈的非洲之旅文风": "processed_2",
-    "女帝-小马仙侠": "processed_3",
+    "RP生成": "processed_3",
     "妈妈娼馆文风": "processed_4",
     "颖儿-被催眠暴奸的冷艳美母文风": "processed_5",
     "妈妈-我是美母骑士": "processed_6",
@@ -2138,6 +2138,11 @@ multi_reply_protocol_1 = (
 2. 全部文本均由“心理锚点 + 官能动作 + 官能对话 + 官能画面/感官/神态/内心”的高密度事实堆砌而成；每个维度的高频用词必须从范本对应【常用词/短句库】中调用原词，禁止替换为平庸同义词。
 3. 具体组合以上六维写作技巧的方式，必须严格参照上方【六维官能黄金范本】中例句的密度、节奏和用词。
 4. 完稿前自查：0️⃣-3️⃣四幕齐全、硬性指标全部达标；台词、动作、画面中至少各出现2个来自对应常用词库的原词/短句；整体官能浓度必须保持范本高密度水准。
+    """
+)
+
+multi_reply_protocol_3 = (
+    """
     """
 )
 
@@ -3074,6 +3079,10 @@ else:
         # 根据文风选择，取用对应的写作协议
         if st.session_state.get("selected_style_key") == "processed_1":
             active_protocol = multi_reply_protocol_1
+        elif st.session_state.get("selected_style_key") == "processed_2":
+            active_protocol = multi_reply_protocol_2
+        elif st.session_state.get("selected_style_key") == "processed_3":
+            active_protocol = multi_reply_protocol_3
         elif st.session_state.get("selected_style_key") == "processed_5":
             active_protocol = multi_reply_protocol_5
         elif st.session_state.get("selected_style_key") == "processed_6":
