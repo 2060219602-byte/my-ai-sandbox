@@ -18,7 +18,7 @@ model_name = st.sidebar.text_input("模型名称 (Model)", value="deepseek-v4-pr
 # =========================================================
 # 1. 自动加载 DeepSeek 聊天客户端
 ds_key = st.secrets["deepseek"]["api_key"] if "deepseek" in st.secrets else ""
-client = OpenAI(api_key=ds_key, base_url="https://api.deepseek.com")
+client = OpenAI(api_key=ds_key, base_url="https://opencode.ai/zen/go/v1")
 
 # 2. 自动加载 阿里云百炼 RAG 客户端
 ali_key = st.secrets["aliyun"]["api_key2"] if "aliyun" in st.secrets else ""
