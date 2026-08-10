@@ -1884,7 +1884,7 @@ style_learned_outro = (
 # 💎 六维词库随机点名机制（仅单聊生效）
 # ==========================================
 PROCESSED_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "processed")
-WORDS_PER_DIMENSION = 10
+WORDS_PER_DIMENSION = 15
 WORD_DIMENSIONS = ["对话描写", "动作描写", "画面描写", "感官描写", "神态描写", "内心描写"]
 _processed_banks_cache = {}
 
