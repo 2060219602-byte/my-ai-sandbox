@@ -361,17 +361,154 @@ st.markdown("""
         font-size: 15px !important;
     }
 
-    /* ========== 响应式微调 ========== */
+    /* ========== 内容防横向溢出（长串词安全换行） ========== */
+    [data-testid="stChatMessage"] p,
+    .stMarkdown p,
+    .stMarkdown li {
+        overflow-wrap: break-word !important;
+        word-break: break-word !important;
+    }
+    [data-testid="stChatMessage"] img,
+    .stMarkdown img {
+        max-width: 100% !important;
+        height: auto !important;
+    }
+
+    /* ========== 📱 手机端专属深度优化 ========== */
     @media (max-width: 768px) {
-        html, body {
+        /* 1. 全局排版：更小、更紧凑，禁止 iOS 自动放大文字 */
+        html {
+            -webkit-text-size-adjust: 100% !important;
+            text-size-adjust: 100% !important;
+        }
+        html, body, [data-testid="stAppViewContainer"], .stMarkdown {
             font-size: 16px !important;
+            line-height: 1.7 !important;
+            letter-spacing: 0.02em !important;
         }
+
+        /* 2. 标题层级缩放，避免长标题挤压聊天首屏 */
+        h1 {
+            font-size: 1.25rem !important;
+            margin-top: 0.8rem !important;
+            margin-bottom: 0.7rem !important;
+            padding-bottom: 0.3em !important;
+            letter-spacing: 0.02em !important;
+        }
+        h2 {
+            font-size: 1.16rem !important;
+            margin-top: 1.1rem !important;
+            margin-bottom: 0.7rem !important;
+        }
+        h3 {
+            font-size: 1.02rem !important;
+            margin-top: 0.9rem !important;
+            margin-bottom: 0.6rem !important;
+        }
+
+        /* 3. 主内容区：收回两侧留白，释放每一寸横向空间 */
+        [data-testid="stMainBlockContainer"], .block-container {
+            padding: 0.9rem 0.75rem 1.1rem 0.75rem !important;
+            max-width: 100% !important;
+        }
+
+        /* 4. 聊天气泡：贴边紧凑，去掉桌面端的悬停位移 */
         [data-testid="stChatMessage"] {
-            padding: 0.8rem !important;
+            padding: 0.35rem 0 !important;
+            transform: none !important;
         }
-        input, textarea {
-            font-size: 15px !important;
-            padding: 8px 12px !important;
+        [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatar"] img[src*="user"]),
+        [data-testid="stChatMessage"]:has([style*="😎"]),
+        [data-testid="stChatMessage"]:has([data-testid="stChatMessageAvatar"] img[src*="assistant"]),
+        [data-testid="stChatMessage"]:has([style*="💋"]) {
+            padding: 0.75rem 0.85rem !important;
+            margin-bottom: 0.7rem !important;
+            border-radius: 12px !important;
+        }
+        [data-testid="stChatMessage"]:hover {
+            transform: none !important;
+            box-shadow: none !important;
+        }
+
+        /* 5. 头像缩小，给正文让出宽度 */
+        [data-testid="stChatMessageAvatar"] {
+            width: 36px !important;
+            height: 36px !important;
+            min-width: 36px !important;
+            font-size: 18px !important;
+            line-height: 36px !important;
+            border-radius: 50% !important;
+        }
+        [data-testid="stChatMessageAvatar"] span,
+        [data-testid="stChatMessageAvatar"] p {
+            font-size: 18px !important;
+            line-height: 36px !important;
+        }
+
+        /* 6. 状态卡与提示框：更紧凑；长状态内部滚动，避免抢占聊天首屏 */
+        .role-status-block {
+            padding: 12px 14px !important;
+            margin-top: 1rem !important;
+            font-size: 14.5px !important;
+        }
+        .role-status-name {
+            font-size: 1rem !important;
+            margin-bottom: 8px !important;
+        }
+        [data-testid="stAlert"] {
+            max-height: 140px !important;
+            overflow-y: auto !important;
+            font-size: 14px !important;
+            padding: 10px 12px !important;
+        }
+
+        /* 7. 按钮：44px 触控高度、允许换行、消除点按延迟 */
+        button, [data-baseweb="button"] {
+            min-height: 44px !important;
+            white-space: normal !important;
+            font-size: 14px !important;
+            touch-action: manipulation !important;
+        }
+        [data-testid="stMain"] button {
+            font-size: 13.5px !important;
+        }
+
+        /* 8. 输入框：16px 字号防止 iOS 聚焦时页面自动放大 */
+        input[type="text"], input[type="password"], input[type="search"],
+        textarea, [data-baseweb="input"], [data-baseweb="textarea"],
+        [data-testid="stChatInput"] textarea {
+            font-size: 16px !important;
+            padding: 10px 12px !important;
+        }
+
+        /* 9. 底部输入区：刘海屏安全区适配 + 半透明遮罩背景 */
+        [data-testid="stChatInput"] {
+            padding: 0.5rem 0.5rem calc(0.5rem + env(safe-area-inset-bottom, 0px)) !important;
+        }
+        [data-testid="stBottom"] {
+            padding-bottom: env(safe-area-inset-bottom, 0px) !important;
+            background: linear-gradient(to top, #fdfaf6 70%, rgba(253, 250, 246, 0)) !important;
+        }
+
+        /* 10. 侧边栏抽屉：适配手机宽度、字号，双列控件纵向堆叠 */
+        [data-testid="stSidebar"] {
+            width: min(94vw, 430px) !important;
+            min-width: min(94vw, 430px) !important;
+            max-width: 94vw !important;
+            font-size: 14px !important;
+        }
+        [data-testid="stSidebar"] [data-testid="stHorizontalBlock"] > div {
+            min-width: 100% !important;
+        }
+
+        /* 11. 防止整页横向溢出 */
+        html, body {
+            overflow-x: hidden !important;
+        }
+
+        /* 12. 去掉点击高亮，观感更接近原生 App */
+        * {
+            -webkit-tap-highlight-color: transparent !important;
         }
     }
 </style>
@@ -2136,7 +2273,7 @@ multi_reply_protocol_1 = (
     """
 )
 
-multi_reply_protocol_1 = (
+multi_reply_protocol_2 = (
     """
 【🎬 中式网文直球事件流四幕叙事协议 (范文直灌高密度版)】
 ⚠️ 最高优先级指令：
@@ -2405,9 +2542,9 @@ def render_message_controls_by_id(msg_id, is_last_msg, agent_name_fallback=""):
     """
     🔒 保持你原有的删除与重算推演控制中枢完全无损，修复参数传递对齐
     """
-    c1, c2, _ = st.columns([0.1, 0.1, 0.8])
+    c1, c2 = st.columns([1, 1])
     with c1:
-        if st.button("❌ 删除", key=f"del_btn_{msg_id}"):
+        if st.button("❌ 删除", key=f"del_btn_{msg_id}", use_container_width=True):
             if is_group_chat:
                 for agent in st.session_state.group_members_list:
                     agent_history = st.session_state.all_sessions_db["roles"][agent]["chat_history"]
@@ -2435,7 +2572,7 @@ def render_message_controls_by_id(msg_id, is_last_msg, agent_name_fallback=""):
 
     with c2:
         if is_last_msg:
-            if st.button("🔄 重发", key=f"regen_btn_{msg_id}"):
+            if st.button("🔄 重发", key=f"regen_btn_{msg_id}", use_container_width=True):
                 if is_group_chat:
                     for agent in st.session_state.group_members_list:
                         agent_history = st.session_state.all_sessions_db["roles"][agent]["chat_history"]
