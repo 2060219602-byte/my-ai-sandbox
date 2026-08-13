@@ -1611,6 +1611,19 @@ if not is_group_chat:
     role_data = st.session_state.all_sessions_db["roles"][target_girl]
     chat_history_view = role_data["chat_history"]
     st.session_state.group_members_list = []
+
+    # 💭 闪回记忆查看器：在侧边栏显示当前角色最新一次的闪回记录，点击显示、再点隐藏
+    st.sidebar.write("---")
+    st.sidebar.subheader("💭 闪回记忆（最新一次）")
+    show_flashback = st.sidebar.checkbox(
+        "点击显示 / 再点隐藏",
+        value=False,
+        key=f"show_flashback_{target_girl}",
+    )
+    if show_flashback:
+        dream_text = role_data.get("dream_result", "")
+        if dream_text:
+            st.sidebar.markdown(dream_text)
 else:
     g_name = curr_sk.replace("💬 群聊：", "")
     room_data = st.session_state.all_sessions_db["group_rooms"][g_name]
