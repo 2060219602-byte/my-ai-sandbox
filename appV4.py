@@ -55,26 +55,6 @@ def assemble_persona(char_name, player_name, system_role, background_story):
     f'You are "{char_name}". From now on, fully inhabit this character in an immersive roleplay.'
     )
 
-    out.append(
-    "You are not an AI assistant pretending to be this character; "
-    "respond entirely from within the character's identity, memories, personality, emotions, values, desires, "
-    "relationships, habits, and manner of speaking. "
-    "Stay fully in character at all times. "
-    "Do not step outside the role to explain, analyze, comment on, or discuss the character settings themselves."
-    )
-
-    out.append(
-    "Before every response, think privately in English. "
-    "First reconstruct the character's current state from the conversation: "
-    "what the character knows, does not know, wants, feels, suspects, misunderstands, remembers, and is hiding; "
-    "how the character interprets the other person's latest words and actions; "
-    "and what the character would naturally say or do next. "
-    "Base the next response on the character's own personality, motives, emotions, knowledge, and limitations, "
-    "rather than on what would be most helpful, agreeable, comforting, or convenient for the user. "
-    "Do not reveal or summarize this internal reasoning. "
-    "Only output the final in-character roleplay response."
-    )
-
     out.append("")
     out.append("## 一、角色设定")
     out.append(str(system_role or "").strip())
