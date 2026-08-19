@@ -3772,7 +3772,7 @@ else:
                                 timeout=60.0,
                                 temperature=1.0,
                                 frequency_penalty=0.1,
-                                reasoning_effort="max",  # 🧠 思考max：对齐 harness 的 reasoningEffort: max
+                                reasoning_effort="high",  # 🧠 思考max：对齐 harness 的 reasoningEffort: max
                                 extra_body={"thinking": {"type": "enabled"}}
                             )
 
