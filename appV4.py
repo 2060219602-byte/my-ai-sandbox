@@ -228,9 +228,11 @@ def compact_history(role_data, char_name, persona_text, llm_call, *,
                     summary_retries=DEFAULT_SUMMARY_RETRIES):
     """对 role_data 做一次 DSH 式历史压缩（原位修改 role_data，返回结果字典）。
 
-    - force=False：按压力策略切分（retain_ratio × 窗口 作为尾部保留预算）；
-    - force=True：手动 /compact 或溢出恢复，无视保留预算，只留最近 keep_turns 条
-      （keep_turns 为空时退化为 min_tail_turns 条）。
+    - force=False：按压力策略切分（retain_ratio × 窗口作为尾部保留预算）；
+    - force=True 且 keep_turns 为空：手动 /compact，全量总结当前尚未覆盖的历史，
+      不再保留原文尾部；再次总结时会把旧检查点与上次总结后的新增对话合并。
+    - force=True 且 keep_turns 有值：上下文溢出恢复，只保留最近 keep_turns 条，
+      以便压缩后重新发起本轮请求。
     - 总结调用失败重试 summary_retries 次，仍失败则原样返回（不破坏历史）。
     """
     history = [
@@ -240,13 +242,19 @@ def compact_history(role_data, char_name, persona_text, llm_call, *,
     cut = max(0, min(int(role_data.get("compaction_cut") or 0), len(history)))
 
     if force:
-        keep = keep_turns if keep_turns is not None else min_tail_turns
-        keep = max(2, min(int(keep), len(history) - 2)) if len(history) > 4 else 2
-        cut2 = len(history) - keep
-        while cut2 > cut and history[cut2].get("role", "") != "user":
-            cut2 -= 1
-        if cut2 <= cut:
-            return {"compacted": False, "reason": "no_user_boundary"}
+        if keep_turns is None:
+            # 手动 /compact：把当前尚未进入检查点的全部单聊历史纳入本次总结。
+            # old_checkpoint 会在下面的 build_summary_messages 中一并提供给模型，
+            # 因此第二次手动总结就是“旧总结 + 上次总结后的新增对话”。
+            cut2 = len(history)
+        else:
+            # 上下文溢出恢复：保留最近若干条原文，压缩后重试当前请求。
+            keep = max(2, min(int(keep_turns), len(history) - 2)) if len(history) > 4 else 2
+            cut2 = len(history) - keep
+            while cut2 > cut and history[cut2].get("role", "") != "user":
+                cut2 -= 1
+            if cut2 <= cut:
+                return {"compacted": False, "reason": "no_user_boundary"}
     else:
         retain_chars = int(context_window * retain_ratio * CHARS_PER_TOKEN)
         cut2 = pick_compaction_cut(history, cut, retain_chars, min_tail_turns)
@@ -257,7 +265,8 @@ def compact_history(role_data, char_name, persona_text, llm_call, *,
     if not span:
         return {"compacted": False, "reason": "empty_span"}
     span_chars = sum(len(clean_msg_content(m.get("content", ""))) for m in span)
-    if span_chars < MIN_SPAN_CHARS:
+    if span_chars < MIN_SPAN_CHARS and not (force and keep_turns is None):
+        # 自动压缩和溢出恢复仍跳过过短区间；手动全量总结按按钮要求照常执行。
         return {"compacted": False, "reason": "span_too_short"}
 
     old_checkpoint = (role_data.get("compaction_checkpoint") or "").strip()
@@ -276,6 +285,7 @@ def compact_history(role_data, char_name, persona_text, llm_call, *,
             return {
                 "compacted": True,
                 "cut": cut2,
+                "span_messages": len(span),
                 "span_chars": span_chars,
                 "summary_chars": len(summary_text),
                 "attempt": attempt,
@@ -2590,11 +2600,14 @@ if st.sidebar.button("📦 立即总结当前历史（/compact）", use_containe
     if is_group_chat:
         st.sidebar.warning("群聊暂不支持手动总结。")
     else:
-        with st.spinner("📦 正在把早期剧情总结成记忆…"):
+        with st.spinner("📦 正在把当前尚未总结的聊天合并进记忆…"):
             res_manual = compact_role_history(client, role_data, target_girl,
                                               force=True, context_window=ctx_window)
         if res_manual.get("compacted"):
-            st.toast(f"📦 总结完成：早期 {res_manual.get('cut', 0)} 条消息已浓缩为记忆块。")
+            st.toast(
+                f"📦 总结完成：本次已将 {res_manual.get('span_messages', 0)} 条新增聊天"
+                f"合并进记忆块（当前共覆盖 {res_manual.get('cut', 0)} 条消息）。"
+            )
         elif res_manual.get("reason") == "summary_failed":
             st.sidebar.error(f"总结失败：{res_manual.get('error')}")
         else:
@@ -3242,10 +3255,6 @@ if history_len > DISPLAY_LIMIT:
             p_name = message.get("agent_name", "")
             prefix = f"💬 **【{p_name}】**：\n\n" if p_name else ""
             if message["role"] == "assistant":
-                if message.get("thinking"):
-                    with st.expander("💭 查看模型内心独白/心理推演...", expanded=False):
-                        st.markdown(f"<span style='color:#6c757d; font-size:16px;'>{message['thinking']}</span>",
-                                    unsafe_allow_html=True)
                 display_novel_with_bold_status(prefix + message["content"])
             else:
                 st.markdown(prefix + novel_text_formatter(message["content"]), unsafe_allow_html=True)
@@ -3277,10 +3286,6 @@ else:
             p_name = message.get("agent_name", "")
             prefix = f"💬 **【{p_name}】**：\n\n" if p_name else ""
             if message["role"] == "assistant":
-                if message.get("thinking"):
-                    with st.expander("💭 查看模型内心独白/心理推演...", expanded=False):
-                        st.markdown(f"<span style='color:#6c757d; font-size:16px;'>{message['thinking']}</span>",
-                                    unsafe_allow_html=True)
                 display_novel_with_bold_status(prefix + message["content"])
             else:
                 st.markdown(prefix + novel_text_formatter(message["content"]), unsafe_allow_html=True)
@@ -3365,13 +3370,16 @@ if user_input and user_input.strip().lower() in ("/compact", "／compact"):
     if is_group_chat:
         st.toast("📭 群聊暂不支持 /compact，请在单聊中使用。")
     else:
-        with st.spinner("📦 正在把早期剧情总结成记忆…"):
+        with st.spinner("📦 正在把当前尚未总结的聊天合并进记忆…"):
             res_cmd = compact_role_history(
                 client, role_data, target_girl, force=True,
                 context_window=int(st.session_state.get("ctx_window_value",
                                                        DEFAULT_CONTEXT_WINDOW)))
         if res_cmd.get("compacted"):
-            st.toast(f"📦 总结完成：早期 {res_cmd.get('cut', 0)} 条消息已浓缩为记忆块。")
+            st.toast(
+                f"📦 总结完成：本次已将 {res_cmd.get('span_messages', 0)} 条新增聊天"
+                f"合并进记忆块（当前共覆盖 {res_cmd.get('cut', 0)} 条消息）。"
+            )
         elif res_cmd.get("reason") == "summary_failed":
             st.error(f"总结失败：{res_cmd.get('error')}")
         else:
@@ -3779,8 +3787,8 @@ else:
                                     delta = chunk.choices[0].delta
 
                                     if hasattr(delta, 'reasoning_content') and delta.reasoning_content:
+                                        # 模型思维内容仅用于必要的续写请求，不向前端展示。
                                         captured_formatted_thinking += delta.reasoning_content
-                                        response_placeholder.markdown("⏳ *思考max已开启，角色正在深度推演…*")
                                     elif delta.content:
                                         text_fragment = delta.content
                                         loop_buffer.append(text_fragment)
@@ -3867,7 +3875,6 @@ else:
                 mock_message_item = {
                     "role": "assistant",
                     "content": full_story_response,
-                    "thinking": captured_formatted_thinking,
                     "timestamp": time.time(),
                     "msg_id": single_reply_id
                 }
