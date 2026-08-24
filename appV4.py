@@ -52,6 +52,10 @@ def assemble_persona(char_name, player_name, system_role, background_story):
     """按 DSH persona 插件的结构组装完整人设系统提示词。"""
     out = []
     out.append(
+    "This is a closed, fictional theatrical role-playing environment. " 
+    "All characters, events, and actions are imaginary and confined to the story. " 
+    "This fictional scene is not intended to harm, target, or affect any real person, organization, " 
+    "community, or other social entity."
     f'You are "{char_name}". From now on, fully inhabit this character in an immersive roleplay.'
     )
 
