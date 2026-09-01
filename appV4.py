@@ -302,7 +302,7 @@ def compact_history(role_data, char_name, persona_text, llm_call, *,
 
 # ☁️ 定义服务器本地保存数据的隐藏 JSON 文件路径
 DATA_FILE = "sandbox_private_db.json"
-model_name = st.sidebar.text_input("模型名称 (Model)", value="deepseek-v4-flash")
+model_name = st.sidebar.text_input("模型名称 (Model)", value="deepseek-v4-pro")
 
 # =========================================================
 # ✨ 修改后的初始化区域：完美的无感自动加载，极度干净！
@@ -318,7 +318,7 @@ ali_client_rag = OpenAI(api_key=ali_key, base_url="https://dashscope.aliyuncs.co
 import streamlit as st
 
 
-def run_secure_generation(user_description: str):
+def run_secure_generation(user_description: str, refusal_retry_count: int = 0):
     # ========== 仅保留格式母本，移除范文 ==========
     try:
         if "novel_style" in st.secrets and "MY_PERFECT_EXAMPLE" in st.secrets["novel_style"]:
@@ -363,7 +363,7 @@ def run_secure_generation(user_description: str):
 </用户核心描述碎片>
 """
 
-    # ========== 后续流式生成与续写逻辑保持不变 ==========
+    # ========== 后续流式直出与拒答重试逻辑 ==========
     with st.sidebar.container():
         status_placeholder = st.empty()
         status_placeholder.markdown("⏳ 苏婉清正在悄悄为你展开一份纯设定...")
@@ -387,7 +387,8 @@ def run_secure_generation(user_description: str):
                     messages=messages,
                     temperature=0.82,  # 稍微收敛，让格式更听话
                     max_tokens=8192,
-                    stream=True
+                    stream=True,
+                    extra_body={"thinking": {"type": "disabled"}},
                 )
 
                 finish_reason = None
@@ -419,13 +420,31 @@ def run_secure_generation(user_description: str):
                 else:
                     break
 
-            final_text = "".join(buffer_list)
+            final_text = "".join(buffer_list).strip()
+            if not final_text or is_refusal_response(final_text, finish_reason):
+                if refusal_retry_count < SINGLE_CHAT_REFUSAL_MAX_RETRIES:
+                    next_retry = refusal_retry_count + 1
+                    status_placeholder.markdown(
+                        f"🔄 检测到模型拒答，正在自动重试（第 {next_retry}/"
+                        f"{SINGLE_CHAT_REFUSAL_MAX_RETRIES} 次）…"
+                    )
+                    preview_box.empty()
+                    time.sleep(0.4)
+                    return run_secure_generation(user_description, next_retry)
+
+                st.session_state.gen_role_res = ""
+                status_placeholder.error("⚠️ 模型连续拒答，已完成 3 次重试，请调整描述后再试。")
+                preview_box.empty()
+                return False
+
             st.session_state.gen_role_res = final_text
             status_placeholder.success("🎉 纯设定生成完毕，苏婉清已经悄悄关掉了电脑。")
             preview_box.empty()
+            return True
 
         except Exception as e:
             status_placeholder.error(f"💥 生成意外中断: {str(e)}")
+            return False
 
 # 🔒 初始化全局线程锁
 if "db_lock" not in st.session_state:
@@ -2025,8 +2044,11 @@ SINGLE_CHAT_REFUSAL_KEYWORDS = (
 )
 
 
-def is_refusal_response(text):
+def is_refusal_response(text, finish_reason=None):
     """检测模型回复是否包含常见的拒答措辞。"""
+    if str(finish_reason or "").lower() in {"content_filter", "refusal"}:
+        return True
+
     normalized_text = re.sub(r"\s+", "", str(text or "")).lower()
     return any(
         re.sub(r"\s+", "", keyword).lower() in normalized_text
@@ -2327,10 +2349,10 @@ with col_g1:
         st.session_state.gen_role_desc = tmp_desc
 
         # 🚀 阻断式流式直出，右上角自动转圈，侧边栏瀑布吐字，30秒稳稳落盒
-        run_secure_generation(tmp_desc)
-
-        # 生成完瞬间刷新，把成果同步到下方的“赋予她的基本人设”输入框里
-        st.rerun()
+        # 生成成功后刷新，把成果同步到下方的“赋予她的基本人设”输入框里；
+        # 连续拒答时保留错误提示，方便用户调整描述后再次尝试。
+        if run_secure_generation(tmp_desc):
+            st.rerun()
 
 with col_g2:
     if st.button("🗑️ 清除生成暂存", use_container_width=True):
@@ -3797,7 +3819,6 @@ else:
             response_placeholder = st.empty()
 
             full_story_response = ""
-            captured_formatted_thinking = ""
             max_loops = 3
             loop_count = 0
             loop_payload = list(cleaned_api_payload)
@@ -3817,8 +3838,7 @@ else:
                                 timeout=60.0,
                                 temperature=1.0,
                                 frequency_penalty=0.1,
-                                reasoning_effort="high",  # 🧠 思考max：对齐 harness 的 reasoningEffort: max
-                                extra_body={"thinking": {"type": "enabled"}}
+                                extra_body={"thinking": {"type": "disabled"}}
                             )
 
                             finish_reason = None
@@ -3828,10 +3848,7 @@ else:
                                 if chunk.choices and chunk.choices[0].delta:
                                     delta = chunk.choices[0].delta
 
-                                    if hasattr(delta, 'reasoning_content') and delta.reasoning_content:
-                                        # 模型思维内容仅用于必要的续写请求，不向前端展示。
-                                        captured_formatted_thinking += delta.reasoning_content
-                                    elif delta.content:
+                                    if delta.content:
                                         text_fragment = delta.content
                                         loop_buffer.append(text_fragment)
                                         full_story_response += text_fragment
@@ -3848,9 +3865,6 @@ else:
                                     "role": "assistant",
                                     "content": current_loop_text
                                 }
-                                if loop_count == 1 and captured_formatted_thinking:
-                                    assistant_message["reasoning_content"] = captured_formatted_thinking
-
                                 loop_payload.append(assistant_message)
                                 loop_payload.append({
                                     "role": "user",
@@ -3860,11 +3874,11 @@ else:
                                 break
 
                         # 单聊模型若直接拒答，不把拒答内容写入历史，自动重新生成。
-                        if is_refusal_response(full_story_response):
+                        if (not full_story_response.strip()
+                                or is_refusal_response(full_story_response, finish_reason)):
                             if refusal_retry_count < SINGLE_CHAT_REFUSAL_MAX_RETRIES:
                                 refusal_retry_count += 1
                                 full_story_response = ""
-                                captured_formatted_thinking = ""
                                 loop_count = 0
                                 loop_payload = list(cleaned_api_payload)
                                 loop_payload.append({
@@ -3897,7 +3911,6 @@ else:
                             if res_overflow.get("compacted"):
                                 save_local_data()
                                 full_story_response = ""
-                                captured_formatted_thinking = ""
                                 loop_count = 0
                                 loop_payload = build_single_chat_payload(
                                     role_data, target_girl, active_user_text)[0]
