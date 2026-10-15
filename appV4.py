@@ -8,8 +8,6 @@ import time  # ✨ 用于群聊历史的物理时间线排序
 import threading  # ✨ 引入线程锁，彻底防止多并发导致的数据文件归零
 import re  # ✨ 引入正则表达式
 import time
-import traceback  # 🩺 真实错误暴露：把异常类型/完整堆栈记录下来
-import httpx  # 🩺 统一超时配置（openai SDK 底层就是 httpx）
 
 # =========================================================
 # 🧠 DSH 式上下文引擎（已内联进本文件，单文件即可部署）
@@ -307,396 +305,15 @@ DATA_FILE = "sandbox_private_db.json"
 model_name = st.sidebar.text_input("模型名称 (Model)", value="deepseek-flash")
 
 # =========================================================
-# 🩺 真实错误暴露层（诊断 + 硬超时看门狗）
-#
-# 这一层专门解决“不报错、但界面一直卡住不动”的问题：
-# 1. OpenAI SDK 默认超时 600 秒、还会静默重试 2 次 → 最坏要等 30 分钟，
-#    而这期间界面上一个字都不会显示，看起来就是“卡死且不报错”。
-# 2. `for chunk in response:` 这种流式循环，如果上游一直不吐数据（或者只吐
-#    心跳/只吐 thinking 思维链），代码会永远停在等待里，既不抛错也没提示。
-# 3. 原来很多调用点的异常只 print 到服务器控制台（浏览器里完全看不到），
-#    于是“上游报错”在界面上表现为“什么都没发生”。
-#
-# 现在：每一次请求都受【空闲超时】+【单轮硬上限】约束，超时会被强制断开，
-# 并在界面上原样显示真实错误（异常类型 / HTTP 状态码 / request-id /
-# 上游返回体 / 完整堆栈）。
+# ✨ 修改后的初始化区域：完美的无感自动加载，极度干净！
 # =========================================================
-API_CONNECT_TIMEOUT = 15.0     # 建立连接（TCP/TLS）超时
-API_WRITE_TIMEOUT = 60.0       # 发送请求体超时
-API_POOL_TIMEOUT = 15.0        # 连接池排队超时
-DEFAULT_READ_TIMEOUT = 120.0   # 空闲超时：多少秒收不到任何数据就判定卡死
-DEFAULT_TOTAL_TIMEOUT = 900.0  # 单轮硬上限：一次生成最多允许等多久（含 thinking + 多段续写）
-STREAM_RENDER_INTERVAL = 0.25  # 流式刷新节流（秒）：避免每个 chunk 都全量重排导致前端假死
-
-
-def _sess_get(key, default):
-    """安全读取 session_state（即使在线程里调用也不会抛错）。"""
-    try:
-        return st.session_state.get(key, default)
-    except Exception:
-        return default
-
-
-def api_read_timeout():
-    try:
-        return max(10.0, float(_sess_get("api_read_timeout", DEFAULT_READ_TIMEOUT)))
-    except Exception:
-        return DEFAULT_READ_TIMEOUT
-
-
-def api_hard_timeout():
-    try:
-        return max(60.0, float(_sess_get("api_hard_timeout", DEFAULT_TOTAL_TIMEOUT)))
-    except Exception:
-        return DEFAULT_TOTAL_TIMEOUT
-
-
-def api_timeout(read=None):
-    """统一超时对象：所有请求都不再使用 SDK 的 600 秒默认值。"""
-    try:
-        read_v = float(read if read is not None else api_read_timeout())
-    except Exception:
-        read_v = DEFAULT_READ_TIMEOUT
-    return httpx.Timeout(connect=API_CONNECT_TIMEOUT, read=read_v,
-                         write=API_WRITE_TIMEOUT, pool=API_POOL_TIMEOUT)
-
-
-def describe_api_error(err) -> str:
-    """把异常翻译成一行可以直接排查的真实原因。"""
-    parts = ["异常类型=" + type(err).__name__]
-    status = getattr(err, "status_code", None)
-    if status is None:
-        status = getattr(getattr(err, "response", None), "status_code", None)
-    if status is not None:
-        parts.append("HTTP=" + str(status))
-
-    req_id = getattr(err, "request_id", None)
-    if not req_id:
-        try:
-            resp = getattr(err, "response", None)
-            headers = getattr(resp, "headers", None)
-            req_id = headers.get("x-request-id") if headers else None
-        except Exception:
-            req_id = None
-    if req_id:
-        parts.append("request-id=" + str(req_id))
-
-    name = type(err).__name__.lower()
-    if isinstance(err, httpx.TimeoutException) or "timeout" in name:
-        parts.append("原因=在限定时间内没有收到任何数据（网络/代理/上游卡住）")
-    elif isinstance(err, httpx.ConnectError) or "connection" in name:
-        parts.append("原因=连接不上（DNS / 代理 / 网络不可达）")
-    elif isinstance(err, httpx.ReadError):
-        parts.append("原因=连接被中途关闭")
-
-    try:
-        body = getattr(err, "body", None)
-        if body:
-            parts.append("上游返回体=" + str(body).replace("\n", " ")[:500])
-    except Exception:
-        pass
-
-    msg = str(err).strip().replace("\n", " ")
-    if msg:
-        if len(msg) > 600:
-            msg = msg[:600] + " …(已截断)"
-        parts.append("原始信息=" + msg)
-    return " ｜ ".join(parts)
-
-
-def diag_log(message, err=None, level="INFO"):
-    """诊断日志：控制台 + 会话内环形日志（侧边栏“诊断日志”可见）。"""
-    stamp = time.strftime("%H:%M:%S")
-    text = f"[{stamp}][{level}] {message}"
-    if err is not None:
-        text += " → " + describe_api_error(err)
-    print(text, flush=True)
-    if err is not None:
-        try:
-            traceback.print_exception(type(err), err, err.__traceback__)
-        except Exception:
-            pass
-    try:
-        log = st.session_state.setdefault("diag_log", [])
-        log.append(text)
-        if len(log) > 300:
-            st.session_state["diag_log"] = log[-300:]
-        if err is not None:
-            st.session_state["diag_last_error"] = {
-                "time": stamp,
-                "where": message,
-                "detail": describe_api_error(err),
-                "traceback": "".join(
-                    traceback.format_exception(type(err), err, err.__traceback__)
-                )[-6000:],
-            }
-    except Exception:
-        pass
-    return text
-
-
-def diag_surface(message, err=None):
-    """把真实错误显示在界面上（而不是只 print 到服务器控制台）。"""
-    if err is not None:
-        diag_log(message, err=err, level="ERROR")
-        message = message + "\n\n**真实错误**：`" + describe_api_error(err) + "`"
-    else:
-        diag_log(message, level="WARN")
-    try:
-        if _sess_get("diag_verbose", True):
-            st.error(message)
-        else:
-            st.warning(message.split("\n")[0])
-    except Exception:
-        pass
-
-
-class UIHeartbeat:
-    """后台每秒刷新一次“已等待 N 秒”，让“正常工作”和“真卡死”肉眼可辨。"""
-
-    def __init__(self, placeholder, prefix="⏳ 已向上游发起请求"):
-        self.placeholder = placeholder
-        self.prefix = prefix
-        self.started = time.time()
-        self.stop_event = threading.Event()
-        self.first_at = None
-        self._last_ui = 0.0
-        self.enabled = bool(_sess_get("ui_heartbeat_enabled", True))
-        self.read_timeout = api_read_timeout()  # 在主线程先取好，线程里不用再碰 session_state
-
-    def start(self):
-        if not self.enabled:
-            return self
-        ctx = None
-        try:
-            from streamlit.runtime.scriptrunner import add_script_run_ctx, get_script_run_ctx
-            ctx = get_script_run_ctx()
-        except Exception:
-            try:
-                from streamlit.runtime.scriptrunner_utils.script_run_context import (
-                    add_script_run_ctx, get_script_run_ctx)
-                ctx = get_script_run_ctx()
-            except Exception:
-                ctx = None
-
-        def _beat():
-            if ctx is not None:
-                try:
-                    add_script_run_ctx(threading.current_thread(), ctx)
-                except Exception:
-                    pass
-            while not self.stop_event.wait(1.0):
-                try:
-                    self.placeholder.markdown(
-                        self.prefix + f"：已等待 **{time.time() - self.started:.0f}** 秒…\n\n"
-                        f"<small>看门狗已开启：超过 {self.read_timeout:.0f} 秒收不到任何数据会自动断开并报出真实错误</small>",
-                        unsafe_allow_html=True)
-                except Exception:
-                    return
-
-        threading.Thread(target=_beat, daemon=True).start()
-        return self
-
-    def noticed_activity(self):
-        """收到第一个数据块：停止等待提示。"""
-        if self.first_at is None:
-            self.first_at = time.time()
-        self.stop_event.set()
-
-    def thinking(self, chars):
-        """收到 thinking 思维链：让用户看见模型在思考，而不是在卡死。"""
-        self.noticed_activity()
-        now = time.time()
-        if now - self._last_ui < 0.5:
-            return
-        self._last_ui = now
-        try:
-            self.placeholder.markdown(f"🧠 模型正在思考…已产生 **{chars}** 字思维链（正文还没开始输出）")
-        except Exception:
-            pass
-
-    def finish(self, clear=True):
-        self.stop_event.set()
-        if clear:
-            try:
-                self.placeholder.empty()
-            except Exception:
-                pass
-        return time.time() - self.started
-
-
-def probe_api_connection(model, timeout_seconds=15.0):
-    """连接自检：用最小请求直连，真实错误原样抛出（不吞、不重试）。"""
-    t0 = time.time()
-    probe = client.with_options(
-        timeout=httpx.Timeout(connect=8.0, read=timeout_seconds,
-                              write=timeout_seconds, pool=8.0),
-        max_retries=0,
-    )
-    resp = probe.chat.completions.create(
-        model=model,
-        messages=[{"role": "user", "content": "ping"}],
-        max_tokens=1,
-        stream=False,
-        extra_body={"thinking": {"type": "disabled"}},
-    )
-    return time.time() - t0, resp
-
-
-def stream_completion_with_watchdog(client_obj, *, label, timeout_read=None, timeout_hard=None,
-                                    on_content=None, on_reason=None, on_activity=None, **kwargs):
-    """带看门狗的流式请求：空闲超时 / 单轮硬上限一到就强制断开，并报出真实错误。
-
-    返回 (正文文本, 思考文本, finish_reason, meta)。
-    """
-    timeout_read = float(timeout_read if timeout_read is not None else api_read_timeout())
-    timeout_hard = float(timeout_hard if timeout_hard is not None else api_hard_timeout())
-    started = time.time()
-    state = {"last": started, "chunks": 0, "chars": 0, "stop": False, "verdict": None}
-    holder = {"stream": None, "raw": None}
-
-    def _hard_close():
-        for key in ("raw", "stream"):
-            obj = holder.get(key)
-            if obj is not None:
-                try:
-                    obj.close()
-                except Exception:
-                    pass
-
-    def _watchdog():
-        while not state["stop"]:
-            time.sleep(0.5)
-            if state["stop"]:
-                return
-            idle = time.time() - state["last"]
-            if idle > timeout_read:
-                state["verdict"] = ("idle", idle)
-                _hard_close()
-                return
-            total = time.time() - started
-            if total > timeout_hard:
-                state["verdict"] = ("hard", total)
-                _hard_close()
-                return
-
-    def _timeout_message():
-        kind, waited = state["verdict"]
-        if kind == "idle":
-            return (f"{label}：上游 {waited:.0f} 秒没有返回任何数据，已强制断开连接"
-                    f"（空闲超时 {timeout_read:.0f} 秒），不再无限等待。")
-        return (f"{label}：本轮等待已超过硬上限 {timeout_hard:.0f} 秒（实际 {waited:.0f} 秒），"
-                f"已强制断开连接。")
-
-    call_kwargs = dict(kwargs)
-    call_kwargs["stream"] = True
-    call_kwargs["timeout"] = httpx.Timeout(connect=API_CONNECT_TIMEOUT, read=timeout_read,
-                                           write=API_WRITE_TIMEOUT, pool=API_POOL_TIMEOUT)
-
-    try:
-        stream = client_obj.chat.completions.create(**call_kwargs)
-    except Exception as e:
-        diag_log(label + "：请求发起阶段就失败了", err=e, level="ERROR")
-        raise RuntimeError(label + "：请求发起阶段就失败了（" + describe_api_error(e) + "）") from e
-
-    holder["stream"] = stream
-    holder["raw"] = getattr(stream, "response", None)
-    threading.Thread(target=_watchdog, daemon=True).start()
-
-    content_parts, reason_parts = [], []
-    finish_reason = None
-    first_chunk_at = None
-    try:
-        for chunk in stream:
-            state["last"] = time.time()
-            state["chunks"] += 1
-            if first_chunk_at is None:
-                first_chunk_at = state["last"]
-                if on_activity is not None:
-                    try:
-                        on_activity()
-                    except Exception:
-                        pass
-            choices = getattr(chunk, "choices", None)
-            if not choices:
-                continue
-            choice = choices[0]
-            delta = getattr(choice, "delta", None)
-            if delta is not None:
-                piece = getattr(delta, "content", None)
-                if piece:
-                    content_parts.append(piece)
-                    state["chars"] += len(piece)
-                    if on_content is not None:
-                        try:
-                            on_content(piece, "".join(content_parts))
-                        except Exception:
-                            pass
-                think_piece = getattr(delta, "reasoning_content", None)
-                if think_piece:
-                    reason_parts.append(think_piece)
-                    if on_reason is not None:
-                        try:
-                            on_reason(think_piece, "".join(reason_parts))
-                        except Exception:
-                            pass
-            if getattr(choice, "finish_reason", None) is not None:
-                finish_reason = choice.finish_reason
-    except Exception as e:
-        if state.get("verdict"):
-            msg = _timeout_message()
-            diag_log(msg, err=e, level="ERROR")
-            raise TimeoutError(msg + "\n断开时的底层异常：" + describe_api_error(e)) from e
-        diag_log(label + f"：流式读取中断（已收 {state['chunks']} 块 / {state['chars']} 字）",
-                 err=e, level="ERROR")
-        raise RuntimeError(
-            label + "：流式读取中断（" + describe_api_error(e) + "；已收到 "
-            + str(state["chunks"]) + " 个数据块 / " + str(state["chars"]) + " 字，最后一块距今 "
-            + f"{time.time() - state['last']:.1f} 秒）"
-        ) from e
-    finally:
-        state["stop"] = True
-        try:
-            stream.close()
-        except Exception:
-            pass
-
-    if state.get("verdict"):
-        msg = _timeout_message()
-        diag_log(msg, level="ERROR")
-        raise TimeoutError(msg)
-
-    meta = {
-        "chunks": state["chunks"],
-        "chars": state["chars"],
-        "reasoning_chars": sum(len(x) for x in reason_parts),
-        "elapsed": time.time() - started,
-        "first_chunk": None if first_chunk_at is None else first_chunk_at - started,
-        "finish_reason": finish_reason,
-    }
-    return "".join(content_parts), "".join(reason_parts), finish_reason, meta
-
-
-# =========================================================
-# ✨ 初始化区域：无感自动加载
-# =========================================================
-# 1. 自动加载 DeepSeek 聊天客户端（🩺 显式超时 + 关闭 SDK 静默重试）
+# 1. 自动加载 DeepSeek 聊天客户端
 ds_key = st.secrets["deepseek"]["api_key"] if "deepseek" in st.secrets else ""
-client = OpenAI(
-    api_key=ds_key,
-    base_url="https://api.deepseek.com/v1",
-    timeout=api_timeout(),
-    max_retries=0,   # 原来默认重试 2 次 × 600 秒超时 = 最多静默等 30 分钟且界面无任何提示
-)
+client = OpenAI(api_key=ds_key, base_url="https://api.deepseek.com/v1")
 
 # 2. 自动加载 阿里云百炼 RAG 客户端
 ali_key = st.secrets["aliyun"]["api_key2"] if "aliyun" in st.secrets else ""
-ali_client_rag = OpenAI(
-    api_key=ali_key,
-    base_url="https://dashscope.aliyuncs.com/compatible-mode/v1",
-    timeout=api_timeout(),
-    max_retries=0,
-)
+ali_client_rag = OpenAI(api_key=ali_key, base_url="https://dashscope.aliyuncs.com/compatible-mode/v1")
 
 import streamlit as st
 
@@ -772,7 +389,6 @@ def run_secure_generation(user_description: str, refusal_retry_count: int = 0):
                     max_tokens=8192,
                     stream=True,
                     extra_body={"thinking": {"type": "enabled"}},
-                    timeout=api_timeout(),  # 🩺 设定生成也必须有超时
                 )
 
                 finish_reason = None
@@ -827,8 +443,7 @@ def run_secure_generation(user_description: str, refusal_retry_count: int = 0):
             return True
 
         except Exception as e:
-            diag_log("设定生成意外中断", err=e, level="ERROR")
-            status_placeholder.error(f"💥 生成意外中断: {describe_api_error(e)}")
+            status_placeholder.error(f"💥 生成意外中断: {str(e)}")
             return False
 
 # 🔒 初始化全局线程锁
@@ -1546,14 +1161,13 @@ def generate_single_turn_summary(client, user_text, assistant_text):
                 temperature=current_temp,
                 max_tokens=1500,
                 reasoning_effort="high",  # ✨ 开启 Max 思考模式
-                extra_body={"thinking": {"type": "enabled"}},
-                timeout=api_timeout(),  # 🩺
+                extra_body={"thinking": {"type": "enabled"}}
             )
             result_text = completion.choices[0].message.content.strip()
 
             # 🔍 检测模型是否触发过度防御而拒绝概述
             if any(kw in result_text for kw in rejection_keywords):
-                diag_log(f"旁白压缩器触发合规拒绝（第 {attempt} 次检测到敏感拦截），调整参数准备重试", level="WARN")
+                print(f"🚨 旁白压缩器触发合规拒绝（第 {attempt} 次检测到敏感拦截），调整参数准备重试...")
                 current_temp = min(1.0, current_temp + 0.2)  # 拉高随机性冲破过滤网
                 time.sleep(0.4)
                 continue  # 重新循环
@@ -1561,7 +1175,7 @@ def generate_single_turn_summary(client, user_text, assistant_text):
             return result_text  # 🎉 成功抓取干净的大动作大纲，直接返回
 
         except Exception as e:
-            diag_log(f"旁白纪实官请求发生物理中断（第 {attempt} 次）", err=e, level="ERROR")
+            print(f"💥 旁白纪实官请求发生物理中断（第 {attempt} 次）: {str(e)}")
             time.sleep(0.5)
 
     # 🛡️ 3次尝试失败（包含触发拦截、拒绝、或网络异常中断），直接输出空字符串
@@ -1581,12 +1195,11 @@ def get_text_embedding(text: str):
     try:
         response = ali_client_rag.embeddings.create(
             model="text-embedding-v3",
-            input=[text],
-            timeout=api_timeout(),  # 🩺 向量化也不许无限等待
+            input=[text]
         )
         return response.data[0].embedding
     except Exception as e:
-        diag_log("阿里向量化请求失败", err=e, level="ERROR")
+        print(f"💥 阿里向量化请求失败: {str(e)}")
         return None
 
 
@@ -1747,8 +1360,7 @@ def generate_four_options(client, system_role, background_story, chat_history_vi
                 max_tokens=1500,
                 response_format={"type": "json_object"},
                 reasoning_effort="high",
-                extra_body={"thinking": {"type": "enabled"}},
-                timeout=api_timeout(),  # 🩺
+                extra_body={"thinking": {"type": "enabled"}}
             )
             res_text = completion.choices[0].message.content.strip()
             res_json = json.loads(res_text)
@@ -1757,7 +1369,7 @@ def generate_four_options(client, system_role, background_story, chat_history_vi
                 return res_json
 
         except Exception as e:
-            diag_log(f"第 {attempt} 次通用分支选项生成失败", err=e, level="ERROR")
+            print(f"💥 第 {attempt} 次通用分支选项生成失败: {str(e)}")
 
         current_temp = min(1.0, current_temp + 0.05)
         time.sleep(0.4)
@@ -1881,7 +1493,6 @@ def perform_dreaming(client, role_data, target_girl):
                     temperature=current_temp,
                     max_tokens=2000,
                     stream=False,
-                    timeout=api_timeout(),  # 🩺
                 )
                 dream_result = response.choices[0].message.content.strip()
                 if dream_result and ("1." in dream_result or "2." in dream_result):
@@ -1890,8 +1501,7 @@ def perform_dreaming(client, role_data, target_girl):
                     st.warning(f"闪回似乎不太清晰，正在尝试第 {attempt} 次重新梳理...")
                     current_temp = min(1.0, current_temp + 0.1)
             except Exception as e:
-                diag_log(f"闪回被打断（尝试 {attempt}/{max_retries}）", err=e, level="ERROR")
-                st.warning(f"闪回被打断（尝试 {attempt}/{max_retries}）：{describe_api_error(e)}")
+                st.warning(f"闪回被打断（尝试 {attempt}/{max_retries}）：{str(e)}")
                 current_temp = min(1.0, current_temp + 0.15)
                 if attempt == max_retries:
                     st.error("💔 三次内心整合均失败，请检查网络或模型后再试。")
@@ -1996,14 +1606,13 @@ def generate_pm_options(client, role_data, chat_history_view):
             temperature=0.7,
             max_tokens=1024,
             response_format={"type": "json_object"},
-            extra_body={"thinking": {"type": "disabled"}},
-            timeout=api_timeout(),  # 🩺 导演AI不能悄悄卡死（原来这里没有超时，界面会一直停住）
+            extra_body={"thinking": {"type": "disabled"}}
         )
         data = json.loads(resp.choices[0].message.content.strip())
         if "options" in data and "scene_ended" in data:
             return data
     except Exception as e:
-        diag_log("导演AI错误（本轮跳过导演选项）", err=e, level="ERROR")
+        print(f"导演AI错误: {e}")
     return None
 
 def generate_scene_script(client, role_data, chat_history):
@@ -2049,15 +1658,14 @@ def generate_scene_script(client, role_data, chat_history):
         resp = client.chat.completions.create(
             model="deepseek-v4-flash",
             messages=[{"role": "user", "content": prompt}],
-            temperature=0.7,  # 🩺 修复：原来是 7，超出 0~2 的合法区间必然被 API 拒绝（而且是静默失败）
+            temperature=7,
             max_tokens=2048,
             stream=False,
-            extra_body={"thinking": {"type": "enabled"}},
-            timeout=api_timeout(),  # 🩺
+            extra_body={"thinking": {"type": "enabled"}}
         )
         return resp.choices[0].message.content.strip()
     except Exception as e:
-        diag_log("编辑AI生成场景失败", err=e, level="ERROR")
+        print(f"编辑AI生成场景失败: {e}")
         return None
 
 # ==========================================
@@ -2294,7 +1902,6 @@ def compact_role_history(client, role_data, char_name, *, force=False, keep_turn
             temperature=0.3,
             max_tokens=DEFAULT_SUMMARY_MAX_TOKENS,
             extra_body={"thinking": {"type": "enabled"}},
-            timeout=api_timeout(),  # 🩺 总结调用也必须受超时保护
         )
         return (resp.choices[0].message.content or "").strip()
 
@@ -2906,59 +2513,6 @@ st.sidebar.write("---")
 st.sidebar.header("🔑 接口配置")
 api_key = st.sidebar.text_input("DeepSeek API Key", type="password",
                                 value=st.secrets["deepseek"]["api_key"] if "deepseek" in st.secrets else "")
-
-# ==========================================
-# 🩺 诊断与超时控制台（卡住不报错时先看这里）
-# ==========================================
-st.sidebar.write("---")
-st.sidebar.header("🩺 诊断与超时")
-st.sidebar.caption("卡住不报错时：先点“连接自检”，再看诊断日志——真实错误会直接写在界面上。")
-
-st.sidebar.number_input(
-    "⏱ 空闲超时（秒）：多久没收到任何数据就判定卡死",
-    min_value=10.0, max_value=3600.0, step=10.0,
-    value=float(DEFAULT_READ_TIMEOUT), key="api_read_timeout",
-    help="默认 120 秒。thinking 模型首次吐字可能较慢，可按需调大；只要上游持续有数据就不会触发。",
-)
-st.sidebar.number_input(
-    "⏱ 单轮硬上限（秒）：一次生成最多允许等多久",
-    min_value=60.0, max_value=7200.0, step=30.0,
-    value=float(DEFAULT_TOTAL_TIMEOUT), key="api_hard_timeout",
-    help="默认 900 秒（含 thinking 与多段续写）。超过就强制断开并把真实错误显示出来。",
-)
-st.sidebar.checkbox("💓 显示等待心跳（每秒刷新已等待秒数）", value=True, key="ui_heartbeat_enabled")
-st.sidebar.checkbox("🧠 显示 thinking 思考过程", value=True, key="show_reasoning_stream")
-st.sidebar.checkbox("📢 把真实错误显示在聊天界面", value=True, key="diag_verbose")
-
-if st.sidebar.button("🧪 连接自检（直连 API，15 秒内出结果）", use_container_width=True,
-                     key="diag_probe_btn"):
-    with st.sidebar.container():
-        with st.spinner("正在直连 DeepSeek API 做最小请求…"):
-            try:
-                _probe_elapsed, _probe_resp = probe_api_connection(model_name)
-                st.success(f"✅ 直连成功：{_probe_elapsed:.2f} 秒返回（model=`{model_name}`）")
-                st.caption(f"usage: {getattr(_probe_resp, 'usage', None)}")
-            except Exception as _probe_err:
-                st.error(f"❌ 直连失败：{describe_api_error(_probe_err)}")
-                diag_log("连接自检失败", err=_probe_err, level="ERROR")
-                st.code(st.session_state.get("diag_last_error", {}).get("traceback", "(无堆栈)"),
-                        language="text")
-
-_diag_logs = st.session_state.get("diag_log", [])
-with st.sidebar.expander(f"📜 诊断日志（{len(_diag_logs)} 条）", expanded=False):
-    _last_err = st.session_state.get("diag_last_error")
-    if _last_err:
-        st.markdown(f"**最近一次真实错误**（{_last_err.get('time')} · {_last_err.get('where')}）")
-        st.code(_last_err.get("detail", ""), language="text")
-        st.code(_last_err.get("traceback") or "(无堆栈)", language="text")
-    else:
-        st.caption("还没有记录到错误。")
-    if _diag_logs:
-        st.code("\n".join(_diag_logs[-40:]), language="text")
-    if st.button("🧹 清空诊断日志", key="diag_clear_btn"):
-        st.session_state["diag_log"] = []
-        st.session_state.pop("diag_last_error", None)
-        st.rerun()
 
 # ==========================================
 # 💎 六维官能黄金范本（refined_style_patch，动态提取并组合 processed_rules）
@@ -4082,7 +3636,6 @@ if is_group_chat:
         # 💬 群聊成员逐一口吐芬芳
         with st.chat_message("assistant", avatar="💋"):
             response_placeholder = st.empty()
-            wait_placeholder = st.empty()
             full_story_response = ""
             try:
                 # —— 💎 接戏强化指令，和单聊保持一致 ——
@@ -4112,53 +3665,34 @@ if is_group_chat:
                 max_loops = 3
                 loop_count = 0
                 loop_payload = list(api_payload)
-                grp_meta = {}
 
                 while loop_count < max_loops:
                     loop_count += 1
-                    label = f"群聊发言 第{loop_count}/{max_loops} 段（{curr_agent}）"
-                    heartbeat = UIHeartbeat(
-                        wait_placeholder,
-                        prefix=f"⏳ {label}：已向上游发起请求",
-                    ).start()
-                    grp_render = {"last": 0.0}
-
-                    def _grp_on_content(_piece, _full, _rs=grp_render):
-                        # 节流刷新：原来每个 chunk 都全量重排一次 markdown，长回复会把前端拖成“假死”
-                        now = time.time()
-                        if now - _rs["last"] < STREAM_RENDER_INTERVAL:
-                            return
-                        _rs["last"] = now
-                        with response_placeholder.container():
-                            st.markdown(novel_text_formatter(_full), unsafe_allow_html=True)
-
-                    def _grp_on_reason(_piece, _full):
-                        heartbeat.thinking(len(_full))
-
-                    try:
-                        text_part, reason_part, finish_reason, grp_meta = \
-                            stream_completion_with_watchdog(
-                                client,
-                                label=label,
-                                messages=loop_payload,
-                                model=model_name,
-                                max_tokens=4000,
-                                temperature=0.85,
-                                extra_body={"thinking": {"type": "enabled"}},
-                                on_activity=heartbeat.noticed_activity,
-                                on_content=_grp_on_content,
-                                on_reason=_grp_on_reason,
-                            )
-                    finally:
-                        heartbeat.finish()
-
-                    loop_buffer = [text_part] if text_part else []
-                    full_story_response += text_part
-                    diag_log(
-                        f"{label} 结束：耗时 {grp_meta.get('elapsed', 0):.1f}s，"
-                        f"正文 {grp_meta.get('chars', 0)} 字，思考 {grp_meta.get('reasoning_chars', 0)} 字，"
-                        f"数据块 {grp_meta.get('chunks', 0)}，finish_reason={finish_reason}"
+                    response = client.chat.completions.create(
+                        model=model_name,
+                        messages=loop_payload,
+                        stream=True,
+                        max_tokens=4000,
+                        timeout=60.0,
+                        temperature=0.85,
+                        extra_body={"thinking": {"type": "enabled"}}
                     )
+
+                    finish_reason = None
+                    loop_buffer = []
+
+                    for chunk in response:
+                        if chunk.choices and chunk.choices[0].delta:
+                            delta = chunk.choices[0].delta
+                            if delta.content:
+                                text_fragment = delta.content
+                                loop_buffer.append(text_fragment)
+                                full_story_response += text_fragment
+                                display_view = novel_text_formatter(full_story_response)
+                                with response_placeholder.container():
+                                    st.markdown(display_view, unsafe_allow_html=True)
+                            if chunk.choices[0].finish_reason is not None:
+                                finish_reason = chunk.choices[0].finish_reason
 
                     if finish_reason == "length":
                         current_loop_text = "".join(loop_buffer)
@@ -4169,13 +3703,6 @@ if is_group_chat:
                         })
                     else:
                         break
-
-                if not full_story_response.strip():
-                    raise RuntimeError(
-                        f"群聊发言（{curr_agent}）没有拿到任何正文：finish_reason={finish_reason}，"
-                        f"思考 {grp_meta.get('reasoning_chars', 0)} 字，耗时 {grp_meta.get('elapsed', 0):.0f} 秒。"
-                        "（原来这里会把空回复直接存进历史且界面毫无提示）"
-                    )
 
                 # 存储本角色的发言
                 single_reply_id = f"reply_{int(time.time() * 1000)}_{random.randint(1000, 9999)}"
@@ -4207,12 +3734,7 @@ if is_group_chat:
                 st.session_state.group_active_agent = ""
                 st.session_state.group_active_queue = []
                 st.session_state.group_round_ended = False
-                diag_log("群聊发言失败（真实错误已显示在界面）", err=e, level="ERROR")
-                st.error("📡 群聊本轮发言失败，真实错误：\n\n"
-                         f"`{describe_api_error(e)}`")
-                with st.expander("🧾 完整堆栈（排查用）", expanded=False):
-                    st.code(st.session_state.get("diag_last_error", {}).get("traceback", "(无堆栈)"),
-                            language="text")
+                st.error(f"📡 赛博空间发生 logic 折断：\n\n{str(e)}")
 
 else:
     # 单聊做梦触发
@@ -4287,7 +3809,6 @@ else:
 
         with st.chat_message("assistant", avatar="💋"):
             response_placeholder = st.empty()
-            wait_placeholder = st.empty()
 
             full_story_response = ""
             max_loops = 3
@@ -4295,79 +3816,40 @@ else:
             loop_payload = list(cleaned_api_payload)
             overflow_retried = False
             refusal_retry_count = 0
-            finish_reason = None
-            last_meta = {}
-
-            timeout_read = api_read_timeout()
-            timeout_hard = api_hard_timeout()
-            thinking_placeholder = st.empty() if _sess_get("show_reasoning_stream", True) else None
 
             try:
-                while True:  # 🧠 外层：上下文溢出兜底 + 空响应/拒答重试（全部有上限，不会无限等）
+                while True:  # 🧠 外层：上下文溢出兜底（对齐 compaction-basic 的溢出恢复，最多重试一次）
                     try:
                         while loop_count < max_loops:
                             loop_count += 1
-                            label = f"单聊生成 第{loop_count}段（本轮最多 {max_loops} 段）"
-                            heartbeat = UIHeartbeat(
-                                wait_placeholder,
-                                prefix=f"⏳ {label}：已向上游发起请求（model={model_name}）",
-                            ).start()
-                            render_state = {"last": 0.0, "updates": 0}
-
-                            def _stream_on_content(_piece, _full, _rs=render_state):
-                                # 节流刷新：原来每个 chunk 都全量重排一次 markdown，
-                                # 长回复时前端会被拖成“假死”状态（看着像卡住）
-                                now = time.time()
-                                if now - _rs["last"] < STREAM_RENDER_INTERVAL:
-                                    return
-                                _rs["last"] = now
-                                _rs["updates"] += 1
-                                with response_placeholder.container():
-                                    st.markdown(novel_text_formatter(_full), unsafe_allow_html=True)
-
-                            def _stream_on_reason(_piece, _full):
-                                heartbeat.thinking(len(_full))
-                                if thinking_placeholder is None:
-                                    return
-                                try:
-                                    _txt = _full if len(_full) <= 1200 else "……" + _full[-1200:]
-                                    thinking_placeholder.markdown(
-                                        f"🧠 **思考中（{len(_full)} 字）**：{_txt}")
-                                except Exception:
-                                    pass
-
-                            try:
-                                text_part, reason_part, finish_reason, last_meta = \
-                                    stream_completion_with_watchdog(
-                                        client,
-                                        label=label,
-                                        messages=loop_payload,
-                                        model=model_name,
-                                        max_tokens=8192,
-                                        temperature=1.0,
-                                        frequency_penalty=0.1,
-                                        # 🚫 单聊已关闭 thinking：思维链会吃满 max_tokens 导致正文为空/长时间无输出
-                                        # （想重新打开就把它改回 {"thinking": {"type": "enabled"}}）
-                                        extra_body={"thinking": {"type": "disabled"}},
-                                        timeout_read=timeout_read,
-                                        timeout_hard=timeout_hard,
-                                        on_activity=heartbeat.noticed_activity,
-                                        on_content=_stream_on_content,
-                                        on_reason=_stream_on_reason,
-                                    )
-                            finally:
-                                heartbeat.finish()
-
-                            loop_buffer = [text_part] if text_part else []
-                            full_story_response += text_part
-                            if thinking_placeholder is not None:
-                                thinking_placeholder.empty()
-                            diag_log(
-                                f"{label} 结束：耗时 {last_meta.get('elapsed', 0):.1f}s，"
-                                f"首块 {last_meta.get('first_chunk') if last_meta.get('first_chunk') is not None else '（无）'}，"
-                                f"正文 {last_meta.get('chars', 0)} 字，思考 {last_meta.get('reasoning_chars', 0)} 字，"
-                                f"数据块 {last_meta.get('chunks', 0)}，finish_reason={finish_reason}"
+                            response = client.chat.completions.create(
+                                model=model_name,
+                                messages=loop_payload,
+                                stream=True,
+                                max_tokens=8192,
+                                timeout=60.0,
+                                temperature=1.0,
+                                frequency_penalty=0.1,
+                                extra_body={"thinking": {"type": "disabled"}}
                             )
+
+                            finish_reason = None
+                            loop_buffer = []
+
+                            for chunk in response:
+                                if chunk.choices and chunk.choices[0].delta:
+                                    delta = chunk.choices[0].delta
+
+                                    if delta.content:
+                                        text_fragment = delta.content
+                                        loop_buffer.append(text_fragment)
+                                        full_story_response += text_fragment
+                                        display_view = novel_text_formatter(full_story_response)
+                                        with response_placeholder.container():
+                                            st.markdown(display_view, unsafe_allow_html=True)
+
+                                    if chunk.choices[0].finish_reason is not None:
+                                        finish_reason = chunk.choices[0].finish_reason
 
                             if finish_reason == "length":
                                 current_loop_text = "".join(loop_buffer)
@@ -4383,26 +3865,9 @@ else:
                             else:
                                 break
 
-                        # ---- 空响应 / 拒答处理（原来空响应会静默重试多轮，界面上一个字都没有）----
-                        is_empty = not full_story_response.strip()
-                        is_refusal = is_refusal_response(full_story_response, finish_reason)
-                        if is_empty or is_refusal:
-                            if is_empty and last_meta.get("reasoning_chars", 0) > 0:
-                                st.warning(
-                                    f"⚠️ 上游只返回了思考内容（thinking {last_meta.get('reasoning_chars', 0)} 字），"
-                                    f"正文一个字都没有：finish_reason={finish_reason}，"
-                                    f"共收到 {last_meta.get('chunks', 0)} 个数据块 / 耗时 "
-                                    f"{last_meta.get('elapsed', 0):.0f} 秒。\n\n"
-                                    "常见原因：① thinking 占满了 max_tokens(=8192)，正文被挤掉；"
-                                    "② 该模型/网关只返回 reasoning_content，不回 delta.content。"
-                                )
-                            elif is_empty:
-                                st.warning(
-                                    f"⚠️ 上游返回了空响应：finish_reason={finish_reason}，"
-                                    f"共收到 {last_meta.get('chunks', 0)} 个数据块 / 耗时 "
-                                    f"{last_meta.get('elapsed', 0):.0f} 秒。"
-                                )
-
+                        # 单聊模型若直接拒答，不把拒答内容写入历史，自动重新生成。
+                        if (not full_story_response.strip()
+                                or is_refusal_response(full_story_response, finish_reason)):
                             if refusal_retry_count < SINGLE_CHAT_REFUSAL_MAX_RETRIES:
                                 refusal_retry_count += 1
                                 full_story_response = ""
@@ -4411,25 +3876,17 @@ else:
                                 loop_payload.append({
                                     "role": "user",
                                     "content": (
-                                        "【重试提示】上一版回复疑似触发了拒答或为空。请重新生成本轮单聊回复，"
+                                        "【重试提示】上一版回复疑似触发了拒答。请重新生成本轮单聊回复，"
                                         "严格遵守上方角色设定和输出格式，不要复述拒答、免责声明或解释，"
                                         "直接从正式角色回复开始。"
                                     ),
                                 })
-                                wait_placeholder.markdown(
-                                    f"🔄 *{'空响应' if is_empty else '疑似拒答'}：正在自动重新生成"
-                                    f"（第 {refusal_retry_count}/{SINGLE_CHAT_REFUSAL_MAX_RETRIES} 次）…*"
-                                )
+                                with response_placeholder.container():
+                                    st.markdown(
+                                        f"🔄 *检测到拒答措辞，正在自动重新生成（第 "
+                                        f"{refusal_retry_count}/{SINGLE_CHAT_REFUSAL_MAX_RETRIES} 次）…*"
+                                    )
                                 continue
-
-                            if is_empty:
-                                raise RuntimeError(
-                                    f"连续 {SINGLE_CHAT_REFUSAL_MAX_RETRIES} 次生成都没有拿到任何正文。"
-                                    f"最后一次：finish_reason={finish_reason}，"
-                                    f"思考 {last_meta.get('reasoning_chars', 0)} 字，"
-                                    f"耗时 {last_meta.get('elapsed', 0):.0f} 秒。"
-                                    "建议依次排查：调大 max_tokens / 关闭 thinking / 换回 harness 里能跑通的模型名。"
-                                )
 
                             st.warning("⚠️ 连续多次检测到模型拒答，本轮保留最后一次生成结果。")
 
@@ -4496,24 +3953,11 @@ else:
                 }
 
                 role_data["chat_history"].append(mock_message_item)
-                with st.spinner("🎬 正在刷新导演选项…"):
-                    update_pm_options(role_data, client, role_data["chat_history"])
+                update_pm_options(role_data, client, role_data["chat_history"])
                 save_local_data()
                 st.rerun()
             except Exception as e:
-                diag_log("单聊生成/收尾阶段失败（真实错误已显示在界面）", err=e, level="ERROR")
-                try:
-                    wait_placeholder.empty()
-                    if thinking_placeholder is not None:
-                        thinking_placeholder.empty()
-                except Exception:
-                    pass
-                st.error("📡 本轮生成失败，真实错误如下（不再静默等待）：\n\n"
-                         f"`{describe_api_error(e)}`")
-                with st.expander("🧾 完整堆栈 / 本轮统计（排查用）", expanded=True):
-                    st.code(st.session_state.get("diag_last_error", {}).get("traceback", "(无堆栈)"),
-                            language="text")
-                    st.json(last_meta or {})
+                st.error(f"📡 赛博空间发生 logic 折断：\n\n{str(e)}")
 
 if __name__ == "__main__":
     import sys
