@@ -3830,7 +3830,7 @@ else:
                                 timeout=60.0,
                                 temperature=1.0,
                                 frequency_penalty=0.1,
-                                extra_body={"thinking": {"type": "disabled"}}
+                                extra_body={"thinking": {"type": "enabled"}}
                             )
 
                             finish_reason = None
